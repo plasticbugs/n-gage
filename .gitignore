@@ -36,3 +36,4 @@ projects/*.qws
 
 # Python environment for the tools (unicorn, capstone)
 /.venv/
+/build/
