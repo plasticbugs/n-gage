@@ -87,6 +87,32 @@ ctx_restore:
     nop
     movs pc, lr
 
+/* Where every thread starts, in user mode.  The kernel sets
+ *   r4 func, r5 its argument, r6 heap min (0: the thread already has a
+ *   heap), r7 heap max, r8 UserHeap::ChunkHeap, r9 User::SwitchHeap,
+ *   r10 User::StartThread
+ * and EUser does the rest; StartThread does not return. */
+    .global thread_tramp
+thread_tramp:
+    cmp r6, #0
+    beq 1f
+    mov r0, #0                      @ no name: a local, anonymous chunk
+    mov r1, r6
+    mov r2, r7
+    mov r3, #0x1000                 @ grow by a page at a time
+    mov lr, pc
+    bx  r8
+    cmp r0, #0
+    beq 2f
+    mov lr, pc
+    bx  r9
+1:  mov r0, r4
+    mov r1, r5
+    mov lr, pc
+    bx  r10
+2:  swi 0xFFFFFF                    @ no heap: the kernel reports it
+    b   2b
+
 /* The idle thread: a user-mode loop the harness recognises by its address
  * and fast-forwards to the next interrupt. */
     .global idle_loop

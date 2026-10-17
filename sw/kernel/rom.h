@@ -40,4 +40,6 @@ struct rom_image {
 const struct rom_entry *rom_find(const char *path);
 const struct rom_image *rom_image(const char *path);
 int rom_valid(void);
+int rom_path_for_code(u32 addr, u16 *out, int max);   /* 0: not ROM code */
+u32 rom_root_dir(void);                               /* Z:'s root, as EFile sees it */
 #endif

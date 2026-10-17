@@ -11,6 +11,9 @@ u32  pt_get_va(u32 va);
 int  vm_mapped(u32 va);
 u32  vm_reserve(u32 size);           /* chunk-space addresses, or 0 */
 void vm_release(u32 base);
+u32  vm_reserved(int *count);         /* bytes of chunk space reserved */
 int  vm_commit(u32 va, u32 size);    /* 0, or -1 when RAM runs out */
 void vm_decommit(u32 va, u32 size);
+void vm_alias(u32 va, u32 page);     /* map someone else's page here too */
+void vm_unalias(u32 base);           /* drop an alias reservation; frees nothing */
 #endif

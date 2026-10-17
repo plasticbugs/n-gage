@@ -33,6 +33,7 @@ void kprintf(const char *fmt, ...);
 void kpanic(const char *fmt, ...) __attribute__((noreturn));
 void *memcpy(void *d, const void *s, unsigned n);
 void *memset(void *d, int v, unsigned n);
+void *memmove(void *d, const void *s, unsigned n);
 int   memcmp(const void *a, const void *b, unsigned n);
 #endif
 #endif

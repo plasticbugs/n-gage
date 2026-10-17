@@ -32,12 +32,12 @@
  * with no entry is a data or prefetch abort.  There is one address space,
  * so the caches are virtually tagged and the table is read only on a miss.  */
 #define NGVM_CHUNK_BASE   0x40000000u
-#define NGVM_CHUNK_SIZE   0x08000000u   /* 128 MB of addresses               */
+#define NGVM_CHUNK_SIZE   0x10000000u   /* 256 MB of addresses, up to the ROM */
 #define NGVM_PAGE_SHIFT   14
 #define NGVM_PAGE_SIZE    (1u << NGVM_PAGE_SHIFT)
-#define NGVM_PT_CHUNK     (NGVM_CHUNK_SIZE >> NGVM_PAGE_SHIFT)   /* 8192    */
+#define NGVM_PT_CHUNK     (NGVM_CHUNK_SIZE >> NGVM_PAGE_SHIFT)   /* 16384   */
 #define NGVM_PT_ENTRIES   (NGVM_PT_CHUNK + (NGVM_DATA_SIZE >> NGVM_PAGE_SHIFT))
-/* Table entries 0..8191 map chunk space; 8192..8447 map the data window.
+/* Table entries 0..16383 map chunk space; 16384..16639 the data window.
  * An entry holds a RAM page number p: RAM address p << NGVM_PAGE_SHIFT,
  * seen by the kernel at NGVM_PHYS_BASE + that.  Pages 0..63 are the
  * kernel's and are never handed out.                                       */
@@ -47,6 +47,7 @@
 #define IO_DBG_PUTC       0x000  /* W: one byte to the debug console          */
 #define IO_DBG_EXIT       0x004  /* W: stop the simulation with this code     */
 #define IO_DBG_HEX        0x008  /* W: print a word in hex (debug console)    */
+#define IO_DBG_FLAGS      0x00C  /* R: trace switches the host asks for (DBGF_*) */
 #define IO_TIMER_US       0x010  /* R: microseconds since reset, low word     */
 #define IO_TIMER_US_HI    0x014  /* R: high word, latched by reading low      */
 #define IO_TIMER_CMP      0x018  /* W: raise IRQ_TIMER when US >= this        */
@@ -65,6 +66,11 @@
 #define IO_CACHE_FLUSH    0x068  /* W: write back and invalidate all caches   */
 #define IO_DRIVE_SIZE     0x070  /* R: bytes loaded at NGVM_DRIVE_BASE        */
 #define IO_ROM_SIZE       0x074  /* R: bytes loaded at NGVM_ROM_BASE          */
+
+/* IO_DBG_FLAGS bits */
+#define DBGF_EXEC         (1u << 0)   /* log every exec call                    */
+#define DBGF_SCHED        (1u << 1)   /* log thread switches                    */
+#define DBGF_IPC          (1u << 2)   /* log messages                           */
 
 #define IRQ_TIMER         (1u << 0)
 #define IRQ_VBLANK        (1u << 1)

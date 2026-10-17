@@ -89,6 +89,15 @@ u32 vm_reserve(u32 size)
     return base;
 }
 
+/* reservations: how many, and how many bytes of chunk space they take */
+u32 vm_reserved(int *count)
+{
+    u32 n = 0;
+    for (int i = 0; i < nres; i++) n += res[i].size;
+    if (count) *count = nres;
+    return n;
+}
+
 void vm_release(u32 base)
 {
     for (int i = 0; i < nres; i++) if (res[i].base == base) {
@@ -124,4 +133,25 @@ void vm_decommit(u32 va, u32 size)
         pt_set(i, NGVM_PT_NONE);
     }
     IO(IO_CACHE_FLUSH) = 1;
+}
+
+/* A second mapping of pages that belong to someone else (a process's data,
+ * for the loader to fill), and its removal, which frees nothing. */
+void vm_alias(u32 va, u32 page)
+{
+    int i = pt_index(va);
+    if (i < 0) kpanic("vm_alias %p outside paged space", va);
+    pt_set(i, page);
+}
+
+void vm_unalias(u32 base)
+{
+    for (int i = 0; i < nres; i++) if (res[i].base == base) {
+        for (u32 a = base; a < base + res[i].size; a += NGVM_PAGE_SIZE) pt_set(pt_index(a), NGVM_PT_NONE);
+        IO(IO_CACHE_FLUSH) = 1;
+        for (int j = i; j < nres - 1; j++) res[j] = res[j + 1];
+        nres--;
+        return;
+    }
+    kpanic("vm_unalias %p: not reserved", base);
 }
