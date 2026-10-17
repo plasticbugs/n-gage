@@ -1,0 +1,227 @@
+{
+  "interact": {
+    "magic": "APF_VER_1",
+    "variables": [
+      {
+        "name": "Reset Core",
+        "id": 0,
+        "type": "action",
+        "enabled": true,
+        "address": "0xF0000000",
+        "value": 1
+      },
+      {
+        "name": "Screen Shape",
+        "id": 60,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "mask": "0xFFFFFFF9",
+        "options": [
+          {"name": "Arcade 4:3", "value": "0x00000000"},
+          {"name": "Fill screen", "value": "0x00000002"}
+        ]
+      },
+      {
+        "name": "Scanlines",
+        "id": 61,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF3000000",
+        "defaultval": 0,
+        "mask": "0xFFFFFFFC",
+        "options": [
+          {"name": "Off", "value": "0x00000000"},
+          {"name": "25%", "value": "0x00000001"},
+          {"name": "50%", "value": "0x00000002"},
+          {"name": "75%", "value": "0x00000003"}
+        ]
+      },
+      {
+        "name": "Shadow Mask",
+        "id": 62,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF3000000",
+        "defaultval": 0,
+        "mask": "0xFFFFFF8F",
+        "options": [
+          {"name": "Off", "value": "0x00000000"},
+          {"name": "1x", "value": "0x00000010"},
+          {"name": "2x", "value": "0x00000020"},
+          {"name": "3x", "value": "0x00000030"}
+        ]
+      },
+      {
+        "name": "Service Switch",
+        "id": 40,
+        "type": "check",
+        "enabled": true,
+        "persist": false,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "mask": "0xFFFFFEFF",
+        "value": "0x00000100"
+      },
+      {
+        "name": "Bring-up: panel",
+        "id": 90,
+        "type": "check",
+        "enabled": true,
+        "persist": false,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "value": "0x00000008",
+        "mask": "0xFFFFFFF7"
+      },
+      {
+        "name": "SDRAM read late",
+        "id": 91,
+        "type": "check",
+        "enabled": true,
+        "persist": false,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "value": "0x00000010",
+        "mask": "0xFFFFFFEF"
+      },
+      {
+        "name": "SDRAM slow bursts",
+        "id": 92,
+        "type": "check",
+        "enabled": true,
+        "persist": false,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "value": "0x00000020",
+        "mask": "0xFFFFFFDF"
+      },
+      {
+        "name": "SRAM read late",
+        "id": 93,
+        "type": "check",
+        "enabled": true,
+        "persist": false,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "value": "0x00000080",
+        "mask": "0xFFFFFF7F"
+      },
+      {
+        "name": "SRAM long writes",
+        "id": 94,
+        "type": "check",
+        "enabled": true,
+        "persist": false,
+        "address": "0xF2000000",
+        "defaultval": 0,
+        "value": "0x00008000",
+        "mask": "0xFFFF7FFF"
+      },
+      {
+        "name": "Analogizer",
+        "id": 70,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF7000000",
+        "defaultval": 0,
+        "mask": "0xFFFFBFDF",
+        "options": [
+          {"name": "Off", "value": "0x0000"},
+          {"name": "On", "value": "0x0020"},
+          {"name": "On, Pocket off", "value": "0x4020"}
+        ]
+      },
+      {
+        "name": "Analogizer Video",
+        "id": 71,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF7000000",
+        "defaultval": 0,
+        "mask": "0xFFFFC3FF",
+        "options": [
+          {"name": "RGBS", "value": "0x0000"},
+          {"name": "RGsB", "value": "0x0400"},
+          {"name": "YPbPr", "value": "0x0800"},
+          {"name": "Y/C NTSC", "value": "0x0C00"},
+          {"name": "Y/C PAL", "value": "0x1000"},
+          {"name": "Scandoubler", "value": "0x1400"},
+          {"name": "Scandoubler 25%", "value": "0x1800"},
+          {"name": "Scandoubler 50%", "value": "0x1C00"},
+          {"name": "Scandoubler 75%", "value": "0x2000"},
+          {"name": "Scandoubler HQ2x", "value": "0x2400"}
+        ]
+      },
+      {
+        "name": "SNAC Adapter",
+        "id": 72,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF7000000",
+        "defaultval": 0,
+        "mask": "0xFFFFFFE0",
+        "options": [
+          {"name": "None", "value": "0x00"},
+          {"name": "DB15", "value": "0x01"},
+          {"name": "NES", "value": "0x02"},
+          {"name": "SNES", "value": "0x03"},
+          {"name": "PCE 2-button", "value": "0x04"},
+          {"name": "PCE 6-button", "value": "0x05"},
+          {"name": "PCE Multitap", "value": "0x06"},
+          {"name": "DB15 Fast", "value": "0x09"},
+          {"name": "SNES A,B<->X,Y", "value": "0x0B"},
+          {"name": "PSX Digital", "value": "0x10"},
+          {"name": "PSX Digital Fast", "value": "0x11"},
+          {"name": "PSX Analog", "value": "0x12"},
+          {"name": "PSX Analog Fast", "value": "0x13"}
+        ]
+      },
+      {
+        "name": "SNAC Assignment",
+        "id": 73,
+        "type": "list",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF7000000",
+        "defaultval": 0,
+        "mask": "0xFFFFFC3F",
+        "options": [
+          {"name": "SNAC P1 -> P1", "value": "0x000"},
+          {"name": "SNAC P1 -> P2", "value": "0x040"},
+          {"name": "SNAC P1,P2 -> P1,P2", "value": "0x080"},
+          {"name": "SNAC P1,P2 -> P2,P1", "value": "0x0C0"},
+          {"name": "SNAC P1,P2 -> P3,P4", "value": "0x100"},
+          {"name": "SNAC P1-P4 -> P1-P4", "value": "0x140"}
+        ]
+      },
+      {
+        "name": "Analogizer H Position",
+        "id": 74,
+        "type": "slider_u32",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF7000004",
+        "defaultval": 0,
+        "graphical": {"signed": true, "min": -16, "max": 16, "adjust_small": 1, "adjust_large": 4}
+      },
+      {
+        "name": "Analogizer V Position",
+        "id": 75,
+        "type": "slider_u32",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF7000008",
+        "defaultval": 0,
+        "graphical": {"signed": true, "min": -2, "max": 2, "adjust_small": 1, "adjust_large": 4}
+      }
+    ]
+  }
+}

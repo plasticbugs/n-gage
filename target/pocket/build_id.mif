@@ -1,0 +1,15 @@
+-- begin_signature
+-- Build_ID
+-- end_signature
+DEPTH=256;
+WIDTH=32;
+
+ADDRESS_RADIX=HEX;
+DATA_RADIX=HEX;
+
+CONTENT
+BEGIN
+	0E0 :	20261009;
+	0E1 :	00064401;
+	0E2 :	bed716e8;
+END;

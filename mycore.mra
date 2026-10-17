@@ -1,0 +1,30 @@
+<misterromdescription>
+    <!--
+        The ROM recipe.  tools/mra_build.py reads this and your MAME romset and
+        writes mycore.rom; any standard MRA tool does the same.
+
+        One <part> per ROM file, in image order.  Interleaved ROMs go inside an
+        <interleave output="16"> (or 32): each `map` digit is one byte of the
+        output word, read RIGHT TO LEFT as the MRA format and mra-tools-c do (the
+        rightmost digit is the word's first byte), and its value is the 1-based
+        byte of THIS part that lands there, 0 for none.  So two byte-wide ROMs
+        making big-endian 16-bit words are map="01" (this part is the first
+        byte) and map="10".  Build the image with BOTH tools/mra_build.py and
+        the standard `mra` tool and check they agree, then check the result
+        against the bytes MAME hands the CPU with tools/verify_rom.py; do not
+        reason about it.  METHODOLOGY section 5.7.
+
+        The image layout must match target/pocket/mycore_mem.sv and
+        sim/tb_mem.cpp.
+    -->
+    <name>My Core</name>
+    <setname>mycore</setname>
+    <rbf>mycore</rbf>
+    <mameversion>0000</mameversion>
+    <year>1980</year>
+    <manufacturer>MANUFACTURER</manufacturer>
+    <switches default="ff,ff"/>
+    <rom index="0" zip="mycore.zip" md5="none">
+        <!-- <part name="prog0.bin" crc="00000000"/> -->
+    </rom>
+</misterromdescription>

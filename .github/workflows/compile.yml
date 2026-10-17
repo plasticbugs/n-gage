@@ -1,0 +1,147 @@
+################################################################################
+# Compile the My Core Pocket core and upload the SD-card package.
+# Runs on every push to main, on tags, and on manual dispatch.
+################################################################################
+name: Compile Core
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Verilator
+        run: sudo apt-get update && sudo apt-get install -y verilator
+
+      - name: Lint the RTL
+        run: ./sim/lint.sh
+
+  compile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free runner disk space (Quartus image needs ~18GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
+                      /usr/local/share/boost /usr/local/graalvm
+          sudo docker image prune --all --force
+          df -h /
+
+      - name: Compile with Quartus 18.1 (Docker)
+        run: |
+          docker run --rm -v "$PWD":/build -w /build \
+            raetro/quartus:pocket \
+            quartus_sh --flow compile projects/mycore_pocket.qpf
+
+      - name: Package for Pocket
+        run: python3 package-pocket.py
+
+      - name: Show resource summary
+        run: cat projects/output_files/mycore_pocket.fit.summary || true
+
+      - name: Check block RAM fits
+        run: |
+          fit=projects/output_files/mycore_pocket.fit.summary
+          echo "--- resource use ---"
+          grep -E 'logic utilization|block memory|Total RAM|registers' "$fit" || true
+          # The ROMs and the frame buffer are in SDRAM precisely so the rest fits; if the
+          # memory bits ever creep past the device, say so here rather than
+          # discovering it as a mysterious fit failure.
+          if grep -qi 'block memory bits.*: *[0-9,]*/ *[0-9,]* *( *9[5-9]%' "$fit"; then
+            echo "block RAM above 95% -- something has moved out of SDRAM"
+            exit 1
+          fi
+
+      - name: Check every constraint was applied
+        run: |
+          # A constraint whose filter matches nothing is silently ignored, so
+          # the SDC can claim a relaxation the analyser never granted -- a
+          # multicycle aimed at a register Quartus had merged into a RAM sat
+          # dead in this file for weeks.  Only our own SDC is policed; the
+          # BSP's sys_constr.sdc names dram_clk before it exists and there is
+          # nothing to do about that here.
+          # 332049 lands in the fitter's report, 332174 only in the analyser's.
+          rpts="projects/output_files/mycore_pocket.fit.rpt projects/output_files/mycore_pocket.sta.rpt"
+          if grep -hE 'Warning \(3320(49|74)\).*mycore_pocket\.sdc' $rpts | sed 's/ File:.*//' | sort -u | grep .; then
+            echo
+            echo "the constraints above matched nothing and were ignored."
+            echo "fix the filter or delete the line -- do not leave it lying."
+            exit 1
+          fi
+          echo "every constraint in mycore_pocket.sdc was applied"
+
+      - name: Check timing closed
+        run: |
+          sta=projects/output_files/mycore_pocket.sta.summary
+          echo "--- worst slack per corner ---"
+          grep -B3 'Slack' "$sta" | grep -E 'Type|Slack' | paste - - | head -20
+          if grep -q 'Slack : -' "$sta"; then
+            echo
+            echo "TIMING NOT CLOSED -- refusing to call this build good."
+            grep -B3 'Slack : -' "$sta" | head -30
+            echo
+            echo "--- worst paths ---"
+            docker run --rm -v "$PWD":/build -w /build raetro/quartus:pocket \
+              quartus_sta -t projects/report_worst.tcl >/dev/null 2>&1 || true
+            grep -E '^; (From|To) Node|^; Slack ' \
+              projects/output_files/worst_paths.txt 2>/dev/null | head -30 || true
+            echo "--- worst paths, cold corner ---"
+            grep -E '^; (From|To) Node|^; Slack ' \
+              projects/output_files/worst_paths_cold.txt 2>/dev/null | head -30 || true
+            exit 1
+          fi
+          echo "all corners positive"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: mycore-pocket
+          path: release/pocket/
+          if-no-files-found: error
+
+      - name: Publish release (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Releases are normally cut from a hardware-verified CI run rather
+          # than from a fresh compile, so the release usually exists already.
+          # Keep that artifact; only publish here if the tag arrived without one.
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "release ${GITHUB_REF_NAME} already published; skipping"
+            exit 0
+          fi
+          cd release/pocket && zip -qr ../../mycore-pocket-sdcard.zip . && cd ../..
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "My Core for Analogue Pocket ${GITHUB_REF_NAME}" \
+            --notes "Unzip onto the Pocket SD card root, overwriting previous files. The ROM image goes in Assets/mycore/common/." \
+            mycore-pocket-sdcard.zip
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-reports
+          path: |
+            projects/output_files/*.rpt
+            projects/output_files/*.summary
+            projects/output_files/worst_paths.txt
+            projects/output_files/worst_paths_cold.txt
+            projects/output_files/worst_dram.txt
+            projects/output_files/worst_hold.txt
+            projects/output_files/clocks.txt
+            projects/output_files/sdc_applied.txt
+          if-no-files-found: ignore

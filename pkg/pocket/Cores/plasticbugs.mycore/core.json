@@ -1,0 +1,36 @@
+{
+  "core": {
+    "magic": "APF_VER_1",
+    "metadata": {
+      "platform_ids": [
+        "mycore"
+      ],
+      "shortname": "mycore",
+      "description": "My Core (MANUFACTURER, YEAR) arcade core",
+      "author": "plasticbugs",
+      "url": "https://github.com/plasticbugs/analogue-pocket-mycore",
+      "version": "0.0.1",
+      "date_release": "1970-01-01"
+    },
+    "framework": {
+      "target_product": "Analogue Pocket",
+      "version_required": "1.1",
+      "sleep_supported": false,
+      "dock": {
+        "supported": true,
+        "analog_output": false
+      },
+      "hardware": {
+        "link_port": false,
+        "cartridge_adapter": 0
+      }
+    },
+    "cores": [
+      {
+        "name": "default",
+        "id": 0,
+        "filename": "bitstream.rbf_r"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+    "data": {
+        "magic": "APF_VER_1",
+        "data_slots": [
+            {
+                "name": "ROM Set",
+                "id": 0,
+                "required": true,
+                "parameters": "0x8",
+                "filename": "mycore.rom",
+                "extensions": [
+                    "rom"
+                ],
+                "address": "0x00000000"
+            }
+        ]
+    }
+}

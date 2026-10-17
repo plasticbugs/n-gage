@@ -1,0 +1,42 @@
+{
+    "input": {
+        "magic": "APF_VER_1",
+        "controllers": [
+            {
+                "type": "default",
+                "mappings": [
+                    {
+                        "id": 100,
+                        "name": "Button 2",
+                        "key": "pad_btn_b"
+                    },
+                    {
+                        "id": 101,
+                        "name": "Button 1",
+                        "key": "pad_btn_a"
+                    },
+                    {
+                        "id": 102,
+                        "name": "Button 2 (alt)",
+                        "key": "pad_btn_x"
+                    },
+                    {
+                        "id": 103,
+                        "name": "Button 1 (alt)",
+                        "key": "pad_btn_y"
+                    },
+                    {
+                        "id": 104,
+                        "name": "Coin",
+                        "key": "pad_btn_select"
+                    },
+                    {
+                        "id": 105,
+                        "name": "Start",
+                        "key": "pad_btn_start"
+                    }
+                ]
+            }
+        ]
+    }
+}
