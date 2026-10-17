@@ -16,7 +16,7 @@ interrupt.
 import argparse, ctypes, os, re, struct, sys, time
 
 from unicorn import (Uc, UcError, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_INTR,
-                     UC_PROT_READ, UC_PROT_EXEC, UC_PROT_ALL, UC_HOOK_MEM_WRITE)
+                     UC_PROT_READ, UC_PROT_EXEC, UC_PROT_ALL, UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ, UC_HOOK_CODE)
 from unicorn.arm_const import *
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,12 +25,18 @@ import pngio  # noqa: E402
 
 
 def hw_constants():
-    """The #defines of ngvm_hw.h, so this file cannot drift from the header."""
+    """The #defines of ngvm_hw.h, so this file cannot drift from the header.
+    Values are C constant expressions over earlier ones; evaluated as Python."""
     out = {}
     for line in open(os.path.join(ROOT, 'sw', 'include', 'ngvm_hw.h')):
-        m = re.match(r'#define\s+(\w+)\s+(\(1u << (\d+)\)|0x[0-9A-Fa-f]+u?|\d+)(?=\s|$)', line)
-        if m:
-            out[m.group(1)] = (1 << int(m.group(3))) if m.group(3) else int(m.group(2).rstrip('u'), 0)
+        m = re.match(r'#define\s+([A-Z_][A-Z0-9_]*)\s+(.*?)\s*(/\*.*)?$', line)
+        if not m or not m.group(2):
+            continue
+        expr = re.sub(r'\b(0x[0-9A-Fa-f]+|\d+)u\b', r'\1', m.group(2))
+        try:
+            out[m.group(1)] = int(eval(expr, {'__builtins__': {}}, dict(out)))
+        except Exception:
+            pass
     return out
 
 
@@ -101,6 +107,19 @@ class Machine:
             uc.mem_write(addr, data)
         self.idle_pc = self.syms['idle_loop']
         uc.hook_add(UC_HOOK_INTR, self.on_intr)
+        if args.brk:
+            from romsyms import Syms
+            self.syms = Syms(args.rom)
+            self.brk_left = args.brk_count
+            self.brk_r0 = None if args.brk_r0 is None else int(args.brk_r0, 16) & 0xFFFFFFFF
+            for a in args.brk.split(','):
+                a = int(a, 16) & ~1
+                uc.hook_add(UC_HOOK_CODE, self.on_brk, begin=a, end=a)
+        if args.watch:
+            lo, hi = (int(x, 16) for x in args.watch.split(':'))
+            self.watch_left = 3000
+            uc.hook_add(UC_HOOK_MEM_READ, self.on_watch, begin=lo, end=hi)
+            uc.hook_add(UC_HOOK_MEM_WRITE, self.on_watch_w, begin=lo, end=hi)
 
         # devices
         self.insns = 0                 # virtual time, in instructions
@@ -122,6 +141,53 @@ class Machine:
         uc.reg_write(UC_ARM_REG_CPSR, 0xD3)
         self.pc = entry
 
+    def on_brk(self, uc, addr, size, ud):
+        """A breakpoint that only reports: registers, and the words on the
+        stack that look like return addresses into the firmware."""
+        if self.brk_left <= 0:
+            return
+        r = [uc.reg_read(x) for x in REGS]
+        if self.brk_r0 is not None and r[0] != self.brk_r0:
+            return
+        self.brk_left -= 1
+        print('[brk] %08x %s' % (addr, self.syms.name(addr)))
+        print('[brk]   r0=%08x r1=%08x r2=%08x r3=%08x lr=%08x %s' % (r[0], r[1], r[2], r[3], r[14], self.syms.name(r[14])))
+        print('[brk]   ' + ' '.join('r%d=%08x' % (i, r[i]) for i in range(4, 13)) + ' sp=%08x' % r[13])
+        for spec in (self.a.brk_mem or '').split(','):
+            m = re.match(r'r(\d+)([+-]0x[0-9a-f]+|[+-]\d+)?:(\d+)$', spec.strip())
+            if not m:
+                continue
+            a = (r[int(m.group(1))] + int(m.group(2) or '0', 0)) & 0xFFFFFFFF
+            try:
+                b = uc.mem_read(a, int(m.group(3)))
+                print('[brk]   %s @%08x: %s' % (spec, a, ' '.join('%08x' % int.from_bytes(b[i:i + 4], 'little') for i in range(0, len(b) - 3, 4))))
+            except Exception:
+                print('[brk]   %s @%08x: unmapped' % (spec, a))
+        sp, chain = r[13], []
+        n = min(1024, NGVM_PAGE_SIZE - (sp & (NGVM_PAGE_SIZE - 1)))   # stay in the stack's page
+        try:
+            words = uc.mem_read(sp, n)
+        except Exception:
+            words = b''
+        for i in range(0, len(words), 4):
+            v = int.from_bytes(words[i:i + 4], 'little')
+            if NGVM_ROM_BASE <= v < NGVM_ROM_BASE + 0x2000000 and len(chain) < 12:
+                chain.append('%08x %s' % (v, self.syms.name(v)))
+        for c in chain:
+            print('[brk]     ' + c)
+
+    def on_watch_w(self, uc, access, addr, size, value, ud):
+        if self.watch_left > 0:
+            self.watch_left -= 1
+            pc = uc.reg_read(UC_ARM_REG_PC)
+            print('[watch] pc %08x write %08x/%d = %x' % (pc, addr, size, value))
+
+    def on_watch(self, uc, access, addr, size, value, ud):
+        if self.watch_left > 0:
+            self.watch_left -= 1
+            v = int.from_bytes(uc.mem_read(addr, size), 'little')
+            print('[watch] pc %08x read %08x/%d = %x' % (uc.reg_read(UC_ARM_REG_PC), addr, size, v))
+
     # ---- time ---------------------------------------------------------------
     def now_us(self):
         return self.insns // self.mips
@@ -139,6 +205,8 @@ class Machine:
             return self.timer_hi_latch
         if off == IO_IRQ_STATUS:
             return self.irq_status
+        if off == IO_DBG_FLAGS:
+            return self.a.trace
         if off == IO_IRQ_ENABLE:
             return self.irq_enable
         if off == IO_LCD_BASE:
@@ -327,6 +395,12 @@ def main():
     ap.add_argument('--seconds', type=float, default=10)
     ap.add_argument('--mips', type=int, default=100)
     ap.add_argument('--slice', type=int, default=200000)
+    ap.add_argument('--trace', type=lambda x: int(x, 0), default=0, help='DBGF_* bits for the kernel')
+    ap.add_argument('--watch', help='lo:hi (hex): log reads of this range')
+    ap.add_argument('--brk', help='addr[,addr] (hex): report registers and stack when reached')
+    ap.add_argument('--brk-count', type=int, default=20, help='reports at most this many')
+    ap.add_argument('--brk-r0', help='(hex) report only when r0 is this')
+    ap.add_argument('--brk-mem', help='rN+off:len[,...]: words to dump at each report')
     ap.add_argument('--frames-to')
     ap.add_argument('--frame-every', type=int, default=0)
     a = ap.parse_args()
