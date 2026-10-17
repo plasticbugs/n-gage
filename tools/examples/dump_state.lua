@@ -1,4 +1,4 @@
--- Dump the whole video state of mycore at chosen frames, plus MAME's own
+-- Dump the whole video state of ngage at chosen frames, plus MAME's own
 -- snapshot of the same frame, so tools/render_model.py can be checked against
 -- it pixel for pixel.
 --

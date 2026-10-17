@@ -3,7 +3,7 @@
 #       raetro/quartus:pocket quartus_sta -t projects/report_worst.tcl
 # Writes output_files/worst_paths.txt next to the other reports.
 cd projects
-if {[catch {project_open mycore_pocket -revision mycore_pocket} err]} {
+if {[catch {project_open ngage_pocket -revision ngage_pocket} err]} {
     puts "PROJECT OPEN FAILED: $err"; exit 1
 }
 create_timing_netlist -model slow

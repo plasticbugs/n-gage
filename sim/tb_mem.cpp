@@ -1,4 +1,4 @@
-// Pocket memory gate: push an image through mycore_mem's download port at the
+// Pocket memory gate: push an image through ngage_mem's download port at the
 // APF loader's rate, then read every region back through the core's ports
 // and compare.  Then the same for the SRAM.
 //
@@ -15,7 +15,7 @@
 //        address and data stable; anything that counts, sums or pushes on the
 //        strobe's level rather than its edge fails here (METHODOLOGY 5.8).
 //
-// The layout constants must match target/pocket/mycore_mem.sv.
+// The layout constants must match target/pocket/ngage_mem.sv.
 #include "Vtb_mem_top.h"
 #include "verilated.h"
 #include <cstdio>

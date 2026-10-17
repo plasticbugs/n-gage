@@ -1,4 +1,4 @@
-// Bench wrapper for target/pocket/mycore_mem.sv: the Pocket memory subsystem
+// Bench wrapper for target/pocket/ngage_mem.sv: the Pocket memory subsystem
 // with behavioural chips behind the pins.  sim/tb_mem.cpp pushes an image in
 // through the download port at the APF loader's rate and reads every region
 // back through the core's ports.
@@ -33,7 +33,7 @@ module tb_mem_top (
     wire [16:0] sram_a; wire [15:0] sram_dq;
     wire        sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n;
 
-    mycore_mem dut (
+    ngage_mem dut (
         .clk(clk), .clk_sdram(clk), .init(init), .ready(ready),
         .rd_late(rd_late), .burst_slow(burst_slow), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),

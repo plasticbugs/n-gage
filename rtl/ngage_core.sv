@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// My Core -- the machine, platform-agnostic.
+// N-Gage -- the machine, platform-agnostic.
 //
 // THIS IS THE SKELETON.  It is a whole, working core that contains no game: a
 // raster, a test pattern, a cursor on the d-pad, a beep on button 1, and one
@@ -18,13 +18,13 @@
 //------------------------------------------------------------------------------
 `default_nettype none
 
-module mycore_core (
+module ngage_core (
     input  logic        clk,            // 96 MHz
     input  logic        rst,
     input  logic        pause,          // freeze the CPUs and sound, keep the picture
     input  logic        pix_sync,       // see clk_enables.sv
 
-    // ---------------- memory, all through target/pocket/mycore_mem.sv
+    // ---------------- memory, all through target/pocket/ngage_mem.sv
     output logic        mrom_req,  output logic [18:1] mrom_addr,
     input  logic        mrom_ack,  input  logic [15:0] mrom_q,
     output logic        srom_req,  output logic [15:0] srom_addr,

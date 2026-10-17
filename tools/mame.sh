@@ -1,5 +1,5 @@
 #!/bin/sh
-# Run MAME on mycore against the shadow romset, headless and deterministic.
+# Run MAME on ngage against the shadow romset, headless and deterministic.
 #
 # Always pass -seconds_to_run: a Lua script that ends the run with
 # machine:exit() has proved unreliable, while -seconds_to_run plus an
@@ -16,7 +16,7 @@
 # no Space.  Verified: snapshots come out byte-identical to a normal run.
 root=$(cd "$(dirname "$0")/.." && pwd)
 SDL_VIDEODRIVER=dummy \
-exec mame mycore -rompath "$root/.mame/roms" \
+exec mame ngage -rompath "$root/.mame/roms" \
     -video none -videodriver dummy -window -nomaximize \
     -sound none -nothrottle -skip_gameinfo \
     -cfg_directory "$root/.mame/cfg" -nvram_directory "$root/.mame/nvram" \

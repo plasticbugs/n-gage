@@ -11,10 +11,10 @@ fails the package if one slipped through anyway.
 import os, shutil, sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-RBF = os.path.join(ROOT, "projects", "output_files", "mycore_pocket.rbf")
+RBF = os.path.join(ROOT, "projects", "output_files", "ngage_pocket.rbf")
 PKG = os.path.join(ROOT, "pkg", "pocket")
 OUT = os.path.join(ROOT, "release", "pocket")
-CORE_ID = "plasticbugs.mycore"
+CORE_ID = "plasticbugs.ngage"
 
 if not os.path.exists(RBF):
     sys.exit(f"missing {RBF} - run the Quartus compile first "
@@ -33,8 +33,8 @@ with open(os.path.join(core_dir, "bitstream.rbf_r"), "wb") as f:
     f.write(reversed_rbf)
 
 # Ship the ROM recipe and its builder alongside the core, so a downloaded
-# release contains everything needed to produce mycore.rom.
-for extra in ("mycore.mra", "README.md", os.path.join("tools", "mra_build.py")):
+# release contains everything needed to produce ngage.rom.
+for extra in ("ngage.mra", "README.md", os.path.join("tools", "mra_build.py")):
     src = os.path.join(ROOT, extra)
     if os.path.exists(src):
         shutil.copy(src, os.path.join(OUT, os.path.basename(extra)))
@@ -47,4 +47,4 @@ if strays:
 
 print(f"packaged -> {OUT}")
 print("copy Cores/, Platforms/ and Assets/ from that folder onto the SD card root")
-print("build the ROM with:  python3 mra_build.py mycore.mra mycore.zip")
+print("build the ROM with:  python3 mra_build.py ngage.mra ngage.zip")

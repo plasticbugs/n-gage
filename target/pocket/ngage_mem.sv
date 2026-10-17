@@ -9,7 +9,7 @@
 //   SRAM    tilemap VRAM     64 KB   word 0x00000    single words, byte enables
 //
 // The image arrives from the Pocket as a stream of bytes in the order
-// mycore.mra builds it, and is written into SDRAM a word at a time through
+// ngage.mra builds it, and is written into SDRAM a word at a time through
 // the same controller the core reads it back through.
 //
 // The graphics ports are 32 bits wide where the SDRAM is 16, so each 32-bit
@@ -18,7 +18,7 @@
 //------------------------------------------------------------------------------
 `default_nettype none
 
-module mycore_mem (
+module ngage_mem (
     input  logic        clk,            // 96 MHz
     input  logic        clk_sdram,      // 96 MHz, phase shifted, drives the pin
     input  logic        init,           // hold to (re)initialise the SDRAM

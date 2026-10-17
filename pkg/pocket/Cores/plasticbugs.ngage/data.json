@@ -7,7 +7,7 @@
                 "id": 0,
                 "required": true,
                 "parameters": "0x8",
-                "filename": "mycore.rom",
+                "filename": "ngage.rom",
                 "extensions": [
                     "rom"
                 ],

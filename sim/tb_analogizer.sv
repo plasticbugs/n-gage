@@ -33,7 +33,7 @@
 module tb_analogizer;
     // ------------------------------------------- the core's raster: SET THESE
     // to the core's (its video module, and core_top's pocket_analogizer
-    // parameters).  The template: rtl/mycore_core.sv, 6.857 MHz dots from 96 MHz.
+    // parameters).  The template: rtl/ngage_core.sv, 6.857 MHz dots from 96 MHz.
     localparam int DIV    = 14;           // system clocks a dot
     localparam int HTOTAL = 452, VTOTAL = 253;
     localparam int X0 = 0,   X1 = 319;    // visible dots, inclusive

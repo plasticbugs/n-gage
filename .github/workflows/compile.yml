@@ -1,5 +1,5 @@
 ################################################################################
-# Compile the My Core Pocket core and upload the SD-card package.
+# Compile the N-Gage Pocket core and upload the SD-card package.
 # Runs on every push to main, on tags, and on manual dispatch.
 ################################################################################
 name: Compile Core
@@ -44,17 +44,17 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/build -w /build \
             raetro/quartus:pocket \
-            quartus_sh --flow compile projects/mycore_pocket.qpf
+            quartus_sh --flow compile projects/ngage_pocket.qpf
 
       - name: Package for Pocket
         run: python3 package-pocket.py
 
       - name: Show resource summary
-        run: cat projects/output_files/mycore_pocket.fit.summary || true
+        run: cat projects/output_files/ngage_pocket.fit.summary || true
 
       - name: Check block RAM fits
         run: |
-          fit=projects/output_files/mycore_pocket.fit.summary
+          fit=projects/output_files/ngage_pocket.fit.summary
           echo "--- resource use ---"
           grep -E 'logic utilization|block memory|Total RAM|registers' "$fit" || true
           # The ROMs and the frame buffer are in SDRAM precisely so the rest fits; if the
@@ -74,18 +74,18 @@ jobs:
           # BSP's sys_constr.sdc names dram_clk before it exists and there is
           # nothing to do about that here.
           # 332049 lands in the fitter's report, 332174 only in the analyser's.
-          rpts="projects/output_files/mycore_pocket.fit.rpt projects/output_files/mycore_pocket.sta.rpt"
-          if grep -hE 'Warning \(3320(49|74)\).*mycore_pocket\.sdc' $rpts | sed 's/ File:.*//' | sort -u | grep .; then
+          rpts="projects/output_files/ngage_pocket.fit.rpt projects/output_files/ngage_pocket.sta.rpt"
+          if grep -hE 'Warning \(3320(49|74)\).*ngage_pocket\.sdc' $rpts | sed 's/ File:.*//' | sort -u | grep .; then
             echo
             echo "the constraints above matched nothing and were ignored."
             echo "fix the filter or delete the line -- do not leave it lying."
             exit 1
           fi
-          echo "every constraint in mycore_pocket.sdc was applied"
+          echo "every constraint in ngage_pocket.sdc was applied"
 
       - name: Check timing closed
         run: |
-          sta=projects/output_files/mycore_pocket.sta.summary
+          sta=projects/output_files/ngage_pocket.sta.summary
           echo "--- worst slack per corner ---"
           grep -B3 'Slack' "$sta" | grep -E 'Type|Slack' | paste - - | head -20
           if grep -q 'Slack : -' "$sta"; then
@@ -108,7 +108,7 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: mycore-pocket
+          name: ngage-pocket
           path: release/pocket/
           if-no-files-found: error
 
@@ -124,11 +124,11 @@ jobs:
             echo "release ${GITHUB_REF_NAME} already published; skipping"
             exit 0
           fi
-          cd release/pocket && zip -qr ../../mycore-pocket-sdcard.zip . && cd ../..
+          cd release/pocket && zip -qr ../../ngage-pocket-sdcard.zip . && cd ../..
           gh release create "${GITHUB_REF_NAME}" \
-            --title "My Core for Analogue Pocket ${GITHUB_REF_NAME}" \
-            --notes "Unzip onto the Pocket SD card root, overwriting previous files. The ROM image goes in Assets/mycore/common/." \
-            mycore-pocket-sdcard.zip
+            --title "N-Gage for Analogue Pocket ${GITHUB_REF_NAME}" \
+            --notes "Unzip onto the Pocket SD card root, overwriting previous files. The ROM image goes in Assets/ngage/common/." \
+            ngage-pocket-sdcard.zip
 
       - name: Upload reports
         if: always()

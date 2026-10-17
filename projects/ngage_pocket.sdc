@@ -1,5 +1,5 @@
 # ==============================================================================
-# My Core on the Pocket: timing constraints beyond the BSP's
+# N-Gage on the Pocket: timing constraints beyond the BSP's
 # sys_constr.sdc. The 96 MHz system clock, its 6.857 MHz video pair and the
 # shifted SDRAM clock all come from core_pll and are timed as one related
 # group; the two 74.25 MHz inputs and the audio PLL are asynchronous to it.

@@ -42,8 +42,8 @@ for f in "$root"/rtl/*.sv; do
 done
 
 printf '%-20s ' "pocket memories"
-out=$(verilator --lint-only $OPTS "$WAIVE" --top-module mycore_mem \
-      "$root"/target/pocket/mycore_mem.sv "$root"/target/pocket/sdram_ctrl.sv \
+out=$(verilator --lint-only $OPTS "$WAIVE" --top-module ngage_mem \
+      "$root"/target/pocket/ngage_mem.sv "$root"/target/pocket/sdram_ctrl.sv \
       "$root"/target/pocket/sram_port.sv 2>&1 \
       | grep -E '^%(Error|Warning)' | grep -v 'Exiting due to' \
       | grep -v 'sdram_ctrl.sv' || true)

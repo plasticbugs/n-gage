@@ -1,5 +1,5 @@
-// Whole-machine bench, through the Pocket's real memory glue: mycore_core
-// against mycore_mem, sdram_ctrl and sram_port, with behavioural chips beyond
+// Whole-machine bench, through the Pocket's real memory glue: ngage_core
+// against ngage_mem, sdram_ctrl and sram_port, with behavioural chips beyond
 // the pins and the ROM image sent in through the download port at the APF
 // loader's rate.
 //
@@ -58,7 +58,7 @@ module tb_system_top (
     end
     wire mem_init = !seen_reset || !(&por);
 
-    mycore_mem u_mem (
+    ngage_mem u_mem (
         .clk(clk), .clk_sdram(clk), .init(mem_init), .ready(mem_ready),
         .rd_late(1'b1), .burst_slow(1'b0), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(reset),
@@ -86,7 +86,7 @@ module tb_system_top (
     sram_model sram (.clk(clk), .a(sram_a), .dq(sram_dq), .oe_n(sram_oe_n),
                      .we_n(sram_we_n), .ub_n(sram_ub_n), .lb_n(sram_lb_n));
 
-    mycore_core u_core (
+    ngage_core u_core (
         .clk(clk), .rst(reset | ~mem_ready), .pause(pause), .pix_sync(1'b0),
         .mrom_req(mrom_req), .mrom_addr(mrom_addr), .mrom_ack(mrom_ack), .mrom_q(mrom_q),
         .srom_req(srom_req), .srom_addr(srom_addr), .srom_ack(srom_ack), .srom_q(srom_q),

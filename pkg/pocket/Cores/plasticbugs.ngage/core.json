@@ -3,12 +3,12 @@
     "magic": "APF_VER_1",
     "metadata": {
       "platform_ids": [
-        "mycore"
+        "ngage"
       ],
-      "shortname": "mycore",
-      "description": "My Core (MANUFACTURER, YEAR) arcade core",
+      "shortname": "ngage",
+      "description": "N-Gage (MANUFACTURER, YEAR) arcade core",
       "author": "plasticbugs",
-      "url": "https://github.com/plasticbugs/analogue-pocket-mycore",
+      "url": "https://github.com/plasticbugs/analogue-pocket-ngage",
       "version": "0.0.1",
       "date_release": "1970-01-01"
     },

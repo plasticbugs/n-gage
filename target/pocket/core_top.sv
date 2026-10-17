@@ -26,13 +26,13 @@
 // SOFTWARE.
 //
 //------------------------------------------------------------------------------
-// Platform Specific top-level -- My Core
+// Platform Specific top-level -- N-Gage
 // Instantiated by the real top-level: apf_top
 //
-// The machine (rtl/mycore_core.sv) is platform-agnostic; this file is the APF
+// The machine (rtl/ngage_core.sv) is platform-agnostic; this file is the APF
 // glue: bridge, the ROM slot, the interact menu, video and audio hand-off, the
 // memories, and the bring-up panel.  The ROM image lives in SDRAM and the
-// tilemap RAM in the SRAM (target/pocket/mycore_mem.sv).
+// tilemap RAM in the SRAM (target/pocket/ngage_mem.sv).
 //
 // Everything above the "@ The game" banner is the framework's and is the same
 // in every core here.  Below it, the shapes are proven on hardware -- the
@@ -851,8 +851,8 @@ module core_top
     always_ff @(posedge clk_sys) if (allc_s) loaded <= 1'b1;
     wire  g_reset = reset_sw_s | ~loaded | ~mem_ready | ~sram_done;
 
-    //! ROM: one slot with the flat image tools/mra_build.py makes from mycore.mra.
-    //! Its layout is in target/pocket/mycore_mem.sv; change the two together.
+    //! ROM: one slot with the flat image tools/mra_build.py makes from ngage.mra.
+    //! Its layout is in target/pocket/ngage_mem.sv; change the two together.
     wire        ioctl_isROM = ioctl_download && ioctl_index == 16'h0;
     wire        dl_we       = ioctl_isROM && ioctl_wr;
     wire [24:0] dl_addr     = ioctl_addr[24:0];
@@ -945,7 +945,7 @@ module core_top
     assign vram_ben  = sram_done ? cv_ben  : 2'b11;
     assign cv_ack    = sram_done ? vram_ack : 1'b0;
 
-    mycore_mem u_mem (
+    ngage_mem u_mem (
         .clk(clk_sys), .clk_sdram(clk_sdram), .init(mem_init), .ready(mem_ready),
         .rd_late(g_rd_late), .burst_slow(g_burst_slow),
         .sram_slow(g_sram_slow), .sram_slow_wr(g_sram_slow_wr),
@@ -983,7 +983,7 @@ module core_top
     always @(posedge clk_sys) begin vt_s <= vt; vt_d <= vt_s; end
     wire pix_sync = vt_s ^ vt_d;
 
-    mycore_core u_core (
+    ngage_core u_core (
         //! pause_core is the Pocket's menu being open.  It used to be ORed into
         //! reset here, which held the whole board in reset while the menu was
         //! up and booted it from scratch when the menu closed.

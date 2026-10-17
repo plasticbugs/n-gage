@@ -43,7 +43,7 @@ ALLOW_LARGE="modules/cpu-tg68k/gen/tg68k.v"
 # The Pocket package's own images, .bin by the platform's convention and not
 # ROM data: the platform artwork (171,930 bytes) and the core icon (2,592).
 # The size check still applies to them.
-ALLOW_PACKAGE="pkg/pocket/Platforms/_images/mycore.bin pkg/pocket/Cores/plasticbugs.mycore/icon.bin"
+ALLOW_PACKAGE="pkg/pocket/Platforms/_images/ngage.bin pkg/pocket/Cores/plasticbugs.ngage/icon.bin"
 
 git ls-files | while IFS= read -r f; do
     [ -f "$f" ] || continue
@@ -60,7 +60,7 @@ git ls-files | while IFS= read -r f; do
     # extension above, so a real ROM in it is still refused.
     case "$f" in
         pkg/pocket/Assets/*) ;;
-        mycore/*|*/mycore/*)
+        ngage/*|*/ngage/*)
             printf '  REFUSE  %s\n            ROM or romset file\n' "$f" >>"$report" ;;
     esac
     sz=$(wc -c < "$f" 2>/dev/null || echo 0)

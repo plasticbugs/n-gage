@@ -20,8 +20,8 @@ power-of-two RAMs only (section 5.18).
 
 ## 3. The ROM image
 
-Layout of `mycore.rom` byte by byte, the SDRAM word address of each region,
-and the same constants in `target/pocket/mycore_mem.sv` and `sim/tb_mem.cpp`.
+Layout of `ngage.rom` byte by byte, the SDRAM word address of each region,
+and the same constants in `target/pocket/ngage_mem.sv` and `sim/tb_mem.cpp`.
 
 ## 4. SDRAM clients and the arbiter
 
@@ -41,7 +41,7 @@ with a counter that survives the miss (section 5.19).
 
 ## 6. Timing exceptions
 
-Every multicycle in `projects/mycore_pocket.sdc`, why everything its filter
+Every multicycle in `projects/ngage_pocket.sdc`, why everything its filter
 matches qualifies, and which registers sit at the edge of the relaxed region.
 
 ## 7. What is not cycle-exact, and why that is acceptable

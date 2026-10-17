@@ -10,8 +10,8 @@
 PLACEHOLDERS=""          # e.g. "pal16l8.ic3:260 pal20l8.ic23:260"
 set -e
 root=$(cd "$(dirname "$0")/.." && pwd)
-src=${1:-$root/mycore}
-dst=$root/.mame/roms/mycore
+src=${1:-$root/ngage}
+dst=$root/.mame/roms/ngage
 [ -d "$src" ] || { echo "no romset directory at $src" >&2; exit 2; }
 mkdir -p "$dst" "$root/.mame/cfg" "$root/.mame/nvram"
 for f in "$src"/*; do ln -sf "$f" "$dst/$(basename "$f")"; done

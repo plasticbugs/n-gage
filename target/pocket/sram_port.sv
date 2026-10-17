@@ -5,7 +5,7 @@
 // (docs/core-design.md section 2).
 //
 // Carried over from the Gaiapolis core, where it is proven on hardware. Every
-// pin is a register in its IO cell (projects/mycore_pocket.qsf) so the pin
+// pin is a register in its IO cell (projects/ngage_pocket.qsf) so the pin
 // timing is the same on every build; `slow` and `slow_wr` stretch the read
 // capture and the write strobe by a clock and are exposed in the Pocket menu
 // as diagnostics.

@@ -4,7 +4,7 @@ You are building an openFPGA core for one arcade board. This repository starts
 as a **working skeleton**: it compiles, closes timing, passes its memory gate,
 and on a Pocket shows a test pattern with a cursor on the d-pad, a beep on
 button 1 and a bring-up panel. Your job is to replace the inside of
-`rtl/mycore_core.sv` with the machine, without ever breaking what already
+`rtl/ngage_core.sv` with the machine, without ever breaking what already
 works around it.
 
 `METHODOLOGY.md` is the long form of everything below, written from five cores
@@ -33,12 +33,12 @@ until it is checked, and commit at each one.
    clocks, the video chip's registers and draw order, the sound board. Use
    Ghidra on the program ROM for anything the driver leaves implicit. No RTL
    yet.
-3. **The ROM image.** Write `mycore.mra`, build the image with
+3. **The ROM image.** Write `ngage.mra`, build the image with
    `tools/mra_build.py` **and** the standard `mra` tool (`tools/check_mra.py`
    requires the same md5 from both), and write a `tools/verify_rom.py` (the pattern is in
    `tools/examples/`) that proves every region is byte-identical to what MAME
    hands the chips. Set the region bases in
-   `target/pocket/mycore_mem.sv` and `sim/tb_mem.cpp` to match, and run
+   `target/pocket/ngage_mem.sv` and `sim/tb_mem.cpp` to match, and run
    `sim/run_mem.sh`.
 4. **The reference renderer** — a Python model of the video hardware, in
    `tools/`, pixel-identical to MAME on captured frames that span boot, attract, gameplay and any special mode. Expect to get
@@ -49,7 +49,7 @@ until it is checked, and commit at each one.
 6. **CPUs, then the whole machine** on the fast bench with ideal memories.
 7. **The whole machine on the real memory glue** — `sim/run_system.sh`, which
    is in this template and already runs against the skeleton: real
-   `mycore_mem`, real SDRAM controller and SRAM port, behavioural chips beyond
+   `ngage_mem`, real SDRAM controller and SRAM port, behavioural chips beyond
    the pins, image pushed in at the loader's rate. Keep the fast
    ideal-memory bench too, but this is the one to pass *before the first
    flash*.
@@ -95,7 +95,7 @@ until it is checked, and commit at each one.
 
 | Trap | Where it is handled | Section |
 |---|---|---|
-| The Pocket's loader cannot wait; a single pending download word corrupts the image | 64-word FIFO, edge-detected strobe, in `mycore_mem.sv`; `sim/run_mem.sh` fails without it | 5.16 |
+| The Pocket's loader cannot wait; a single pending download word corrupts the image | 64-word FIFO, edge-detected strobe, in `ngage_mem.sv`; `sim/run_mem.sh` fails without it | 5.16 |
 | The write strobe is held 4 clocks; anything that counts on its level is wrong | the gate's `-hold` | 5.8 |
 | A shared port's ack carries no name | latch the owner at grant; route the ack by it, never by who is asking when it lands | 5.17 |
 | 2-D or non-power-of-two arrays of flops | one-dimensional, power-of-two RAMs only | 5.18 |
@@ -159,12 +159,12 @@ docs/hardware.md                        the board, from MAME and the ROM — wri
 docs/core-design.md                     how it maps onto the Pocket, and the budgets
 docs/bringup.md                         what to do and read at the first flash
 ref/mame/                               MAME sources this was written against, verbatim
-rtl/mycore_core.sv                      THE MACHINE.  skeleton now; ports are the contract
+rtl/ngage_core.sv                      THE MACHINE.  skeleton now; ports are the contract
 rtl/clk_enables.sv                      CPU/sound/dot enables, with pause and pix_sync
 rtl/dbg_overlay.sv  rtl/dbg_fault.sv    the bring-up panel and the first-fault capture
 modules/                                vendored CPUs and sound chips; VENDOR.md says from where
 target/pocket/core_top.sv               APF glue; game-specific only below "@ The game"
-target/pocket/mycore_mem.sv             SDRAM clients, download FIFO, burst arbiter, SRAM
+target/pocket/ngage_mem.sv             SDRAM clients, download FIFO, burst arbiter, SRAM
 target/pocket/sdram_ctrl.sv sram_port.sv   proven on hardware; do not edit casually
 target/pocket/pocket_analogizer.sv     the Analogizer: clock hand-over, Y/C, SNAC -> key1..4
 target/pocket/ana_15k.sv               a 15 kHz picture from a 25/31 kHz board, for the Analogizer
@@ -190,7 +190,7 @@ tools/check_frames.py artifacts/still -w W -h H   # THREE CONSECUTIVE frames of 
                              # still screen.  A picture that alternates leaves a
                              # ghost on the Pocket's OLED -- before the first flash
 tools/check_json.py pkg/pocket --active WxH       # what the firmware silently refuses
-sim/run_mem.sh -quick        # a minute; after touching mycore_mem.sv (drop -quick before a flash)
+sim/run_mem.sh -quick        # a minute; after touching ngage_mem.sv (drop -quick before a flash)
 sim/run_system.sh -frames 10 # the whole machine through the real memory glue
 sim/run_analogizer.sh        # the Analogizer path, read at the cartridge pins
 sim/run_ana15k.sh            # the 15 kHz converter, if the board is not 15 kHz

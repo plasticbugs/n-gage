@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build the Pocket .rom image for the My Core core from a MAME romset.
+"""Build the Pocket .rom image for the N-Gage core from a MAME romset.
 
 A core is FPGA gateware: it cannot unzip a romset or run a script, so the ROM
 image has to be assembled on a computer. This reads the .mra description and a
-MAME `mycore` romset -- either the zip or a directory of loose files -- checks
+MAME `ngage` romset -- either the zip or a directory of loose files -- checks
 every part's CRC32, assembles the image in the order the .mra gives, and
 verifies the finished image against the md5 recorded in the .mra.
 

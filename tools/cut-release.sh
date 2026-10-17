@@ -85,7 +85,7 @@ done
 for d in "$OUT"/Cores/*/; do
     [ -f "$d/bitstream.rbf_r" ] || { echo "no bitstream for $(basename "$d") in run $RUN"; exit 1; }
 done
-for extra in mycore.mra README.md tools/mra_build.py; do
+for extra in ngage.mra README.md tools/mra_build.py; do
     [ -f "$extra" ] && cp "$extra" "$OUT/$(basename "$extra")"
 done
 
@@ -107,7 +107,7 @@ if find "$OUT" -name '*.rom' | grep -q .; then
     echo "refusing to publish: a ROM is in the package"; exit 1
 fi
 
-VER=$(python3 -c "import json;print(json.load(open('pkg/pocket/Cores/plasticbugs.mycore/core.json'))['core']['metadata']['version'])")
+VER=$(python3 -c "import json;print(json.load(open('pkg/pocket/Cores/plasticbugs.ngage/core.json'))['core']['metadata']['version'])")
 # names from the package, so a core made from the template never ships
 # another core's (this line once named MCR-68000 in NBA Jam's release)
 SHORT=$(python3 -c "import json,glob;print(json.load(open(sorted(glob.glob('pkg/pocket/Cores/*/core.json'))[0]))['core']['metadata']['shortname'])")
