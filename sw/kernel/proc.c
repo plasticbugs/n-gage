@@ -15,7 +15,7 @@
 
 extern char thread_tramp[];
 static u32 next_id = 1;
-static u32 euser_export(int ord)
+u32 euser_export(int ord)
 {
     static const struct rom_image *eu;
     if (!eu) eu = rom_image("\\System\\Libs\\EUser.dll");

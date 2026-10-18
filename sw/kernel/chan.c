@@ -136,9 +136,111 @@ static s32 lcd_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
     kpanic("Lcd request %d (%x %x)", fn, a1, a2);
 }
 
+/* ---- NOSDRIVER: Phonet, ISI messages to the modem ----------------------
+ * Control 4 (and 6) sends one message: a1 is a TDes8 over it.  A Phonet
+ * frame: media, receiver device, sender device, resource, length (big
+ * endian, of what follows byte 5), receiver object, sender object, then the
+ * ISI body: transaction id, message id, ...  Request 0 receives one into
+ * the TDes8 at a1.
+ *
+ * There is no modem, so NGVM answers as an ISI modem answers a service it
+ * does not have: COMMON_MESSAGE (0xF0), COMM_SERVICE_NOT_IDENTIFIED_RESP
+ * (0x01), the request's message id, back to the sender's object with its
+ * transaction id.  Clients take their error paths instead of waiting for
+ * ever (MediaServer waited on ETel, and the game on MediaServer). */
+#define ISI_REPLIES 32
+#define ISI_LEN 14
+static struct { struct channel *c; u8 m[ISI_LEN]; } isi_q[ISI_REPLIES];
+static struct { struct channel *c; struct thread *t; u32 st, buf; } isi_rx[16];
+
+static void isi_deliver(struct channel *c)
+{
+    for (int r = 0; r < 16; r++) {
+        if (!isi_rx[r].t || isi_rx[r].c != c) continue;
+        for (int q = 0; q < ISI_REPLIES; q++) {
+            if (isi_q[q].c != c) continue;
+            struct thread *t = isi_rx[r].t;
+            isi_rx[r].t = 0;
+            extern struct process *proc_mapped(void);
+            struct process *was = proc_mapped();
+            proc_switch_in(t->proc);
+            s32 e = des_write8(isi_rx[r].buf, isi_q[q].m, ISI_LEN);
+            proc_switch_in(was);
+            isi_q[q].c = 0;
+            if (kflags & DBGF_IPC) {
+                kprintf("[isi] reply res %02x tid %02x to ", isi_q[q].m[3], isi_q[q].m[8]);
+                kputs16(t->proc->o.name, t->proc->o.namelen);
+                kprintf(": %d\n", e);
+            }
+            request_complete(t, isi_rx[r].st, e);
+            return;
+        }
+    }
+}
+
+static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
+{
+    if (fn != 4 && fn != 6) return mute_control(c, fn, a1, a2);
+    u8 m[24];
+    int n = des_len(a1);
+    ucopy_from(m, des_ptr(a1), n < 24 ? n : 24);
+    if (kflags & DBGF_IPC) {
+        kprintf("[isi] send res %02x len %d obj %02x->%02x tid %02x msg %02x:", m[3], n, m[7], m[6], m[8], m[9]);
+        for (int i = 10; i < n && i < 24; i++) kprintf(" %02x", m[i]);
+        kprintf(" (from ");
+        kputs16(cur->proc->o.name, cur->proc->o.namelen);
+        kprintf(")\n");
+    }
+    if (n < 10 || m[9] == 0xF0) return KErrNone;   /* not a request */
+    for (int q = 0; q < ISI_REPLIES; q++) {
+        if (isi_q[q].c) continue;
+        u8 *r = isi_q[q].m;
+        r[0] = m[0]; r[1] = m[2]; r[2] = m[1]; r[3] = m[3];
+        r[4] = 0; r[5] = ISI_LEN - 6;
+        r[6] = m[7]; r[7] = m[6];
+        r[8] = m[8]; r[9] = 0xF0; r[10] = 0x01; r[11] = m[9]; r[12] = 0; r[13] = 0;
+        if (m[3] == 0x1C && m[9] == 0x10) {   /* accessory mode: PHONETSY reads one byte */
+            r[9] = 0x11; r[10] = 0; r[11] = 0;     /* 0: no accessory */
+        }
+        isi_q[q].c = c;
+        isi_deliver(c);
+        return KErrNone;
+    }
+    kprintf("[isi] reply queue full\n");
+    return KErrNone;
+}
+
+static s32 nos_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
+{
+    if (kflags & DBGF_IPC) {
+        kprintf("[isi] receive %d (%x %x) from ", fn, a1, a2);
+        kputs16(cur->proc->o.name, cur->proc->o.namelen);
+        kprintf("\n");
+    }
+    if (fn != 0) return mute_request(c, fn, st, a1, a2);
+    for (int r = 0; r < 16; r++)
+        if (!isi_rx[r].t) {
+            isi_rx[r].c = c; isi_rx[r].t = cur; isi_rx[r].st = st; isi_rx[r].buf = a1;
+            isi_deliver(c);
+            return KErrNone;
+        }
+    kpanic("NOSDRIVER: too many receives");
+}
+
+static void nos_cancel(struct channel *c, u32 mask)
+{
+    if (mask & 1)
+        for (int r = 0; r < 16; r++)
+            if (isi_rx[r].t && isi_rx[r].c == c) {
+                request_complete(isi_rx[r].t, isi_rx[r].st, KErrCancel);
+                isi_rx[r].t = 0;
+            }
+    mute_cancel(c, mask);
+}
+
 static const struct devmodel models[] = {
     { "Lcd", 0, lcd_control, lcd_request, 0 },
-    { "NOSDRIVER", 0, mute_control, mute_request, mute_cancel },
+    { "NOSDRIVER", 0, nos_control, nos_request, nos_cancel },
     { "LesterDrv", 0, mute_control, mute_request, mute_cancel },
     { "adspctrl", 0, mute_control, mute_request, mute_cancel },
     { "Audioldd", 0, mute_control, mute_request, mute_cancel },

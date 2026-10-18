@@ -81,6 +81,15 @@
 #define LCD_W             176
 #define LCD_H             208
 
+/* The game's drive image is a FAT16 volume with no partition table
+ * (tools/mkdrive.py).  Its boot sector's boot-code area, which FAT never
+ * reads, holds the launch record: NGVM_LAUNCH_MAGIC, then the .app to run
+ * ("E:\\System\\Apps\\X\\X.app"), ASCII, NUL-terminated.  No record: the
+ * phone boots and runs nothing.                                             */
+#define NGVM_LAUNCH_OFF   0x40
+#define NGVM_LAUNCH_MAGIC "NGVMRUN"   /* 8 bytes with its NUL                  */
+#define NGVM_LAUNCH_MAX   0x1B6       /* bytes of path, NUL included           */
+
 /* Pocket controls as the kernel sees them. */
 #define KEY_UP     (1u << 0)
 #define KEY_DOWN   (1u << 1)

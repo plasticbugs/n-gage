@@ -95,6 +95,7 @@ void kmain(void)
     boot_idle();
     extern void drive_init(void);
     drive_init();
+    launch_init();
 
     const char *fs = "Z:\\System\\Libs\\EFile.exe";
     const struct rom_image *img = rom_image(fs);

@@ -10,6 +10,11 @@ Files are laid out contiguously, in path order.  No dependencies.
 
 A game zip as distributed holds the card's contents at its root
 (`system/apps/...`); --from accepts the zip directly.
+
+The boot sector's boot-code area, which FAT never reads, carries the launch
+record the kernel reads (NGVM_LAUNCH_* in sw/include/ngvm_hw.h): the .app to
+run, from the `Path:` line of the card's ngagegamestarter.txt, else the
+card's only .app, else --app.
 """
 import argparse, os, struct, sys, time, zipfile
 
@@ -57,7 +62,30 @@ def needs_lfn(name, short11):
     return name != (b + ('.' + e if e else ''))
 
 
-def build(tree, size_mb, label):
+LAUNCH_OFF, LAUNCH_MAGIC, LAUNCH_MAX = 0x40, b'NGVMRUN\0', 0x1FE - 0x48
+
+
+def find_app(tree):
+    """The card's game, as E:\\... : what the N-Gage's game starter runs."""
+    st = tree.children.get('ngagegamestarter.txt')
+    if st:
+        for line in st.data.decode('latin-1').splitlines():
+            if line.lower().startswith('path:'):
+                return 'E:' + line.split(':', 1)[1].strip()
+    apps = []
+
+    def walk(n, path):
+        for c in n.children.values():
+            p = path + '\\' + c.name
+            if c.is_dir:
+                walk(c, p)
+            elif c.name.lower().endswith('.app'):
+                apps.append('E:' + p)
+    walk(tree, '')
+    return apps[0] if len(apps) == 1 else None
+
+
+def build(tree, size_mb, label, app=None):
     total = size_mb * 1024 * 1024 // SECTOR
     # pick the smallest cluster that keeps FAT16 within its cluster range
     for spc in (1, 2, 4, 8, 16, 32, 64):
@@ -147,6 +175,11 @@ def build(tree, size_mb, label):
                      total if total >= 65536 else 0)
     bs += struct.pack('<BBBI11s8s', 0x80, 0, 0x29, 0x4E474147, label.upper().ljust(11)[:11].encode(), b'FAT16   ')
     img[0:len(bs)] = bs
+    if app:
+        rec = LAUNCH_MAGIC + app.encode('ascii') + b'\0'
+        if len(rec) > LAUNCH_MAX + 8:
+            sys.exit('launch path too long')
+        img[LAUNCH_OFF:LAUNCH_OFF + len(rec)] = rec
     img[510:512] = b'\x55\xAA'
     fatb = struct.pack('<%dH' % len(fat), *fat)
     for i in range(nfats):
@@ -193,6 +226,7 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--size-mb', type=int, default=0, help='default: the content plus 2 MB, at least 16')
     ap.add_argument('--label', default='NGAGE')
+    ap.add_argument('--app', help='the .app to launch (E:\\...); default: from the card')
     a = ap.parse_args()
     tree = load_tree(a.src)
     content = 0
@@ -204,9 +238,11 @@ def main():
             walk(c)
     walk(tree)
     size = a.size_mb or max(16, (content + 2 * 1024 * 1024 + 1048575) // 1048576 + 1)
-    img, used = build(tree, size, a.label)
+    app = a.app or find_app(tree)
+    img, used = build(tree, size, a.label, app)
     open(a.out, 'wb').write(img)
-    print('%s: %d MB FAT16, %d bytes of files, %d bytes of clusters used' % (a.out, size, content, used))
+    print('%s: %d MB FAT16, %d bytes of files, %d bytes of clusters used; launches %s'
+          % (a.out, size, content, used, app or 'nothing'))
 
 
 if __name__ == '__main__':

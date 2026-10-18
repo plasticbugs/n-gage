@@ -50,6 +50,7 @@ static void program_timer(void)
 {
     u64 next = slice_end;
     if (tq && tq->expiry < next) next = tq->expiry;
+    if (launch_due < next) next = launch_due;
     IO(IO_TIMER_CMP) = (u32)next;
 }
 
@@ -238,6 +239,7 @@ void timer_tick(void)
         if (k->kind == 9) obj_unref(&k->o);        /* User::After's own timer */
     }
     if (now >= slice_end) slice_expired = 1;
+    launch_poll();
     program_timer();
 }
 

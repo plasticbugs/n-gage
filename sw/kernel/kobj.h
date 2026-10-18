@@ -253,6 +253,10 @@ void timer_queue(struct ktimer *k, u64 when);
 void timer_dequeue(struct ktimer *k);
 void timer_tick(void);
 void activity(void);                  /* user activity: inactivity timers restart */
+/* ---- launch.c --------------------------------------------------------------- */
+void launch_init(void);               /* read the drive's launch record      */
+void launch_poll(void);               /* from the timer: start it when due   */
+extern u64 launch_due;                /* when to look again; ~0: never       */
 void thread_exit(struct thread *t, int type, s32 reason, const u16 *cat, int catlen);
 extern struct thread *idle_thread;
 void sem_signal(struct semaphore *s, int n);
@@ -269,6 +273,7 @@ void proc_switch_in(struct process *p);     /* 0: unmap the data window */
 void thread_reprioritise(struct thread *t);
 u32  proc_static_calls(struct process *p, u32 *list, int max);
 struct library *lib_for_rom(const struct rom_image *img);
+u32  euser_export(int ord);           /* EUser.dll's export by ordinal       */
 void lib_add_dep(struct library *l, struct library *dep);
 void proc_add_dep(struct process *p, struct library *dep);
 void proc_kill(struct process *p, int type, s32 reason, const u16 *cat, int catlen);
