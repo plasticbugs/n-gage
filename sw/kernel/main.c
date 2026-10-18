@@ -103,6 +103,13 @@ void kmain(void)
     const struct rom_image *img = rom_image(fs);
     if (!img) kpanic("%s not in the firmware", fs);
     struct process *p = proc_from_rom(img, fs);
+    /* EKA1 gives the file server EPriorityFileServer itself: EFile's header
+     * says 350 (as ekern's does) and nothing in the firmware ever sets 750.
+     * Its loader thread must outrank the applications, or another app runs
+     * between a client's "no server" and the server it is starting coming
+     * up, and starts a second copy (PhoneServer panics PhSrvFault 2). */
+    p->prio = 750;
+    thread_reprioritise(p->main);
     p->main->suspend_count = 0;
     kprintf("EFile: entry %p data %p+%x bss %x\n", img->entry, img->data_bss_base, img->data_size, img->bss_size);
 

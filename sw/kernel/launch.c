@@ -84,6 +84,6 @@ void launch_poll(void)
     p->exit_type = 3;
     struct thread *t = thread_create(p, (u32)launcher, 0, 0x2000, 0, 0x1000, 0x10000, 1);
     obj_set_name_a(&t->o, "Main");
-    t->suspend_count = 0;
+    thread_resume(t);
     kprintf("[launch] starting AppRun\n");
 }

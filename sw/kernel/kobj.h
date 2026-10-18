@@ -275,6 +275,7 @@ struct thread *thread_create(struct process *p, u32 func, u32 ptr, u32 stack, u3
                              u32 heap_min, u32 heap_max, int first);
 void proc_switch_in(struct process *p);     /* 0: unmap the data window */
 void thread_reprioritise(struct thread *t);
+void thread_resume(struct thread *t);       /* one resume; runs at zero    */
 u32  proc_static_calls(struct process *p, u32 *list, int max);
 struct library *lib_for_rom(const struct rom_image *img);
 u32  euser_export(int ord);           /* EUser.dll's export by ordinal       */

@@ -463,7 +463,7 @@ void exec_dispatch(struct ctx *c, u32 n)
     case 0x1B: { struct process *p = prc(ARG(0)); r = p ? (s32)p->id : KErrBadHandle; break; }
     case 0x1D: {                                  /* resume                 */
         struct process *p = prc(ARG(0));
-        if (p && p->main && p->main->suspend_count > 0) p->main->suspend_count--;
+        if (p && p->main) thread_resume(p->main);
         if (p && (kflags & DBGF_IPC)) {
             kprintf("[kern] resume process ");
             kputs16(p->o.name, p->o.namelen);
@@ -516,7 +516,7 @@ void exec_dispatch(struct ctx *c, u32 n)
     case 0x32: { struct thread *t = thr(ARG(0)); r = t ? (s32)t->id : KErrBadHandle; break; }
     case 0x34: {                                  /* resume                 */
         struct thread *t = thr(ARG(0));
-        if (t && t->suspend_count > 0) t->suspend_count--;
+        if (t) thread_resume(t);
         break;
     }
     case 0x35: { struct thread *t = thr(ARG(0)); if (t) t->suspend_count++; break; }

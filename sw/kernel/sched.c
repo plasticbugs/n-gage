@@ -11,9 +11,13 @@
 
 struct thread *cur;
 struct thread *idle_thread;
+u64 idle_us;                            /* time the idle thread has held the CPU;
+                                           the host reads it to measure load */
+u64 idle_since;                         /* when it last got it */
 static struct process *mapped_proc;     /* whose data window is mapped     */
 static u32 run_stamp;
 static int slice_expired;
+static int need_resched = 1;             /* a thread may now outrank cur    */
 static u64 slice_end;
 static struct ktimer *tq;                /* sorted by expiry                */
 
@@ -39,7 +43,13 @@ static int effective_prio(struct thread *t)
     return t->proc->prio + r;
 }
 
-void thread_reprioritise(struct thread *t) { t->prio = effective_prio(t); }
+void thread_reprioritise(struct thread *t) { t->prio = effective_prio(t); need_resched = 1; }
+
+/* One resume: the thread runs when its count reaches zero. */
+void thread_resume(struct thread *t)
+{
+    if (t->suspend_count > 0 && --t->suspend_count == 0) need_resched = 1;
+}
 
 static int runnable(struct thread *t)
 {
@@ -66,12 +76,19 @@ void sched_wake(struct thread *t)
     if (t->state == T_DEAD) return;
     t->state = T_READY;
     t->wait_obj = 0;
+    need_resched = 1;
 }
 
 void sched_block(struct thread *t, enum tstate st) { t->state = st; }
 
 void schedule(void)
 {
+    /* Nothing has woken, resumed or changed priority since the last choice,
+     * and cur can still run: it stays.  Most execs end here, and the scan
+     * below walks every thread object, the dead ones included. */
+    if (!need_resched && !slice_expired && cur && (cur == idle_thread || runnable(cur)))
+        return;
+    need_resched = 0;
     struct thread *best = 0;
     for (struct kobj *o = obj_first(O_THREAD); o; o = o->next) {
         struct thread *t = (struct thread *)o;
@@ -96,6 +113,11 @@ void schedule(void)
         kprintf(" (%d) pc %p\n", best->prio, best->ctx.pc);
     }
     best->run_stamp = ++run_stamp;
+    if (best != cur) {
+        u64 now = now_us();
+        if (cur == idle_thread) idle_us += now - idle_since;
+        if (best == idle_thread) idle_since = now;
+    }
     cur = best;
     cur_ctx = &best->ctx;
     if (best->proc && best->proc != mapped_proc && best != idle_thread) proc_switch_in(best->proc);
@@ -230,6 +252,7 @@ void activity(void)
 void timer_tick(void)
 {
     u64 now = now_us();
+    kflags = IO(IO_DBG_FLAGS);            /* the host may change them as it runs */
     while (tq && tq->expiry <= now) {
         struct ktimer *k = tq;
         tq = k->qnext;

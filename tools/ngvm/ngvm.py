@@ -116,7 +116,7 @@ class Machine:
         uc.hook_add(UC_HOOK_INTR, self.on_intr)
         if args.brk:
             from romsyms import Syms
-            self.syms = Syms(args.rom)
+            self.romsyms = Syms(args.rom)
             self.brk_left = args.brk_count
             self.brk_r0 = None if args.brk_r0 is None else int(args.brk_r0, 16) & 0xFFFFFFFF
             for a in args.brk.split(','):
@@ -142,12 +142,25 @@ class Machine:
         self.audio = []                # samples (int16 L, int16 R)
         self.audio_rate = 8000
         self.audio_fifo = 0.0          # samples waiting, drained at audio_rate
+        self.idle_at = []              # the kernel's idle_us, once a virtual second
+        self.pc_hist = {}              # --profile: where slices end
+        self.ram_peak = 0              # most distinct RAM pages mapped at once
         self.exit_code = None
         self.con = bytearray()
         self.slice_us = 0.0
 
         uc.reg_write(UC_ARM_REG_CPSR, 0xD3)
         self.pc = entry
+
+    def rd32(self, a):
+        return struct.unpack('<I', self.uc.mem_read(a, 4))[0]
+
+    def kobj_name(self, o):
+        """A kernel object's name (struct kobj: namelen at +2, UTF-16 name at +20)."""
+        if not o:
+            return '-'
+        n = struct.unpack('<H', self.uc.mem_read(o + 2, 2))[0]
+        return bytes(self.uc.mem_read(o + 20, 2 * min(n, 80))).decode('utf-16-le', 'replace')
 
     def on_brk(self, uc, addr, size, ud):
         """A breakpoint that only reports: registers, and the words on the
@@ -158,8 +171,9 @@ class Machine:
         if self.brk_r0 is not None and r[0] != self.brk_r0:
             return
         self.brk_left -= 1
-        print('[brk] %08x %s' % (addr, self.syms.name(addr)))
-        print('[brk]   r0=%08x r1=%08x r2=%08x r3=%08x lr=%08x %s' % (r[0], r[1], r[2], r[3], r[14], self.syms.name(r[14])))
+        print('[brk] %08x %s in %s at %.6f s' % (addr, self.romsyms.name(addr), self.kobj_name(self.rd32(self.syms['cur'])),
+                                                self.insns / self.mips / 1e6))
+        print('[brk]   r0=%08x r1=%08x r2=%08x r3=%08x lr=%08x %s' % (r[0], r[1], r[2], r[3], r[14], self.romsyms.name(r[14])))
         print('[brk]   ' + ' '.join('r%d=%08x' % (i, r[i]) for i in range(4, 13)) + ' sp=%08x' % r[13])
         for spec in (self.a.brk_mem or '').split(','):
             m = re.match(r'r(\d+)([+-]0x[0-9a-f]+|[+-]\d+)?:(\d+)$', spec.strip())
@@ -180,7 +194,7 @@ class Machine:
         for i in range(0, len(words), 4):
             v = int.from_bytes(words[i:i + 4], 'little')
             if NGVM_ROM_BASE <= v < NGVM_ROM_BASE + 0x2000000 and len(chain) < 12:
-                chain.append('%08x %s' % (v, self.syms.name(v)))
+                chain.append('%08x %s' % (v, self.romsyms.name(v)))
         for c in chain:
             print('[brk]     ' + c)
 
@@ -214,7 +228,8 @@ class Machine:
         if off == IO_IRQ_STATUS:
             return self.irq_status
         if off == IO_DBG_FLAGS:
-            return self.a.trace
+            on = self.insns >= self.a.trace_from * self.mips * 1000000
+            return self.a.trace if on else 0
         if off == IO_IRQ_ENABLE:
             return self.irq_enable
         if off == IO_LCD_BASE:
@@ -399,6 +414,14 @@ class Machine:
 
     def on_frame(self):
         a = self.a
+        if self.frames % 30 == 0:
+            self.ram_peak = max(self.ram_peak, len(set(self.pt.values())))
+        if self.frames % 60 == 0:
+            rd = lambda name, n: struct.unpack('<Q' if n == 8 else '<I', self.uc.mem_read(self.syms[name], n))[0]
+            idle = rd('idle_us', 8)
+            if rd('cur', 4) == rd('idle_thread', 4):    # an idle stretch still running
+                idle += self.now_us() - rd('idle_since', 8)
+            self.idle_at.append(idle)
         now = self.insns / self.mips / 1e6
         while self.key_steps and self.key_steps[0][0] <= now:
             self.keys = self.key_steps.pop(0)[1]
@@ -439,6 +462,37 @@ class Machine:
             w.writeframes(struct.pack('<%dI' % len(self.audio), *self.audio))
         print('audio: %d samples at %d Hz to %s' % (len(self.audio), self.audio_rate, path))
 
+    def report_load(self):
+        """What the run asked of the machine: CPU MIPS outside the idle thread
+        each virtual second (from the kernel's idle_us, so as fine as --slice),
+        and the most RAM pages mapped at once."""
+        idle = self.idle_at
+        mips = [self.mips * (1 - (b - a) / 1e6) for a, b in zip(idle, idle[1:])]
+        if mips:
+            print('load: busy MIPS per second: ' + ' '.join('%.0f' % m for m in mips))
+            print('load: mean %.1f, max %.1f MIPS of %d; RAM peak %d pages (%.1f MB)' % (
+                sum(mips) / len(mips), max(mips), self.mips, self.ram_peak,
+                self.ram_peak * NGVM_PAGE_SIZE / 1048576))
+
+    def report_profile(self):
+        """--profile: the commonest places slices ended, named from the ROM."""
+        from romsyms import Syms
+        syms = Syms(self.a.rom)
+        total = sum(self.pc_hist.values()) or 1
+        by_name = {}
+        for pc, k in self.pc_hist.items():
+            if NGVM_ROM_BASE <= pc < NGVM_ROM_BASE + NGVM_ROM_MAX:
+                name = syms.name(pc)
+                name = re.sub(r'\+0x[0-9a-f]+$', '', name)
+            elif pc < NGVM_KERN_SIZE:
+                below = [(a, n) for n, a in self.syms.items() if a <= pc]
+                name = 'kernel!' + (max(below)[1] if below else '?')
+            else:
+                name = 'RAM %08x' % (pc & ~0xFFF)
+            by_name[name] = by_name.get(name, 0) + k
+        for name, k in sorted(by_name.items(), key=lambda x: -x[1])[:25]:
+            print('profile: %5.1f%%  %s' % (100.0 * k / total, name))
+
     def run(self):
         uc = self.uc
         end = self.a.seconds * 1000000 * self.mips
@@ -468,8 +522,13 @@ class Machine:
             self.slice_us = n / self.mips / 1e6
             self.insns += n
             pc = uc.reg_read(UC_ARM_REG_PC)
+            if self.a.profile and pc != self.idle_pc:
+                self.pc_hist[pc & ~1] = self.pc_hist.get(pc & ~1, 0) + 1
             self.update_devices()
         dt = time.time() - t0
+        self.report_load()
+        if self.a.profile:
+            self.report_profile()
         if self.a.wav:
             self.write_wav(self.a.wav)
         print('ran %.3f virtual s (%d insns) in %.1f host s; %d frames; exit %s' % (
@@ -486,6 +545,7 @@ def main():
     ap.add_argument('--mips', type=int, default=100)
     ap.add_argument('--slice', type=int, default=200000)
     ap.add_argument('--trace', type=lambda x: int(x, 0), default=0, help='DBGF_* bits for the kernel')
+    ap.add_argument('--trace-from', type=float, default=0, help='trace only from this virtual second')
     ap.add_argument('--watch', help='lo:hi (hex): log reads of this range')
     ap.add_argument('--brk', help='addr[,addr] (hex): report registers and stack when reached')
     ap.add_argument('--brk-count', type=int, default=20, help='reports at most this many')
@@ -494,6 +554,7 @@ def main():
     ap.add_argument('--fault-va', help='(hex) at a fault, report the page table around this address')
     ap.add_argument('--frames-to')
     ap.add_argument('--frame-every', type=int, default=0)
+    ap.add_argument('--profile', action='store_true', help='sample where the CPU spends its time')
     ap.add_argument('--wav', help='write what the audio FIFO was given to this WAV file')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
     a = ap.parse_args()

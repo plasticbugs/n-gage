@@ -47,7 +47,7 @@
 #define IO_DBG_PUTC       0x000  /* W: one byte to the debug console          */
 #define IO_DBG_EXIT       0x004  /* W: stop the simulation with this code     */
 #define IO_DBG_HEX        0x008  /* W: print a word in hex (debug console)    */
-#define IO_DBG_FLAGS      0x00C  /* R: trace switches the host asks for (DBGF_*) */
+#define IO_DBG_FLAGS      0x00C  /* R: trace switches the host asks for (DBGF_*); read at each timer tick */
 #define IO_TIMER_US       0x010  /* R: microseconds since reset, low word     */
 #define IO_TIMER_US_HI    0x014  /* R: high word, latched by reading low      */
 #define IO_TIMER_CMP      0x018  /* W: raise IRQ_TIMER when US >= this        */
