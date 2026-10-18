@@ -245,6 +245,7 @@ static const struct devmodel models[] = {
     { "adspctrl", 0, mute_control, mute_request, mute_cancel },
     { "Audioldd", 0, mute_control, mute_request, mute_cancel },
     { "Comm", absent_open, 0, 0, 0 },
+    { "bt_driver", 0, mute_control, mute_request, mute_cancel },  /* Bluetooth that never answers */
     { "HelperDrv", 0, helper_control, helper_request, 0 },
     { 0 }
 };

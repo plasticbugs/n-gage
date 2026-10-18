@@ -157,6 +157,11 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
     case 0x03: {                                 /* adjust chunk (top)       */
         struct chunk *k = (struct chunk *)handle_lookup(t, a0, O_CHUNK);
         r = k ? chunk_adjust(k, 0, a1) : KErrBadHandle;
+        if ((kflags & DBGF_IPC) && (r || a1 >= 0x200000)) {
+            kprintf("[chunk] adjust %x %p to %x (max %x reserved %x) -> %d by ", a0, k ? k->base : 0, a1, k ? k->max : 0, k ? k->reserved : 0, r);
+            kputs16(t->o.name, t->o.namelen);
+            kprintf("\n");
+        }
         break;
     }
     case 0x4E: {                                 /* adjust double ended     */
@@ -443,6 +448,22 @@ void exec_dispatch(struct ctx *c, u32 n)
     case 0x1D: {                                  /* resume                 */
         struct process *p = prc(ARG(0));
         if (p && p->main && p->main->suspend_count > 0) p->main->suspend_count--;
+        if (p && (kflags & DBGF_IPC)) {
+            kprintf("[kern] resume process ");
+            kputs16(p->o.name, p->o.namelen);
+            kprintf(" prio %d (main thread %d)\n", p->prio, p->main ? p->main->prio : -1);
+        }
+        break;
+    }
+    case 0xB5: {                                  /* RThread::Context(TDes8&): r0-r15, cpsr */
+        struct thread *t = thr(ARG(1));
+        if (!t) { r = KErrBadHandle; break; }
+        u32 regs[17];
+        for (int i = 0; i < 15; i++) regs[i] = t->ctx.r[i];
+        regs[15] = t->ctx.pc;
+        regs[16] = t->ctx.cpsr;
+        int n = des_maxlen(ARG(0));
+        r = des_write8(ARG(0), (const u8 *)regs, n < (int)sizeof regs ? n : (int)sizeof regs);
         break;
     }
     case 0x1E: case 0x1F: {                      /* file name, command line */
