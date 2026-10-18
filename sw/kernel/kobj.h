@@ -254,6 +254,9 @@ void timer_dequeue(struct ktimer *k);
 void timer_tick(void);
 void activity(void);                  /* user activity: inactivity timers restart */
 void keys_poll(void);                 /* at vblank: IO_KEYS changes become key events */
+void dsp_pump(void);                  /* IRQ_AUDIO: the DSP's PCM player feeds the FIFO */
+void thread_dump(void);               /* every live thread, where it waits */
+void stack_scan(struct thread *t, int max); /* ROM addresses on its stack, then a newline */
 /* ---- launch.c --------------------------------------------------------------- */
 void launch_init(void);               /* read the drive's launch record      */
 void launch_poll(void);               /* from the timer: start it when due   */

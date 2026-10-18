@@ -57,6 +57,7 @@ void exc_dispatch(struct ctx *c, int kind)
         IO(IO_IRQ_STATUS) = st;
         if (st & IRQ_TIMER) timer_tick();
         if (st & IRQ_VBLANK) keys_poll();
+        if (st & IRQ_AUDIO) dsp_pump();
         break;
     }
     default:

@@ -13,6 +13,7 @@
  * A device with no model panics with its name: each one is added when the
  * firmware first reaches for it, from what it asks. */
 #include "kobj.h"
+#include "mm.h"
 
 extern int des_to_ascii(u32 d, char *out, int max);
 
@@ -254,6 +255,34 @@ static s32 absent_open(struct channel *c)
     return KErrNotFound;
 }
 
+/* ---- Audioldd (audio.ldd): the DSP's shared memory ---------------------
+ * audio.ldd is a shim of 1460 bytes.  Control 0 writes three words: at a1
+ * the shared memory's address and the constant 0x0a061000, at a2 its size
+ * (both from the variant's virtuals at +0xf0 and +0xf4).  Controls 1 and 2
+ * switch something in the variant on and off (an object's call with 2, then
+ * 0).  SoundDevice.mda (MediaServer's sound device) is its one client; it
+ * reads and writes the memory directly.  The size is a guess until the DSP
+ * side is understood. */
+#define AUDIO_SHM_SIZE 0x10000
+static u32 audio_shm;
+
+static s32 audio_control(struct channel *c, int fn, u32 a1, u32 a2)
+{
+    if (fn == 0) {
+        if (!audio_shm) {
+            audio_shm = vm_reserve(AUDIO_SHM_SIZE);
+            if (!audio_shm || vm_commit(audio_shm, AUDIO_SHM_SIZE)) kpanic("no memory for the DSP's shared memory");
+            memset((void *)audio_shm, 0, AUDIO_SHM_SIZE);
+        }
+        if (a1) { uwrite32(a1, audio_shm); uwrite32(a1 + 4, 0x0a061000); }
+        if (a2) uwrite32(a2, AUDIO_SHM_SIZE);
+        if (kflags & DBGF_IPC) kprintf("[Audioldd] shared memory %x+%x\n", audio_shm, AUDIO_SHM_SIZE);
+        return KErrNone;
+    }
+    if (fn == 1 || fn == 2) return mute_control(c, fn, a1, a2);
+    return KErrNotSupported;
+}
+
 /* ---- Lcd (lcd.ldd) ------------------------------------------------------ */
 static s32 lcd_control(struct channel *c, int fn, u32 a1, u32 a2)
 {
@@ -282,15 +311,18 @@ static s32 lcd_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
  * ever (MediaServer waited on ETel, and the game on MediaServer). */
 #define ISI_REPLIES 32
 #define ISI_LEN 14
-static struct { struct channel *c; u8 m[ISI_LEN]; } isi_q[ISI_REPLIES];
+static struct { struct channel *c; u32 seq; u8 m[ISI_LEN]; } isi_q[ISI_REPLIES];
+static u32 isi_seq;                           /* queued messages go out in order */
 static struct { struct channel *c; struct thread *t; u32 st, buf; } isi_rx[16];
 
 static void isi_deliver(struct channel *c)
 {
     for (int r = 0; r < 16; r++) {
         if (!isi_rx[r].t || isi_rx[r].c != c) continue;
-        for (int q = 0; q < ISI_REPLIES; q++) {
-            if (isi_q[q].c != c) continue;
+        int q = -1;
+        for (int i = 0; i < ISI_REPLIES; i++)
+            if (isi_q[i].c == c && (q < 0 || (s32)(isi_q[i].seq - isi_q[q].seq) < 0)) q = i;
+        if (q >= 0) {
             struct thread *t = isi_rx[r].t;
             isi_rx[r].t = 0;
             extern struct process *proc_mapped(void);
@@ -310,6 +342,120 @@ static void isi_deliver(struct channel *c)
     }
 }
 
+/* ---- the DSP's PCM player (ISI resource 0xE8) ----------------------------
+ * SoundDevice.mda plays a stream through two buffers in the Audioldd shared
+ * memory, which the DSP addresses from 0x0a061000.  Read from its code and
+ * its traffic:
+ *   0x20 start   [10] 0x82  [11] 2 or 3  [12..13] capacity (samples)
+ *                [14..17] buffer 0, [18..21] buffer 1 (DSP addresses)
+ *                [22..23] 0x32 (8 kHz) or 0x46 (16 kHz)           -> 0x21
+ *   0x23 filled  [10] buffer  [11] 2, or 1 for the last  [12..13] samples
+ *                                                                  -> 0x24
+ *   0x27 filled  as 0x23, once playing: the buffer last asked for -> 0x28
+ *   0x26 (from the DSP) [11] a buffer to fill
+ * 0x24 moves SoundDevice from starting to playing.  It fills one buffer
+ * at the start and one for each 0x26, so the DSP asks for the other buffer
+ * as it starts to play one: double buffering.  After the last buffer
+ * (flag 1) it sends 0x2b with [10..11] the bytes played, a guess not yet
+ * checked.  Samples are 16-bit little endian, mono; the FIFO takes them as
+ * L = R. */
+#define DSP_BASE 0x0a061000u
+static struct {
+    struct channel *c;
+    u8 hdr[3];                                /* media, its device, ours     */
+    u8 obj, us;                               /* its object, and ours        */
+    u32 buf[2]; int len[2], full[2], last[2];
+    int cur, pos, playing, rate;
+    int want;                                 /* the buffer asked for, or -1 */
+} dsp;
+
+static void isi_post(struct channel *c, const u8 *m)
+{
+    for (int q = 0; q < ISI_REPLIES; q++)
+        if (!isi_q[q].c) {
+            memcpy(isi_q[q].m, m, ISI_LEN);
+            isi_q[q].c = c;
+            isi_q[q].seq = isi_seq++;
+            isi_deliver(c);
+            return;
+        }
+    kprintf("[isi] reply queue full\n");
+}
+
+static void dsp_send(u8 id, u8 b10, u8 b11, u8 b12, u8 b13)
+{
+    u8 m[ISI_LEN] = { dsp.hdr[0], dsp.hdr[1], dsp.hdr[2], 0xE8, 0, ISI_LEN - 6, dsp.obj, dsp.us, 0, id, b10, b11, b12, b13 };
+    if (kflags & DBGF_IPC) kprintf("[dsp] send %02x: %02x %02x\n", id, b10, b11);
+    isi_post(dsp.c, m);
+}
+
+static u32 be32(const u8 *p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
+
+/* a request to the player: fill in the reply r, or return 0 for the
+ * generic one */
+static int dsp_request(struct channel *c, const u8 *m, int n, u8 *r)
+{
+    switch (m[9]) {
+    case 0x20:
+        if (n < 24) break;
+        dsp.c = c; dsp.obj = m[7]; dsp.us = m[6];
+        dsp.hdr[0] = m[0]; dsp.hdr[1] = m[2]; dsp.hdr[2] = m[1];
+        dsp.buf[0] = be32(m + 14); dsp.buf[1] = be32(m + 18);
+        dsp.rate = m[23] == 0x32 ? 8000 : 16000;
+        dsp.full[0] = dsp.full[1] = 0; dsp.cur = dsp.pos = 0; dsp.playing = 0; dsp.want = -1;
+        IO(IO_AUDIO_RATE) = dsp.rate;
+        if (kflags & DBGF_IPC)
+            kprintf("[dsp] start: buffers %x %x of %d samples, %d Hz\n", dsp.buf[0], dsp.buf[1], m[12] << 8 | m[13], dsp.rate);
+        r[9] = 0x21; r[10] = 0; r[11] = 0;
+        return 1;
+    case 0x23:
+    case 0x27: {
+        int i = m[9] == 0x23 ? m[10] & 1 : dsp.want;
+        if (i < 0) { kprintf("[dsp] a buffer filled that was not asked for\n"); i = dsp.cur ^ 1; }
+        if (i == dsp.want) dsp.want = -1;
+        dsp.full[i] = 1; dsp.last[i] = m[11] == 1; dsp.len[i] = m[12] << 8 | m[13];
+        if (kflags & DBGF_IPC) kprintf("[dsp] buffer %d: %d samples%s\n", i, dsp.len[i], dsp.last[i] ? ", last" : "");
+        dsp.playing = 1;
+        IO(IO_IRQ_ENABLE) |= IRQ_AUDIO;
+        r[9] = m[9] + 1; r[10] = 0; r[11] = 0;
+        return 1;
+    }
+    }
+    kprintf("[dsp] request %02x not modelled\n", m[9]);
+    return 0;
+}
+
+/* IRQ_AUDIO: the FIFO is half empty.  Play from the current buffer; a
+ * buffer played goes back to SoundDevice. */
+void dsp_pump(void)
+{
+    if (!dsp.playing) { IO(IO_IRQ_ENABLE) &= ~IRQ_AUDIO; return; }
+    int room = (int)IO(IO_AUDIO_SIZE) - (int)IO(IO_AUDIO_LEVEL);
+    while (room > 0 && dsp.full[dsp.cur]) {
+        int i = dsp.cur;
+        if (dsp.pos == 0 && !dsp.full[i ^ 1] && dsp.want < 0 && !dsp.last[i]) {
+            dsp.want = i ^ 1;
+            dsp_send(0x26, 0, i ^ 1, 0, 0);
+        }
+        const u16 *p = (const u16 *)(audio_shm + (dsp.buf[i] - DSP_BASE));
+        while (room > 0 && dsp.pos < dsp.len[i]) {
+            u32 v = (u16)p[dsp.pos++];
+            IO(IO_AUDIO_DATA) = v | v << 16;
+            room--;
+        }
+        if (dsp.pos < dsp.len[i]) break;
+        dsp.full[i] = 0; dsp.pos = 0; dsp.cur ^= 1;
+        if (dsp.last[i]) {
+            int b = dsp.len[i] * 2;
+            dsp_send(0x2b, b >> 8, b, 0, 0);
+            dsp.playing = 0;
+            break;
+        }
+    }
+    /* nothing to play: stop asking until SoundDevice fills a buffer */
+    if (!dsp.full[dsp.cur]) IO(IO_IRQ_ENABLE) &= ~IRQ_AUDIO;
+}
+
 static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
 {
     if (fn != 4 && fn != 6) return mute_control(c, fn, a1, a2);
@@ -322,6 +468,7 @@ static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
         kprintf(" (from ");
         kputs16(cur->proc->o.name, cur->proc->o.namelen);
         kprintf(")\n");
+        if (kflags & DBGF_DUMP) { kprintf("  from:"); stack_scan(cur, 16); }
     }
     if (n < 10 || m[9] == 0xF0) return KErrNone;   /* not a request */
     for (int q = 0; q < ISI_REPLIES; q++) {
@@ -334,7 +481,9 @@ static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
         if (m[3] == 0x1C && m[9] == 0x10) {   /* accessory mode: PHONETSY reads one byte */
             r[9] = 0x11; r[10] = 0; r[11] = 0;     /* 0: no accessory */
         }
+        if (m[3] == 0xE8) dsp_request(c, m, n, r);
         isi_q[q].c = c;
+        isi_q[q].seq = isi_seq++;
         isi_deliver(c);
         return KErrNone;
     }
@@ -375,7 +524,7 @@ static const struct devmodel models[] = {
     { "NOSDRIVER", 0, nos_control, nos_request, nos_cancel },
     { "LesterDrv", 0, mute_control, mute_request, mute_cancel },
     { "adspctrl", 0, mute_control, mute_request, mute_cancel },
-    { "Audioldd", 0, mute_control, mute_request, mute_cancel },
+    { "Audioldd", 0, audio_control, mute_request, mute_cancel },
     { "Comm", absent_open, 0, 0, 0 },
     { "bt_driver", 0, mute_control, bt_request, bt_cancel },
     { "HelperDrv", 0, helper_control, helper_request, 0 },
@@ -433,6 +582,19 @@ s32 chan_create(struct thread *t, u32 a, int towned)
 }
 
 static struct channel *chan(u32 h) { return (struct channel *)handle_lookup(cur, h, O_CHANNEL); }
+
+/* The last handle is gone.  EKA1's logical channels cancel what is still
+ * outstanding when they are closed, so a client that closes first and then
+ * waits on its request (gendll's destructor in adspserver does) gets
+ * KErrCancel; and nothing may keep pointing at the channel after it. */
+void chan_destroy(struct kobj *o)
+{
+    struct channel *c = (struct channel *)o;
+    if (kflags & DBGF_IPC) trace_name("close", c, 0, 0, 0);
+    if (c->m->cancel) c->m->cancel(c, ~0u);
+    for (int q = 0; q < ISI_REPLIES; q++)
+        if (isi_q[q].c == c) isi_q[q].c = 0;
+}
 
 s32 chan_exec(int idx, u32 a0, u32 a1, u32 a2, u32 a3)
 {

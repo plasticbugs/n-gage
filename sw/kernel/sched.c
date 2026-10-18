@@ -326,3 +326,33 @@ void proc_kill(struct process *p, int type, s32 reason, const u16 *cat, int catl
     for (int i = 0; i < p->win_pages; i++) pg_free(p->win[i]);
     p->win_pages = 0;
 }
+
+/* Every live thread: its state, where it stopped, and the ROM code
+ * addresses on its stack (return addresses among them), for reading where
+ * a thread waits without tracing every exec. */
+void stack_scan(struct thread *t, int max)
+{
+    u32 rom_end = NGVM_ROM_BASE + IO(IO_ROM_SIZE);
+    u32 sp = t->ctx.r[13], top = t->stack_base + t->stack_size;
+    int n = 0;
+    if (t->stack_base && sp >= t->stack_base && sp < top)
+        for (u32 a = sp & ~3u; a < top && n < max; a += 4) {
+            u32 w = *(u32 *)a;
+            if (w > NGVM_ROM_BASE && w < rom_end) { kprintf(" %x", w); n++; }
+        }
+    kprintf("\n");
+}
+
+void thread_dump(void)
+{
+    static const char st[] = "CRQSMUD";
+    for (struct kobj *o = obj_first(O_THREAD); o; o = o->next) {
+        struct thread *t = (struct thread *)o;
+        if (t->state == T_DEAD) continue;
+        kputs16(t->proc->o.name, t->proc->o.namelen);
+        kprintf("::");
+        kputs16(t->o.name, t->o.namelen);
+        kprintf(" %c prio %d req %d pc %p lr %p:", st[t->state], t->prio, t->reqsem, t->ctx.pc, t->ctx.r[14]);
+        stack_scan(t, 10);
+    }
+}

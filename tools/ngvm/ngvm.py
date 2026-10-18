@@ -429,6 +429,16 @@ class Machine:
         self.exit_code = 99
         uc.emu_stop()
 
+    def write_wav(self, path):
+        """What the audio FIFO was given, as 16-bit stereo at its last rate."""
+        import wave
+        with wave.open(path, 'wb') as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(self.audio_rate)
+            w.writeframes(struct.pack('<%dI' % len(self.audio), *self.audio))
+        print('audio: %d samples at %d Hz to %s' % (len(self.audio), self.audio_rate, path))
+
     def run(self):
         uc = self.uc
         end = self.a.seconds * 1000000 * self.mips
@@ -460,6 +470,8 @@ class Machine:
             pc = uc.reg_read(UC_ARM_REG_PC)
             self.update_devices()
         dt = time.time() - t0
+        if self.a.wav:
+            self.write_wav(self.a.wav)
         print('ran %.3f virtual s (%d insns) in %.1f host s; %d frames; exit %s' % (
             self.insns / self.mips / 1e6, self.insns, dt, self.frames, self.exit_code))
         return self.exit_code or 0
@@ -482,6 +494,7 @@ def main():
     ap.add_argument('--fault-va', help='(hex) at a fault, report the page table around this address')
     ap.add_argument('--frames-to')
     ap.add_argument('--frame-every', type=int, default=0)
+    ap.add_argument('--wav', help='write what the audio FIFO was given to this WAV file')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
     a = ap.parse_args()
     m = Machine(a)

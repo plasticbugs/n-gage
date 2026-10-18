@@ -224,6 +224,7 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         struct server *s = server_find(name, n);
         if (!s) {
             if (kflags & DBGF_IPC) { kprintf("[ipc] no server "); kputs16(name, n); kprintf("\n"); }
+            if (kflags & DBGF_DUMP) thread_dump();
             r = KErrNotFound; break;
         }
         struct session *ss = (struct session *)obj_new(O_SESSION, sizeof(struct session), t->proc);

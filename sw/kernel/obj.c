@@ -195,6 +195,7 @@ static void obj_destroy(struct kobj *o)
         if (c->base) vm_release(c->base);
     }
     if (o->type == O_TIMER) timer_dequeue((struct ktimer *)o);
+    if (o->type == O_CHANNEL) { extern void chan_destroy(struct kobj *); chan_destroy(o); }
     kfree(o);
 }
 
