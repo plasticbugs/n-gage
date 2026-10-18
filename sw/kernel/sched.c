@@ -56,7 +56,7 @@ static void program_timer(void)
 
 void sched_init(void)
 {
-    IO(IO_IRQ_ENABLE) = IRQ_TIMER;
+    IO(IO_IRQ_ENABLE) = IRQ_TIMER | IRQ_VBLANK;
     slice_end = now_us() + SLICE_US;
     program_timer();
 }

@@ -127,7 +127,11 @@ int ipc_complete(struct thread *t, u32 mh, s32 reason)
 {
     struct message *m = msg_lookup(mh);
     if (!m) { kprintf("[ipc] complete of a dead message %x\n", mh); return KErrBadHandle; }
-    if (kflags & DBGF_IPC) kprintf("[ipc] complete fn %d -> %d\n", m->function, reason);
+    if (kflags & DBGF_IPC) {
+        kprintf("[ipc] complete fn %d -> %d for ", m->function, reason);
+        kputs16(m->client->o.name, m->client->o.namelen);
+        kprintf("%s\n", m->status ? "" : " (no status)");
+    }
     struct session *s = m->session;
     s->msgs_out--;
     if (m->status) request_complete(m->client, m->status, reason);

@@ -12,6 +12,11 @@ Time is virtual: MIPS instructions are one microsecond (default 100), so a
 run is reproducible instruction for instruction, whatever the host's speed.
 The idle thread's loop is recognised by address and skipped to the next
 interrupt.
+
+A key script is a list of "SECONDS:KEYS" steps: at that virtual time the
+pressed set becomes KEYS, names joined with '+' (up down left right a b x y
+l r select start), or nothing for none.  "26:start 26.2: 30:a 30.2:" taps
+start, then a.
 """
 import argparse, ctypes, os, re, struct, sys, time
 
@@ -131,6 +136,7 @@ class Machine:
         self.lcd_ctrl = 0
         self.frames = 0
         self.keys = 0
+        self.key_steps = self.parse_keys(args.keys)
         self.audio = []                # samples (int16 L, int16 R)
         self.audio_rate = 8000
         self.audio_fifo = 0.0          # samples waiting, drained at audio_rate
@@ -334,8 +340,24 @@ class Machine:
             rgb[i * 3 + 2] = (p & 15) * 17
         return rgb
 
+    KEY_NAMES = ('up', 'down', 'left', 'right', 'a', 'b', 'x', 'y', 'l', 'r', 'select', 'start')
+
+    @classmethod
+    def parse_keys(cls, script):
+        steps = []
+        for step in (script or '').split():
+            t, _, names = step.partition(':')
+            mask = 0
+            for n in filter(None, names.lower().split('+')):
+                mask |= 1 << cls.KEY_NAMES.index(n)
+            steps.append((float(t), mask))
+        return sorted(steps)
+
     def on_frame(self):
         a = self.a
+        now = self.insns / self.mips / 1e6
+        while self.key_steps and self.key_steps[0][0] <= now:
+            self.keys = self.key_steps.pop(0)[1]
         if a.frames_to and a.frame_every and self.frames % a.frame_every == 0:
             os.makedirs(a.frames_to, exist_ok=True)
             pngio.write(os.path.join(a.frames_to, 'f%05d.png' % self.frames), LCD_W, LCD_H, self.frame_rgb())
@@ -403,6 +425,7 @@ def main():
     ap.add_argument('--brk-mem', help='rN+off:len[,...]: words to dump at each report')
     ap.add_argument('--frames-to')
     ap.add_argument('--frame-every', type=int, default=0)
+    ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
     a = ap.parse_args()
     m = Machine(a)
     sys.exit(m.run())

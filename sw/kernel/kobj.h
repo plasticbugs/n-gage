@@ -253,6 +253,7 @@ void timer_queue(struct ktimer *k, u64 when);
 void timer_dequeue(struct ktimer *k);
 void timer_tick(void);
 void activity(void);                  /* user activity: inactivity timers restart */
+void keys_poll(void);                 /* at vblank: IO_KEYS changes become key events */
 /* ---- launch.c --------------------------------------------------------------- */
 void launch_init(void);               /* read the drive's launch record      */
 void launch_poll(void);               /* from the timer: start it when due   */

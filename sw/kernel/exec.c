@@ -526,6 +526,11 @@ void exec_dispatch(struct ctx *c, u32 n)
         struct thread *t = thr(ARG(2));
         u32 st = uread32(ARG(0));
         if (t && st) request_complete(t, st, (s32)ARG(1));
+        if (t && st && (kflags & DBGF_IPC)) {
+            kprintf("[ipc] request complete %d for ", (s32)ARG(1));
+            kputs16(t->o.name, t->o.namelen);
+            kprintf("\n");
+        }
         uwrite32(ARG(0), 0);
         break;
     }
