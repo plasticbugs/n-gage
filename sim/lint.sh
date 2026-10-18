@@ -29,12 +29,16 @@ done
 # vendored modules, if there are any yet
 MODS=$(ls "$root"/modules/*/*.v "$root"/modules/*/*.sv 2>/dev/null || true)
 
+# packages first, where both tools want them; they are not tops
+PKGS=$(ls "$root"/rtl/*_pkg.sv 2>/dev/null || true)
+SRCS="$PKGS $(ls "$root"/rtl/*.sv | grep -v '_pkg\.sv$')"
+
 fail=0
-for f in "$root"/rtl/*.sv; do
+for f in $(ls "$root"/rtl/*.sv | grep -v '_pkg\.sv$'); do
     m=$(basename "$f" .sv)
     printf '%-20s ' "$m"
     out=$(verilator --lint-only $OPTS "$WAIVE" --top-module "$m" \
-          "$root"/rtl/*.sv $MODS 2>&1 \
+          $SRCS $MODS 2>&1 \
           | grep -E '^%(Error|Warning)' | grep -v 'Exiting due to' || true)
     if [ -z "$out" ]; then echo ok
     else echo; echo "$out" | sed 's/^/    /'; fail=1
