@@ -18,7 +18,7 @@ pressed set becomes KEYS, names joined with '+' (up down left right a b x y
 l r select start), or nothing for none.  "26:start 26.2: 30:a 30.2:" taps
 start, then a.
 """
-import argparse, ctypes, os, re, struct, sys, time
+import argparse, bisect, ctypes, os, re, struct, sys, time
 
 from unicorn import (Uc, UcError, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_INTR,
                      UC_PROT_READ, UC_PROT_EXEC, UC_PROT_ALL, UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ, UC_HOOK_CODE)
@@ -90,6 +90,8 @@ class Machine:
         uc.mem_map_ptr(NGVM_PHYS_BASE, NGVM_RAM_SIZE, UC_PROT_ALL, self.ram_addr)
         uc.mem_map_ptr(NGVM_KERN_BASE, NGVM_KERN_SIZE, UC_PROT_ALL, self.ram_addr)
         self.pt = {}                   # table index -> RAM page
+        self.runs = {}                 # first index of a mapped run -> its length
+        self.run_starts = []           # sorted
         uc.mem_map(NGVM_KSEC_BASE, NGVM_KSEC_SIZE, UC_PROT_ALL)
         rom = open(args.rom, 'rb').read()
         if len(rom) > NGVM_ROM_MAX:
@@ -236,6 +238,14 @@ class Machine:
         return 0
 
     def io_write(self, uc, off, size, value, ud):
+        try:
+            self.io_write1(uc, off, size, value)
+        except Exception as e:                 # Unicorn would hold it and skip later hooks
+            import traceback
+            traceback.print_exc()
+            self.fault('in the IO write of %x = %x: %r' % (off, value, e))
+
+    def io_write1(self, uc, off, size, value):
         if off == IO_DBG_PUTC:
             c = value & 0xFF
             if c == 10:
@@ -277,18 +287,52 @@ class Machine:
             return NGVM_CHUNK_BASE + (i << NGVM_PAGE_SHIFT)
         return NGVM_DATA_BASE + ((i - NGVM_PT_CHUNK) << NGVM_PAGE_SHIFT)
 
+    # Unicorn region per page would be simplest, but QEMU beneath it numbers
+    # memory sections in the low bits of a TLB entry: past about a thousand
+    # of them, accesses resolve to the wrong section (stores to the IO page
+    # were lost, and a committed page read as unmapped).  So a run of table
+    # entries that maps a run of RAM pages is one region.
+    def run_at(self, i):
+        k = bisect.bisect_right(self.run_starts, i) - 1
+        if k >= 0:
+            s = self.run_starts[k]
+            if i < s + self.runs[s]:
+                return s
+        return None
+
     def pt_set(self, i, page):
         if i >= NGVM_PT_ENTRIES:
             return self.fault('page table index %d out of range' % i)
-        v = self.pt_virt(i)
-        if i in self.pt:
-            self.uc.mem_unmap(v, NGVM_PAGE_SIZE)
-            del self.pt[i]
-        if page != NGVM_PT_NONE:
-            if (page + 1) << NGVM_PAGE_SHIFT > NGVM_RAM_SIZE:
-                return self.fault('page table entry %d -> RAM page %x beyond RAM' % (i, page))
-            self.uc.mem_map_ptr(v, NGVM_PAGE_SIZE, UC_PROT_ALL, self.ram_addr + (page << NGVM_PAGE_SHIFT))
+        if page != NGVM_PT_NONE and (page + 1) << NGVM_PAGE_SHIFT > NGVM_RAM_SIZE:
+            return self.fault('page table entry %d -> RAM page %x beyond RAM' % (i, page))
+        if self.pt.get(i, NGVM_PT_NONE) == page:
+            return
+        lo = hi = i
+        for j in (i - 1, i, i + 1):            # the runs this entry can split or join
+            s = self.run_at(j)
+            if s is not None:
+                n = self.runs.pop(s)
+                self.run_starts.remove(s)
+                self.uc.mem_unmap(self.pt_virt(s), n << NGVM_PAGE_SHIFT)
+                lo, hi = min(lo, s), max(hi, s + n - 1)
+        if page == NGVM_PT_NONE:
+            self.pt.pop(i, None)
+        else:
             self.pt[i] = page
+        k = lo
+        while k <= hi:
+            if k not in self.pt:
+                k += 1
+                continue
+            s = k
+            while k + 1 <= hi and k + 1 != NGVM_PT_CHUNK and self.pt.get(k + 1) == self.pt[k] + 1:
+                k += 1
+            n = k - s + 1
+            self.uc.mem_map_ptr(self.pt_virt(s), n << NGVM_PAGE_SHIFT, UC_PROT_ALL,
+                                self.ram_addr + (self.pt[s] << NGVM_PAGE_SHIFT))
+            self.runs[s] = n
+            bisect.insort(self.run_starts, s)
+            k += 1
 
     # ---- exceptions -----------------------------------------------------------
     def enter(self, vector, mode, ret):
@@ -370,6 +414,18 @@ class Machine:
         print('  ' + ' '.join('r%d=%08x' % (i, v) for i, v in enumerate(r[:8])))
         print('  ' + ' '.join('r%d=%08x' % (i + 8, v) for i, v in enumerate(r[8:13])) +
               ' sp=%08x lr=%08x pc=%08x cpsr=%08x' % (r[13], r[14], r[15], uc.reg_read(UC_ARM_REG_CPSR)))
+        if self.a.fault_va:                    # what the page table says about an address
+            va = int(self.a.fault_va, 16)
+            i = (va - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT
+            print('  %08x: pt[%d] = %s; %d pages mapped in %d regions' % (va, i, self.pt.get(i), len(self.pt), len(self.runs)))
+            near = sorted(k for k in self.pt if abs(k - i) < 600)
+            print('  mapped near it: %s' % (near and '%d..%d (%d)' % (near[0], near[-1], len(near))))
+        try:                                   # the stack, raw: return addresses into RAM code too
+            words = uc.mem_read(r[13], min(256, NGVM_PAGE_SIZE - (r[13] & (NGVM_PAGE_SIZE - 1))))
+            for i in range(0, len(words) - 31, 32):
+                print('  sp+%03x: %s' % (i, ' '.join('%08x' % int.from_bytes(words[j:j + 4], 'little') for j in range(i, i + 32, 4))))
+        except Exception:
+            pass
         self.exit_code = 99
         uc.emu_stop()
 
@@ -423,6 +479,7 @@ def main():
     ap.add_argument('--brk-count', type=int, default=20, help='reports at most this many')
     ap.add_argument('--brk-r0', help='(hex) report only when r0 is this')
     ap.add_argument('--brk-mem', help='rN+off:len[,...]: words to dump at each report')
+    ap.add_argument('--fault-va', help='(hex) at a fault, report the page table around this address')
     ap.add_argument('--frames-to')
     ap.add_argument('--frame-every', type=int, default=0)
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
