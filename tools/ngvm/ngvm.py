@@ -18,10 +18,11 @@ pressed set becomes KEYS, names joined with '+' (up down left right a b x y
 l r select start), or nothing for none.  "26:start 26.2: 30:a 30.2:" taps
 start, then a.
 """
-import argparse, bisect, ctypes, os, re, struct, sys, time
+import argparse, array, bisect, ctypes, os, re, struct, sys, time
 
 from unicorn import (Uc, UcError, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_INTR,
-                     UC_PROT_READ, UC_PROT_EXEC, UC_PROT_ALL, UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ, UC_HOOK_CODE)
+                     UC_PROT_READ, UC_PROT_EXEC, UC_PROT_ALL, UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ, UC_HOOK_CODE,
+                     UC_HOOK_BLOCK)
 from unicorn.arm_const import *
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -144,6 +145,7 @@ class Machine:
         self.audio_fifo = 0.0          # samples waiting, drained at audio_rate
         self.idle_at = []              # the kernel's idle_us, once a virtual second
         self.pc_hist = {}              # --profile: where slices end
+        self.mt = None                 # --memtrace: (from, to, path), hooks, streams
         self.ram_peak = 0              # most distinct RAM pages mapped at once
         self.exit_code = None
         self.con = bytearray()
@@ -493,13 +495,50 @@ class Machine:
         for name, k in sorted(by_name.items(), key=lambda x: -x[1])[:25]:
             print('profile: %5.1f%%  %s' % (100.0 * k / total, name))
 
+    # --memtrace FROM:SECONDS:FILE: every instruction fetch (as basic blocks)
+    # and every data access over that window of virtual time, for a cache
+    # model (tools/ngvm/cachesim.py).  FILE gets a header line, then the
+    # blocks as (addr, bytes) u32 pairs, then the data accesses as u32
+    # (addr & ~1) | write -- byte addresses, so bit 0 is free only because
+    # the model works in lines; the access size is not kept.
+    def memtrace_step(self):
+        mt, uc = self.mt, self.uc
+        if mt['hooks'] is None and self.insns >= mt['from']:
+            mt['blocks'], mt['data'], mt['insns0'] = array.array('I'), array.array('I'), self.insns
+            b, d = mt['blocks'], mt['data']
+            mt['hooks'] = [
+                uc.hook_add(UC_HOOK_BLOCK, lambda u, a, n, _: b.extend((a, n))),
+                uc.hook_add(UC_HOOK_MEM_READ, lambda u, t, a, n, v, _: d.append(a & ~1)),
+                uc.hook_add(UC_HOOK_MEM_WRITE, lambda u, t, a, n, v, _: d.append((a & ~1) | 1)),
+            ]
+            # hooks are compiled into translated code: what was translated
+            # before them would run unseen
+            uc.ctl_flush_tb()
+        elif mt['hooks'] and self.insns >= mt['to']:
+            for h in mt['hooks']:
+                uc.hook_del(h)
+            with open(mt['path'], 'wb') as f:
+                f.write(b'NGVMTRACE insns=%d blocks=%d data=%d\n' % (
+                    self.insns - mt['insns0'], len(mt['blocks']) // 2, len(mt['data'])))
+                mt['blocks'].tofile(f)
+                mt['data'].tofile(f)
+            print('[memtrace] %d insns, %d blocks, %d data accesses -> %s' % (
+                self.insns - mt['insns0'], len(mt['blocks']) // 2, len(mt['data']), mt['path']))
+            self.mt = None
+
     def run(self):
         uc = self.uc
         end = self.a.seconds * 1000000 * self.mips
         slice_insns = self.a.slice
         pc = self.pc
         t0 = time.time()
+        if self.a.memtrace:
+            f, d, path = self.a.memtrace.split(':')
+            self.mt = {'from': float(f) * 1e6 * self.mips, 'to': (float(f) + float(d)) * 1e6 * self.mips,
+                       'path': path, 'hooks': None}
         while self.exit_code is None and self.insns < end:
+            if self.mt:
+                self.memtrace_step()
             # deliver an interrupt if the line is up and the CPU will take it
             cpsr = uc.reg_read(UC_ARM_REG_CPSR)
             if self.irq_line() and not (cpsr & 0x80):
@@ -556,6 +595,7 @@ def main():
     ap.add_argument('--frame-every', type=int, default=0)
     ap.add_argument('--profile', action='store_true', help='sample where the CPU spends its time')
     ap.add_argument('--wav', help='write what the audio FIFO was given to this WAV file')
+    ap.add_argument('--memtrace', help='FROM:SECONDS:FILE: record fetches and data accesses for a cache model')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
     a = ap.parse_args()
     m = Machine(a)
