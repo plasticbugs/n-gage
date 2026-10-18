@@ -198,7 +198,7 @@ def load_tree(src):
     root = Node('', True)
 
     def add(path, data, is_dir):
-        parts = [p for p in path.replace('\\', '/').split('/') if p]
+        parts = [p for p in path.replace('\\', '/').split('/') if p and p != '.']
         n = root
         for i, p in enumerate(parts):
             last = i == len(parts) - 1
