@@ -140,6 +140,8 @@ int obj_find_next(int type, u32 presult, u32 phandle, u32 match)
     for (struct kobj *o = by_type[type]; o; o = o->next) {
         if (o->seq <= after || (best && o->seq >= best->seq)) continue;
         if (type == O_THREAD && ((struct thread *)o)->state == T_DEAD) continue;
+        if (type == O_SERVER && (!((struct server *)o)->thread ||
+                                 ((struct server *)o)->thread->state == T_DEAD)) continue;   /* see server_find */
         int n = obj_full_name(o, full, 2 * NAME_MAX);
         if (!match16(pat, pn, full, n)) continue;
         best = o;

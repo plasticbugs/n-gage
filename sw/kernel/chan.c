@@ -111,6 +111,138 @@ static void mute_cancel(struct channel *c, u32 mask)
         }
 }
 
+/* ---- bt_driver: the Bluetooth controller's transport --------------------
+ * A byte stream, as a UART is.  Request 1 sends (a1 a descriptor, a2 points
+ * at its length); request 0 reads exactly the count a2 points at into the
+ * descriptor a1.  hci.dll reads a packet in pieces (its reader's state
+ * machine at 0x50475278): a 16-bit little-endian type, then the header,
+ * then the rest: 1 command (opcode, length, parameters), 4 event (code,
+ * length, parameters).  Its first write is 01 00 05 10 00, Read_Buffer_Size.
+ *
+ * There is no radio, so NGVM is a controller with nothing in range: every
+ * command completes at once with success and plausible return parameters,
+ * and an inquiry finds no one.  Games need the stack up only to offer
+ * multiplayer. */
+#define BT_FIFO 4096                          /* bytes from the controller */
+static u8 bt_fifo[BT_FIFO];
+static int bt_head, bt_count;
+static struct { struct thread *t; struct channel *c; u32 st, buf; int want; } bt_rx;
+
+static void bt_deliver(void)
+{
+    if (!bt_rx.t || bt_count < bt_rx.want) return;
+    u8 b[260];
+    int n = bt_rx.want;
+    for (int i = 0; i < n; i++) b[i] = bt_fifo[(bt_head + i) % BT_FIFO];
+    bt_head = (bt_head + n) % BT_FIFO;
+    bt_count -= n;
+    struct thread *t = bt_rx.t;
+    bt_rx.t = 0;
+    extern struct process *proc_mapped(void);
+    struct process *was = proc_mapped();
+    proc_switch_in(t->proc);
+    s32 e = des_write8(bt_rx.buf, b, n);
+    proc_switch_in(was);
+    request_complete(t, bt_rx.st, e);
+}
+
+/* an event: its parameters are filled in through the pointer returned */
+static u8 bt_ev[260];
+static int bt_evlen;
+static u8 *bt_event(int code, int plen)
+{
+    bt_ev[0] = 4; bt_ev[1] = 0; bt_ev[2] = (u8)code; bt_ev[3] = (u8)plen;
+    memset(bt_ev + 4, 0, plen);
+    bt_evlen = 4 + plen;
+    return bt_ev + 4;
+}
+
+static void bt_send_event(void)
+{
+    if (bt_count + bt_evlen > BT_FIFO) { kprintf("[bt] fifo full\n"); return; }
+    for (int i = 0; i < bt_evlen; i++) bt_fifo[(bt_head + bt_count + i) % BT_FIFO] = bt_ev[i];
+    bt_count += bt_evlen;
+}
+
+/* Command Complete with these return parameters after the status byte */
+static void bt_complete(u16 op, const u8 *ret, int n)
+{
+    u8 *p = bt_event(0x0E, 4 + n);
+    p[0] = 1; p[1] = (u8)op; p[2] = (u8)(op >> 8); p[3] = 0;
+    if (n) memcpy(p + 4, ret, n);
+    bt_send_event();
+}
+
+static void bt_command(u16 op, const u8 *par, int plen)
+{
+    static const u8 bufsize[] = { 0x53, 0x01, 0x40, 0x08, 0x00, 0x01, 0x00 };  /* ACL 339 x8, SCO 64 x1 */
+    static const u8 version[] = { 1, 0x00, 0x00, 1, 0x01, 0x00, 0x00, 0x00 };   /* HCI/LMP 1.1, Nokia */
+    static const u8 features[] = { 0xFF, 0xFF, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    static const u8 bdaddr[] = { 0x01, 0x00, 0x00, 0x47, 0x4E, 0x00 };           /* 00:4E:47:00:00:01 */
+    static const u8 cod[] = { 0x04, 0x02, 0x5A };
+    if (kflags & DBGF_IPC) kprintf("[bt] command %04x (ogf %x ocf %x) len %d\n", op, op >> 10, op & 0x3FF, plen);
+    switch (op) {
+    case 0x1005: bt_complete(op, bufsize, sizeof bufsize); return;
+    case 0x1001: bt_complete(op, version, sizeof version); return;
+    case 0x1003: bt_complete(op, features, sizeof features); return;
+    case 0x1009: bt_complete(op, bdaddr, sizeof bdaddr); return;
+    case 0x0C23: bt_complete(op, cod, sizeof cod); return;           /* Read_Class_of_Device */
+    case 0x0C19: { static const u8 z[1]; bt_complete(op, z, 1); return; }   /* Read_Scan_Enable */
+    case 0x0C14: {                                                   /* Read_Local_Name */
+        static u8 name[248];
+        memcpy(name, "N-Gage", 6);
+        bt_complete(op, name, sizeof name);
+        return;
+    }
+    case 0x0401: {                                                   /* Inquiry: no one there */
+        u8 *p = bt_event(0x0F, 4);                                   /* Command Status */
+        p[0] = 0; p[1] = 1; p[2] = (u8)op; p[3] = (u8)(op >> 8);
+        bt_send_event();
+        bt_event(0x01, 1);                                           /* Inquiry Complete, success */
+        bt_send_event();
+        return;
+    }
+    }
+    bt_complete(op, 0, 0);
+}
+
+static s32 bt_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
+{
+    if (fn == 0) {
+        if (bt_rx.t) kpanic("bt_driver: two reads");
+        bt_rx.t = cur; bt_rx.c = c; bt_rx.st = st; bt_rx.buf = a1;
+        bt_rx.want = (int)uread32(a2);
+        if (bt_rx.want <= 0 || bt_rx.want > 255 || bt_rx.want > des_maxlen(a1)) kpanic("bt_driver: read of %d", bt_rx.want);
+        bt_deliver();
+        return KErrNone;
+    }
+    if (fn == 1) {
+        u8 m[260];
+        int n = des_len(a1);
+        if (n > (int)sizeof m) n = sizeof m;
+        ucopy_from(m, des_ptr(a1), n);
+        if (n >= 5 && m[0] == 1 && m[1] == 0) bt_command(m[2] | m[3] << 8, m + 5, m[4]);
+        else {
+            kprintf("[bt] send %d:", n);
+            for (int i = 0; i < n && i < 16; i++) kprintf(" %02x", m[i]);
+            kprintf("\n");
+        }
+        request_complete(cur, st, KErrNone);
+        bt_deliver();
+        return KErrNone;
+    }
+    return mute_request(c, fn, st, a1, a2);
+}
+
+static void bt_cancel(struct channel *c, u32 mask)
+{
+    if ((mask & 1) && bt_rx.t && bt_rx.c == c) {
+        request_complete(bt_rx.t, bt_rx.st, KErrCancel);
+        bt_rx.t = 0;
+    }
+    mute_cancel(c, mask);
+}
+
 /* ---- devices this phone does not have ------------------------------------
  * Comm (ecomm.ldd), the serial ports C32 opens for IrDA and the cable: with
  * no physical driver for a unit, EKA1's channel create fails KErrNotFound. */
@@ -245,7 +377,7 @@ static const struct devmodel models[] = {
     { "adspctrl", 0, mute_control, mute_request, mute_cancel },
     { "Audioldd", 0, mute_control, mute_request, mute_cancel },
     { "Comm", absent_open, 0, 0, 0 },
-    { "bt_driver", 0, mute_control, mute_request, mute_cancel },  /* Bluetooth that never answers */
+    { "bt_driver", 0, mute_control, bt_request, bt_cancel },
     { "HelperDrv", 0, helper_control, helper_request, 0 },
     { 0 }
 };

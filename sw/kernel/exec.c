@@ -152,6 +152,13 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         int n = name_arg(a1, name);
         struct kobj *o = find_named(sub == 0x02 ? O_CHUNK : sub == 0x18 ? O_MUTEX : O_SEMAPHORE, name, n);
         r = o ? put_handle(a, o, towned) : KErrNotFound;
+        if (sub == 0x1A && (kflags & DBGF_IPC)) {
+            kprintf("[sem] open ");
+            kputs16(name, n);
+            kprintf(" by ");
+            kputs16(t->proc->o.name, t->proc->o.namelen);
+            kprintf(" -> %d (refs %d)\n", r, o ? o->refs : 0);
+        }
         break;
     }
     case 0x03: {                                 /* adjust chunk (top)       */
@@ -203,7 +210,8 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
     case 0x15: {                                 /* create server           */
         struct server *s = (struct server *)obj_new(O_SERVER, sizeof(struct server), t->proc);
         int n = name_arg(a1, name);
-        if (n && find_named(O_SERVER, name, n)) { r = KErrAlreadyExists; break; }
+        extern struct server *server_find(const u16 *, int);
+        if (n && server_find(name, n)) { r = KErrAlreadyExists; break; }
         obj_set_name(&s->o, name, n);
         s->thread = t;
         r = put_handle(a, &s->o, 1);
@@ -239,6 +247,13 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         obj_set_name(&s->o, name, n);
         s->count = (s32)a3;
         r = put_handle(a, &s->o, towned);
+        if (n && (kflags & DBGF_IPC)) {
+            kprintf("[sem] create ");
+            kputs16(name, n);
+            kprintf(" by ");
+            kputs16(t->proc->o.name, t->proc->o.namelen);
+            kprintf("\n");
+        }
         break;
     }
     case 0x1B: {                                 /* create timer            */

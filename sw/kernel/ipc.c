@@ -37,11 +37,18 @@ static struct message *msg_alloc(void)
     kpanic("out of IPC messages");
 }
 
+/* A server's name lives as long as its thread: sessions may keep the object
+ * after the thread dies (their sends fail KErrServerTerminated), but a new
+ * connect must not find it, so that the client starts the server again --
+ * as MsvServer's clients do, MSexe leaving when its last session closes. */
 struct server *server_find(const u16 *name, int len)
 {
     extern int u16_eq_fold(const u16 *, int, const u16 *, int);
-    for (struct kobj *o = obj_first(O_SERVER); o; o = o->next)
-        if (o->namelen && u16_eq_fold(o->name, o->namelen, name, len)) return (struct server *)o;
+    for (struct kobj *o = obj_first(O_SERVER); o; o = o->next) {
+        struct server *s = (struct server *)o;
+        if (!s->thread || s->thread->state == T_DEAD) continue;
+        if (o->namelen && u16_eq_fold(o->name, o->namelen, name, len)) return s;
+    }
     return 0;
 }
 
