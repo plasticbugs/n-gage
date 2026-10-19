@@ -318,7 +318,7 @@ to the next change:
 | match tags (section 5.3) | 91.12 MHz | −0.558 ns | 5,346 | S: forward → shifter → op2; D2: the LDM offset's three adders |
 | list length counted in D1, offsets in 8 bits | 90.01 MHz | −0.693 ns | 5,140 | S: forward → shifter, 5 levels of it |
 | one rotator for every shift | 96.0 MHz | 0.000 ns | 5,094 | met with this seed; see below |
-| register indices, mode and LDM's last step from D1 | being fitted | | | |
+| register indices, mode and LDM's last step from D1 | 94.61 MHz | −0.153 ns | 4,822 | the stall: M's hold → `a_free` → every stage's enables |
 
 **One seed is not a measurement.** The rotator's RTL with three other
 seeds:
@@ -336,7 +336,8 @@ seeds:
   the rotator.
 - **Over-constraining does not help:** the same RTL fitted against
   105 MHz reached only 91.8 MHz.
-- **The next change** removes the paths that seeds 1–3 named:
+- **The next change**, the last row of the table above, removes the
+  paths that seeds 1–3 named:
   - the five register-file indices are computed in D1, in the mode of
     that moment, and D2 decodes in a registered copy of that mode;
   - "another LDM/STM step follows" is a flop, set from the list's
@@ -347,6 +348,27 @@ seeds:
   sees a stale mode.
 - **A fit takes about 7 CPU-hours** under the container's amd64
   emulation, so a four-seed sweep is an evening.
+
+**That change, over the same four seeds:**
+
+| seed | Fmax | worst slack | ALMs |
+|---|---|---|---|
+| 1 | 94.61 MHz | −0.153 ns | 4,822 |
+| 2 | 98.36 MHz | +0.250 ns | 4,749 |
+| 3 | 98.48 MHz | +0.263 ns | 4,855 |
+| 4 | 95.61 MHz | −0.042 ns | 4,868 |
+
+- **Median:** 97.0 MHz against 89.8 before. Two seeds meet 96 MHz and
+  the other two miss by under 0.16 ns.
+- **Hold:** every seed meets it at all four corners, the worst by
+  0.138 ns.
+- **Size:** about 4,100 registers and 3 DSP blocks.
+- **Seed 1's worst path is the stall:** M's hold → `a_free` → the
+  enables of every stage, down to D1's buffer shift. Here `dc_ok` is a
+  flop. Behind a real data cache it would come from a tag compare in
+  the same cycle, so the caches (section 4) should make a miss a
+  replay, not a stall: M flushes, and the instruction re-issues after
+  the fill. Then no enable waits on a compare.
 
 **The core's project is set for area.** It uses
 `OPTIMIZATION_MODE "AGGRESSIVE AREA"`, `OPTIMIZATION_TECHNIQUE AREA` and a
@@ -529,7 +551,7 @@ CPU in reset until all slots are loaded.
 
 | stage | budget | ideal-memory bench | real-memory bench | hardware |
 |---|---|---|---|---|
-| CPU Fmax, alone | ≥ 96 MHz | 87.8–96.0 MHz over four seeds, eight stages, high-performance fit (section 5.4) | | |
+| CPU Fmax, alone | ≥ 96 MHz | 94.6–98.5 MHz over four seeds, median 97.0; eight stages, high-performance fit (section 5.4) | | |
 | CPI, ideal memories, first 15 s of a game | as low as the clock allows | 2.12–2.21 without a BTB (section 5.5) | | |
 | MIPS delivered, Virtua Cop | ≥ the phone's (about 50); 70 a stretch | | | |
 | LCD line fetch | 176 words in one line (63.75 µs) | | | |
