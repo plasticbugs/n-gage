@@ -102,12 +102,20 @@ module arm_cpu
     logic        w_tthumb, m_tthumb, a_tthumb;
     logic        kill_a, kill_s, kill_d2;       // the stage's uop is gone this cycle
     logic        kill_f;                        // D1, the buffer and F2
+    // the return stack's repair by the uop that redirects (below W)
+    logic        fix_push;
+    logic  [2:0] fix_base, fix_sp;
+    logic [31:0] fix_link;
     assign kill_a  = m_redirect || w_redirect;
     assign kill_s  = a_redirect || kill_a;
     assign kill_d2 = kill_s;
     assign kill_f  = d_redirect || kill_d2;
 
     // ============================================================ F1, F2, buffer
+    // The buffer is a ring: an entry stays where F2 put it and D1 reads the
+    // one at ib_r, so taking an instruction (the end of D2's handshake, which
+    // starts at S's stall) only moves a pointer, and D1's decode starts from
+    // flops.
     localparam int IB = 4;                      // instruction buffer entries
     typedef struct packed {
         logic [31:0] word;
@@ -115,12 +123,34 @@ module arm_cpu
         logic        thumb;
         logic        abt;
     } ibe_t;
+    // The fetch's prediction for each buffered instruction (uop_t p_*),
+    // beside it: D2 is its only reader, so D1's mux does not carry it.
+    typedef struct packed {
+        logic        ptaken;
+        logic [31:0] pnext;
+        logic        ptagm;
+        logic  [1:0] pctr;
+        logic  [2:0] psp;
+    } pre_t;
+    // flops: plain vectors, because Quartus splits a struct array before it
+    // reads the attribute, and then makes it a RAM
+    (* ramstyle = "logic" *) logic [$bits(pre_t)-1:0] pr [0:IB-1];
+    logic  [1:0] ib_w, ib_r;                    // next to push, D1's
+    pre_t        pr_d1;                         // D1's prediction
+    assign pr_d1 = pre_t'(pr[ib_r]);
+    pre_t        pr_f2;                         // F2's, to push
 
     logic        f1_thumb;
     logic [31:0] f1_pc;
     logic        f2_valid, f2_thumb;
     logic [31:0] f2_pc;
-    ibe_t        ib [0:IB-1];
+    logic        f2_ptaken, f2_ptagm;
+    logic [31:0] f2_pnext;
+    logic  [1:0] f2_pctr;
+    logic  [2:0] f2_psp;
+    // flops, not a block RAM: a RAM's read data comes late, and Quartus
+    // would take its address from ib_r's next value, at the stall's end
+    (* ramstyle = "logic" *) ibe_t ib [0:IB-1];
     logic  [2:0] ib_n;                          // entries held
     logic        f2_push, f2_miss, f1_go;
 
@@ -131,13 +161,64 @@ module arm_cpu
     assign ic_addr = {f1_pc[31:2], 2'b00};
     assign f2_push = f2_valid && ic_ok;
     assign f2_miss = f2_valid && !ic_ok;
+    assign pr_f2   = '{ptaken: f2_ptaken, pnext: f2_pnext, ptagm: f2_ptagm, pctr: f2_pctr, psp: f2_psp};
+
+    // ---- branch prediction: a BTB answering in F1's own cycle, and a return stack
+    // The BTB is indexed by pc[8:1] and read at the edge that loads f1_pc,
+    // with f1_pc's next value, so its entry for f1_pc is there while F1 holds
+    // it.  A hit whose counter says taken sends F1 to the stored target, or
+    // for a return to the return stack's top.  Every prediction is checked
+    // downstream: direct branches in A, BX in A with the redirect from M.
+    // Loads and ALU writes to PC are not predicted (docs/core-design.md 5.6).
+    localparam int BTBN = 256;
+    typedef struct packed {
+        logic [22:0] tag;                       // pc[31:9]
+        logic [31:0] tgt;                       // {address[31:1], Thumb}
+        logic  [1:0] kind;                      // BK_*
+    } btbe_t;
+    btbe_t       btb_e [0:BTBN-1];
+    logic  [1:0] btb_c [0:BTBN-1];              // counters, apart, so a branch not taken
+                                                // can count down without the target
+    initial for (int e = 0; e < BTBN; e++) begin btb_e[e] = '0; btb_c[e] = 2'd0; end
+    btbe_t       bq;                            // the entry for f1_pc
+    logic  [1:0] bc;
+    logic [31:0] ras [0:7];                     // return addresses, as LR holds them
+    logic  [2:0] ras_sp;                        // pushes less pops, mod 8: the top is ras_sp - 1
+
+    logic [31:0] f1_seq, f1_pnext, f1_pc_n;
+    logic        f1_thumb_n, f1_tagm, f1_hit, any_redirect;
+    assign f1_seq   = f1_pc + (f1_thumb ? 32'd2 : 32'd4);
+    assign f1_tagm  = bq.tag == f1_pc[31:9];
+    assign f1_hit   = f1_tagm && bc[1];
+    assign f1_pnext = bq.kind == BK_RET ? ras[ras_sp - 3'd1] : bq.tgt;
+    assign any_redirect = w_redirect || m_redirect || a_redirect || d_redirect;
+
+    always_comb begin
+        f1_pc_n = f1_pc; f1_thumb_n = f1_thumb;
+        if (rst) begin
+            f1_pc_n = 32'd0; f1_thumb_n = 1'b0;
+        end else if (any_redirect) begin
+            f1_pc_n    = w_redirect ? w_target : m_redirect ? m_target : a_redirect ? a_target : d_target;
+            f1_thumb_n = w_redirect ? w_tthumb : m_redirect ? m_tthumb : a_redirect ? a_tthumb : d2_thumb;
+        end else if (f2_miss) begin                     // ask again for the one that missed
+            f1_pc_n = f2_pc; f1_thumb_n = f2_thumb;
+        end else if (f1_go) begin
+            if (f1_hit) begin
+                f1_pc_n = {f1_pnext[31:1], 1'b0}; f1_thumb_n = f1_pnext[0];
+            end else f1_pc_n = f1_seq;
+        end
+    end
+    always_ff @(posedge clk) begin
+        bq <= btb_e[f1_pc_n[8:1]];
+        bc <= btb_c[f1_pc_n[8:1]];
+    end
 
     // ============================================================ D1
     logic [15:0] d1_half;
     logic [31:0] t_arm, t_imm, d1_arm, d1_pc_op;
     logic        t_imm_en, t_align, t_bl, t_und;
     ibe_t        d1;
-    assign d1      = ib[0];
+    assign d1      = ib[ib_r];
     assign d1_half = d1.pc[1] ? d1.word[31:16] : d1.word[15:0];
     arm_thumb u_thumb (
         .t(d1_half), .arm(t_arm), .imm_ovr_en(t_imm_en), .imm_ovr(t_imm),
@@ -195,6 +276,10 @@ module arm_cpu
     logic  [4:0] d2_mode;                       // the mode D2 decodes in: CPSR's as the uop arrived
     logic  [4:0] d2_lmode;                      // ... and the LDM/STM register's: user for ^ without PC
     logic  [4:0] d2_ixn, d2_ixm, d2_ixs, d2_ixd, d2_ixl;   // register-file indices, from D1
+    logic        d2_ptaken, d2_ptagm;           // the fetch's prediction
+    logic [31:0] d2_pnext;
+    logic  [1:0] d2_pctr;
+    logic  [2:0] d2_psp;
     logic  [1:0] d2_step;
     logic  [4:0] d2_k;
     logic [15:0] d2_rem;
@@ -283,6 +368,7 @@ module arm_cpu
 
     // the uop D2 offers: the decoded step, or an IRQ in place of a new instruction
     uop_t d2_u;
+    logic d2_bls;                               // a Thumb BL suffix straight after its prefix
     // *_nk: the same handshakes without the kills.  Data registers load on
     // those; a kill only clears valid bits, so it reaches a few flops rather
     // than every enable in D1, D2, S and A.
@@ -300,6 +386,17 @@ module arm_cpu
         if (ra_pc) d2_u.ra_rd = 1'b0;
         if (rb_pc) d2_u.rb_rd = 1'b0;
         if (rc_pc) d2_u.rc_rd = 1'b0;
+        // a Thumb BL pair seen whole is a plain BL from here on
+        if (d2_bls) begin d2_u.imm = d_target; d2_u.ra_rd = 1'b0; end
+        d2_u.p_taken = d2_ptaken && !d2_more;
+        d2_u.p_next  = d2_pnext;
+        d2_u.p_tagm  = d2_ptagm;
+        d2_u.p_ctr   = d2_pctr;
+        d2_u.p_sp    = d2_psp;
+        d2_u.br_call = dec_u.kind == K_BRANCH && dec_u.wa_en;
+        d2_u.br_ret  = (dec_u.kind == K_BX && d2_arm[3:0] == 4'hE)
+                    || d2_arm[27:0] == 28'h1A0_F00E                       // MOV pc, lr
+                    || (d2_lsm && d2_arm[20] && d2_arm[15]);              // LDM, POP with pc
         if (d2_inject) begin
             d2_u = '0;
             d2_u.valid = 1'b1;
@@ -310,6 +407,7 @@ module arm_cpu
             d2_u.exc_vec = 3'd6; d2_u.exc_mode = M_IRQ;
             d2_u.exc_lr = d2_pc + 32'd4; d2_u.exc_lr_reg = 5'd28;
             d2_u.irq = 1'b1;
+            d2_u.p_sp = d2_psp;
         end
     end
     assign d2_last     = d2_inject || !d2_more;
@@ -322,9 +420,8 @@ module arm_cpu
 
     // B and BL redirect from here; so does a Thumb BL suffix straight after
     // its prefix, whose LR D2 computed as the prefix went by
-    logic d2_bls;
     assign d2_bls     = d2_bl && d2_after_blp;
-    assign d_redirect = d2_valid && !d2_red_done && (d2_ub || d2_bls) && !kill_d2;
+    assign d_redirect = d2_valid && !d2_red_done && (d2_ub || d2_bls) && !d2_ptaken && !kill_d2;
     assign d_target   = d2_bls ? ((d2_blp_lr + d2_imm) & 32'hFFFF_FFFE) : dec_u.imm;
 
     always_ff @(posedge clk) begin
@@ -359,6 +456,8 @@ module arm_cpu
             d2_lreg <= lowest(d1_arm[15:0]);
             d2_nregs <= popcount16(d1_arm[15:0]);
             d2_lmore <= two_or_more(d1_arm[15:0]);
+            d2_ptaken <= pr_d1.ptaken; d2_pnext <= pr_d1.pnext; d2_ptagm <= pr_d1.ptagm;
+            d2_pctr <= pr_d1.pctr; d2_psp <= pr_d1.psp;
             d2_mode <= cpsr[4:0];
             d2_lmode <= d1_lmode;
             d2_ixn <= phys(d1_arm[19:16], cpsr[4:0]);
@@ -380,31 +479,40 @@ module arm_cpu
         if (rst) begin
             f1_pc <= 32'd0; f1_thumb <= 1'b0;
             f2_valid <= 1'b0; f2_pc <= 32'd0; f2_thumb <= 1'b0;
-            ib_n <= 3'd0;
+            ib_n <= 3'd0; ib_w <= 2'd0; ib_r <= 2'd0;
+            ras_sp <= 3'd0;
         end else begin
-            if (w_redirect || m_redirect || a_redirect || d_redirect) begin
-                f1_pc    <= w_redirect ? w_target : m_redirect ? m_target : a_redirect ? a_target : d_target;
-                f1_thumb <= w_redirect ? w_tthumb : m_redirect ? m_tthumb : a_redirect ? a_tthumb : d2_thumb;
-                f2_valid <= 1'b0;
-            end else if (f2_miss) begin                 // ask again for the one that missed
-                f1_pc <= f2_pc; f1_thumb <= f2_thumb;
-                f2_valid <= 1'b0;
-            end else begin
+            f1_pc <= f1_pc_n; f1_thumb <= f1_thumb_n;
+            if (any_redirect || f2_miss) f2_valid <= 1'b0;
+            else begin
                 f2_valid <= f1_go;
                 if (f1_go) begin
                     f2_pc <= f1_pc; f2_thumb <= f1_thumb;
-                    f1_pc <= f1_pc + (f1_thumb ? 32'd2 : 32'd4);
+                    f2_ptaken <= f1_hit; f2_pnext <= f1_pnext;
+                    f2_ptagm <= f1_tagm; f2_pctr <= bc; f2_psp <= ras_sp;
                 end
             end
-            if (kill_f) ib_n <= 3'd0;
-            else ib_n <= ib_n + {2'd0, f2_push} - {2'd0, d1_take};
+            // the return stack: repaired by a redirect, rewound when F2's
+            // fetch is asked again, else moved by what F1 predicts
+            if (any_redirect) begin
+                ras_sp <= fix_sp;
+                if (fix_push) ras[fix_base] <= fix_link;
+            end else if (f2_miss) ras_sp <= f2_psp;
+            else if (f1_go && f1_hit && bq.kind == BK_CALL) begin
+                ras[ras_sp] <= {f1_seq[31:1], f1_thumb};
+                ras_sp <= ras_sp + 3'd1;
+            end else if (f1_go && f1_hit && bq.kind == BK_RET) ras_sp <= ras_sp - 3'd1;
+            if (kill_f) begin
+                ib_n <= 3'd0; ib_w <= 2'd0; ib_r <= 2'd0;
+            end else begin
+                ib_n <= ib_n + {2'd0, f2_push} - {2'd0, d1_take};
+                ib_w <= ib_w + {1'b0, f2_push};
+                ib_r <= ib_r + {1'b0, d1_take};
+            end
         end
-        // the buffer shifts towards its head; F2 lands behind what stays
-        for (int e = 0; e < IB; e++) begin
-            if (f2_push && 3'(e) == ib_n - {2'd0, d1_take_nk})
-                ib[e] <= '{word: ic_data, pc: f2_pc, thumb: f2_thumb, abt: ic_abort};
-            else if (d1_take_nk && e < IB - 1)
-                ib[e] <= ib[e + 1];
+        if (f2_push) begin
+            ib[ib_w] <= '{word: ic_data, pc: f2_pc, thumb: f2_thumb, abt: ic_abort};
+            pr[ib_w] <= pr_f2;
         end
     end
 
@@ -502,6 +610,7 @@ module arm_cpu
     // ============================================================ A
     logic [31:0] a_op2;
     logic        a_op2_c, a_cpass, a_blate;
+    logic        a_tgt_ok;                      // a direct branch's target is the one predicted
     late_t       a_la, a_lb, a_lc;
 
     logic        a_wa_fb, a_wb_fb, a_wc_fb;
@@ -569,6 +678,7 @@ module arm_cpu
     logic        a_mred;                    // redirect from M next cycle: ALU to PC, BL suffix
     logic [31:0] a_mtarget;
     logic        a_mthumb;
+    logic        a_brtaken;                     // a branch or BX in A, taken
 
     always_comb begin
         a_spsr_cur = spsr_of(cpsr[4:0]);
@@ -628,19 +738,23 @@ module arm_cpu
             end
             K_BRANCH: begin
                 a_ra = a_u.pc + (a_u.thumb ? 32'd2 : 32'd4) + {31'd0, a_u.thumb};
-                if (a_u.ra_rd) begin                    // Thumb BL suffix: LR + offset
+                if (a_u.ra_rd) begin                    // a Thumb BL suffix D2 did not see whole: LR + offset
                     a_mred = !a_dred;
                     a_mtarget = (ea + a_u.imm) & 32'hFFFF_FFFE;
-                end else begin
-                    a_redirect = !a_dred;
+                end else begin                          // unless D2 went, or F1 went right
+                    a_redirect = !a_dred && !(a_u.p_taken && a_tgt_ok);
                     a_target = a_u.imm & (cpsr[5] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
                 end
             end
             K_BX: begin
-                a_redirect = 1'b1;
                 a_tthumb = eb[0];
                 a_target = eb & (eb[0] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
                 a_cpsr_n[5] = eb[0];
+                if (!a_u.p_taken) a_redirect = 1'b1;
+                else if (a_u.p_next != {a_target[31:1], eb[0]}) begin   // predicted wrong: from M,
+                    a_mred = 1'b1;                                     // so the compare ends at a flop
+                    a_mtarget = a_target; a_mthumb = eb[0];
+                end
             end
             K_MRS: a_ra = a_u.psr_spsr ? a_spsr_cur : cpsr;
             K_MSR: begin
@@ -679,6 +793,13 @@ module arm_cpu
         if (!a_pass) begin
             a_cpsr_n = cpsr; a_redirect = 1'b0; a_mred = 1'b0; a_spsr_we = 1'b0;
             a_wa_en = 1'b0; a_wb_en = 1'b0; a_mem = 1'b0;
+        end
+        // F1 went to a target here, but no branch was taken: refetch what follows
+        a_brtaken = a_pass && (a_u.kind == K_BRANCH || a_u.kind == K_BX);
+        if (a_u.p_taken && !a_brtaken && a_u.kind != K_EXC) begin
+            a_redirect = 1'b1;
+            a_target = a_u.pc + (a_u.thumb ? 32'd2 : 32'd4);
+            a_tthumb = a_u.thumb;
         end
         a_redirect = a_redirect && a_commit;
     end
@@ -801,6 +922,7 @@ module arm_cpu
                 a_u.a <= sa; a_u.b <= sb; a_u.c <= sc;
                 a_dred <= s_dred;
                 a_op2 <= s_op2; a_op2_c <= s_op2_c; a_cpass <= s_cpass; a_blate <= s_blate;
+                a_tgt_ok <= s_u.p_next == {s_u.imm[31:1], s_u.thumb};
                 a_la <= late_of(s_ta, s_u.ra_rd);
                 a_lb <= late_of(s_tb, s_u.rb_rd);
                 a_lc <= late_of(s_tc, s_u.rc_rd);
@@ -818,7 +940,7 @@ module arm_cpu
             else if (s_free)   s_valid <= d2_issue;
             if (s_free_nk) begin
                 s_u <= d2_u;
-                s_dred <= !d2_inject && (d2_ub || d2_bls);
+                s_dred <= !d2_inject && (d2_ub || d2_bls) && !d2_ptaken;
                 s_amt_ok <= 1'b0;
                 s_ta <= d2_ta; s_tb <= d2_tb; s_tc <= d2_tc;
             end else begin
@@ -894,6 +1016,68 @@ module arm_cpu
                 w_ra <= m_u.pc + 32'd8;
                 w_cpsr <= {cpsr[31:8], 1'b1, cpsr[6], 1'b0, M_ABT};
             end
+        end
+    end
+
+`ifdef VERILATOR
+    // for the bench's profile, which should not know uop_t's layout
+    logic [3:0] a_kind /* verilator public */;
+    assign a_kind = a_u.kind;
+`endif
+
+    // ============================================================ BTB update, return stack repair
+    // A writes the BTB as each branch or BX commits: a taken one allocates
+    // (counter 2) or retargets its entry, and the counter of an entry it
+    // held moves towards what happened.  The write lands a cycle later, from
+    // flops, so A's forwarding and adders stop at a register; a fetch in
+    // between sees the old entry, which is checked like any other.
+    logic       bw_e, bw_c, bwq_e, bwq_c;
+    btbe_t      bw_d, bwq_d;
+    logic [1:0] bw_ctr, bwq_ctr;
+    logic [7:0] bwq_i;
+    always_comb begin
+        bw_d.tag  = a_u.pc[31:9];
+        bw_d.kind = a_u.br_call ? BK_CALL : a_u.br_ret ? BK_RET : BK_PLAIN;
+        if (a_u.kind == K_BX)  bw_d.tgt = {a_target[31:1], eb[0]};
+        else if (a_u.ra_rd)    bw_d.tgt = {a_mtarget[31:1], 1'b1};
+        else                   bw_d.tgt = {a_u.imm[31:1], a_u.thumb};
+        bw_c = a_commit && a_u.last && (a_u.kind == K_BRANCH || a_u.kind == K_BX)
+               && (a_u.p_tagm || a_brtaken);
+        bw_e = bw_c && a_brtaken;
+        if (!a_u.p_tagm)   bw_ctr = 2'd2;
+        else if (a_brtaken) bw_ctr = a_u.p_ctr == 2'd3 ? 2'd3 : a_u.p_ctr + 2'd1;
+        else               bw_ctr = a_u.p_ctr == 2'd0 ? 2'd0 : a_u.p_ctr - 2'd1;
+    end
+    always_ff @(posedge clk) begin
+        bwq_e <= !rst && bw_e; bwq_c <= !rst && bw_c;
+        bwq_d <= bw_d; bwq_ctr <= bw_ctr; bwq_i <= a_u.pc[8:1];
+        if (bwq_e) btb_e[bwq_i] <= bwq_d;
+        if (bwq_c) btb_c[bwq_i] <= bwq_ctr;
+    end
+
+    // The stack as it was before the redirecting instruction, plus that
+    // instruction's own push or pop if it was a call or return that went.
+    always_comb begin
+        fix_push = 1'b0; fix_link = 32'd0;
+        if (w_redirect) begin                           // a load to PC
+            fix_base = w_u.p_sp;
+            fix_sp   = w_u.br_ret ? w_u.p_sp - 3'd1 : w_u.p_sp;
+        end else if (m_redirect) begin                  // ALU to PC, BX predicted wrong, BL suffix, abort
+            fix_base = m_u.p_sp;
+            fix_push = !m_dabt_take && m_u.br_call;
+            fix_link = m_ra;
+            fix_sp   = m_dabt_take ? m_u.p_sp : m_u.br_call ? m_u.p_sp + 3'd1
+                     : m_u.br_ret ? m_u.p_sp - 3'd1 : m_u.p_sp;
+        end else if (a_redirect) begin
+            fix_base = a_u.p_sp;
+            fix_push = a_brtaken && a_u.br_call;
+            fix_link = a_u.pc + (a_u.thumb ? 32'd3 : 32'd4);   // a_ra, from flops
+            fix_sp   = fix_push ? a_u.p_sp + 3'd1 : (a_brtaken && a_u.br_ret) ? a_u.p_sp - 3'd1 : a_u.p_sp;
+        end else begin                                  // D2: B, BL, a Thumb BL pair
+            fix_base = d2_psp;                          // a call, from flops rather than the decoder
+            fix_push = d2_bls || (d2_ub && d2_arm[24]);
+            fix_link = d2_pc + (d2_thumb ? 32'd3 : 32'd4);
+            fix_sp   = fix_push ? d2_psp + 3'd1 : d2_psp;
         end
     end
 

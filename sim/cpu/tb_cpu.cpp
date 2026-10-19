@@ -126,10 +126,6 @@ struct Bench {
     enum { P_RETIRE, P_UOP, P_EMPTY, P_SWAIT, P_MUL, P_MHOLD,
            P_DRED, P_ARED_BR, P_ARED_BX, P_ARED_EXC, P_ARED_OTHER, P_MRED, P_WRED, P_N };
     uint64_t prof_pend[P_N] = {}, prof_busy[P_N] = {};
-    static uint32_t ebits(const VlWide<11> &w, int lsb, int n) {
-        uint64_t v = w[lsb / 32] | (lsb / 32 + 1 < 11 ? (uint64_t)w[lsb / 32 + 1] << 32 : 0);
-        return (uint32_t)(v >> (lsb % 32)) & ((1u << n) - 1);
-    }
     void profile() {
         auto *c = top->rootp->arm_cpu;
         if (top->rt_valid && !top->rt_irq) prof_pend[P_RETIRE]++;
@@ -141,7 +137,7 @@ struct Bench {
         if (c->w_redirect) prof_pend[P_WRED]++;
         else if (c->m_redirect) prof_pend[P_MRED]++;
         else if (c->a_redirect) {
-            switch (ebits(c->a_u, 267, 4)) {     // uop_t.kind
+            switch (c->a_kind) {                 // uop_t.kind
             case 7:  prof_pend[P_ARED_BR]++; break;   // K_BRANCH
             case 8:  prof_pend[P_ARED_BX]++; break;   // K_BX
             case 11: prof_pend[P_ARED_EXC]++; break;  // K_EXC

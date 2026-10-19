@@ -83,7 +83,23 @@ typedef struct packed {
     logic  [4:0] exc_lr_reg;    // physical index of that LR
 
     logic        irq;           // an injected IRQ (pc is the instruction it displaced)
+
+    // branch prediction (arm_cpu.sv, F1).  The prediction belongs to the
+    // instruction, so only its last uop carries p_taken; every uop carries
+    // p_sp, so whichever one redirects can repair the return stack
+    logic        p_taken;       // fetch predicted a taken branch here
+    logic [31:0] p_next;        // ... to this address, with bit 0 the Thumb state
+    logic        p_tagm;        // the BTB held this address, whatever its counter
+    logic  [1:0] p_ctr;         // ... and that counter
+    logic  [2:0] p_sp;          // the return stack's depth before this instruction
+    logic        br_call;       // BL, Thumb BL: pushes the return stack when taken
+    logic        br_ret;        // BX lr, MOV pc lr, LDM/POP with pc: pops it
 } uop_t;
+
+// BTB entry kinds
+localparam logic [1:0] BK_PLAIN = 2'd0;
+localparam logic [1:0] BK_CALL  = 2'd1;
+localparam logic [1:0] BK_RET   = 2'd2;    // the target is the return stack's top
 
 // modes
 localparam logic [4:0] M_USR = 5'h10;

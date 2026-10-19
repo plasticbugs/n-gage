@@ -15,6 +15,8 @@
 //           2-bit counters and an 8-deep return stack; a correct prediction
 //           loses k cycles (0: the target goes straight back to F1; 1: one
 //           cycle later), a wrong one what the resolving stage loses
+//   btbN/kB as btbN/k, but only branches and BX are predicted: a load or ALU
+//           write to PC always costs its redirect (arm_cpu.sv as built)
 #pragma once
 #include <cstdint>
 #include <cstdio>
@@ -75,12 +77,13 @@ struct BPred {
 
     struct Btb {
         int n, hit_cost;
+        bool pc_writes;                 // predict loads and ALU writes to PC too
         std::vector<uint32_t> tag, tgt;
         std::vector<uint8_t> ctr, ret;
         uint32_t ras[8] = {};
         int sp = 0;
         uint64_t lost[2] = {};
-        Btb(int n, int k) : n(n), hit_cost(k), tag(n, 1), tgt(n), ctr(n), ret(n) {}
+        Btb(int n, int k, bool w = true) : n(n), hit_cost(k), pc_writes(w), tag(n, 1), tgt(n), ctr(n), ret(n) {}
     };
 
     uint64_t n_insns = 0, none[2] = {}, seen[5] = {}, taken[5] = {};
@@ -90,7 +93,10 @@ struct BPred {
     bool p_thumb;
     uint32_t idle_pc = 0;
 
-    BPred() { for (int n : {64, 256, 1024}) for (int k : {0, 1}) btbs.emplace_back(n, k); }
+    BPred() {
+        for (int n : {64, 256, 1024}) for (int k : {0, 1}) btbs.emplace_back(n, k);
+        btbs.emplace_back(256, 0, false);
+    }
 
     void feed(uint32_t pc, uint32_t in, bool thumb, uint32_t next) {
         Br b = classify(pc, in, thumb);
@@ -100,9 +106,11 @@ struct BPred {
         if (b.target == 0) b.target = next;
         uint32_t link = pc + (thumb ? 2 : 4);
         for (int p = 0; p < 2; p++) none[p] += tk ? pipes[p].cost[b.at] : 0;
+        bool pcw = b.at == P_ALUPC || b.at == P_LDPC;
         for (auto &t : btbs) {
             uint32_t i = (pc >> 1) & (t.n - 1);
-            bool hit = t.tag[i] == pc && t.ctr[i] >= 2;
+            bool predict = t.pc_writes || !pcw;
+            bool hit = predict && t.tag[i] == pc && t.ctr[i] >= 2;
             bool right = false;
             if (hit) {
                 uint32_t pred = t.ret[i] ? t.ras[(t.sp - 1) & 7] : t.tgt[i];
@@ -114,6 +122,7 @@ struct BPred {
             }
             if (b.link) { t.ras[t.sp] = link; t.sp = (t.sp + 1) & 7; }
             if (b.kind == RET) t.sp = (t.sp - 1) & 7;
+            if (!predict) continue;
             if (t.tag[i] != pc) {
                 if (tk) { t.tag[i] = pc; t.tgt[i] = next; t.ctr[i] = 2; t.ret[i] = b.kind == RET; }
             } else {
@@ -143,7 +152,8 @@ struct BPred {
         for (int p = 0; p < 2; p++) {
             printf("cycles lost to branches per instruction, %s: none %.3f", pipes[p].name,
                    (double)none[p] / n_insns);
-            for (auto &t : btbs) printf(", btb%d/%d %.3f", t.n, t.hit_cost, (double)t.lost[p] / n_insns);
+            for (auto &t : btbs) printf(", btb%d/%d%s %.3f", t.n, t.hit_cost, t.pc_writes ? "" : "B",
+                                        (double)t.lost[p] / n_insns);
             printf("\n");
         }
     }

@@ -222,10 +222,10 @@ Eight stages. Each starts from registers.
 
 | stage | work |
 |---|---|
-| F1 | next PC → instruction memory address |
-| F2 | instruction word back (or not: the fetch is replayed); into a 4-entry buffer |
-| D1 | from the buffer's head: Thumb → ARM expansion; predecode (B/BL, Thumb BL prefix, LDM/STM, SWP, long multiply; the first LDM/STM register and the list's length) |
-| D2 | decode; register read by the instruction's fields; IRQ injection; redirect for B, BL and a Thumb BL pair |
+| F1 | next PC → instruction memory address; the BTB, read in the same cycle, picks the next PC (section 5.6) |
+| F2 | instruction word back (or not: the fetch is replayed); into a 4-entry ring buffer |
+| D1 | from the buffer's read pointer: Thumb → ARM expansion; predecode (B/BL, Thumb BL prefix, LDM/STM, SWP, long multiply; the first LDM/STM register and the list's length) |
+| D2 | decode; register read by the instruction's fields; IRQ injection; redirect for B, BL and a Thumb BL pair the BTB did not predict |
 | S | forwarding from M's and W's registered results, selected by match tags; barrel shifter |
 | A | late forwarding of unshifted operands; ALU, multiply, flags, CPSR/SPSR, addresses; conditional B, BX, exceptions, MSR redirect |
 | M | data memory; load align and extend; redirect for ALU writes to PC and a Thumb BL suffix D2 did not catch |
@@ -263,8 +263,8 @@ Eight stages. Each starts from registers.
 - **Costs, in cycles:**
   - redirect from D2: 3; from A: 5; from M: 6; from W: 7;
   - load-use: 1 for an unshifted use, 2 for a shifted one;
-  - a shift by a register: 1.
-  - A branch target buffer read in F1 is next (section 5.5).
+  - a shift by a register: 1;
+  - a branch the BTB predicted correctly: 0 (section 5.6).
 - **Kills** clear valid bits only; data registers load whenever the next
   stage has room.
 - **Multiplies:** DSP blocks, 2 cycles in A; the long forms take an
@@ -346,8 +346,11 @@ seeds:
   Every change of mode (MSR to the control field, an exception, a
   return from one) redirects and so kills D2, so no uop that survives
   sees a stale mode.
-- **A fit takes about 7 CPU-hours** under the container's amd64
-  emulation, so a four-seed sweep is an evening.
+- **These fits ran with Quartus's parallel processors**, and each took
+  about 7 CPU-hours (54 minutes) under the container's amd64 emulation.
+  With `NUM_PARALLEL_PROCESSORS 1` the same flow takes 5 to 9 minutes.
+  The parallel workers also once hung in analysis and synthesis for
+  10.6 hours at 3% CPU. The fits below use one processor.
 
 **That change, over the same four seeds:**
 
@@ -369,6 +372,49 @@ seeds:
   the same cycle, so the caches (section 4) should make a miss a
   replay, not a stall: M flushes, and the instruction re-issues after
   the fill. Then no enable waits on a compare.
+
+**The processor count is a seed too.** The same RTL fitted with one
+processor gives a different result from the fit with several, so the
+two sets of numbers cannot be mixed. Every row of this table uses one
+processor:
+
+| seed | the RTL above | with the BTB (section 5.6) |
+|---|---|---|
+| 1 | 100.64 MHz, +0.481 ns | 87.21 MHz, −1.049 ns |
+| 2 | 87.53 MHz, −1.008 ns | 90.60 MHz, −0.621 ns |
+| 3 | 100.11 MHz, +0.428 ns | 89.61 MHz, −0.742 ns |
+| 4 | 100.53 MHz, +0.470 ns | 87.86 MHz, −0.965 ns |
+| median | **100.3 MHz** | **88.7 MHz** |
+| ALMs, registers | about 4,830, 4,090 | about 5,060, 4,430, and 3 M10K blocks |
+
+- **The BTB costs about 11 MHz** of median, and no seed reaches 96 MHz
+  with it.
+- **It is still faster.** Instructions per second are Fmax over CPI:
+  88.7 MHz at CPI 1.59–1.66 is 53–56 MIPS, against 100.3 MHz at
+  2.12–2.21, which is 45–47 MIPS (section 5.5, ideal memories).
+- **Hold** is met on every fit, the worst by 0.123 ns.
+- **The first BTB build** gave 86.82, 92.25, 86.49 and 90.37 MHz (median
+  88.6). Each seed named a different path the BTB had added:
+  - the return stack's repair, from the decoder and from A's result
+    mux;
+  - the BTB's write data, from A's late forwarding;
+  - D2's handshake into the instruction buffer, which now shifted the
+    prediction too.
+
+  Each was removed (section 5.6), and the median did not move. After
+  that, the failing paths are spread across the pipeline:
+
+  | endpoint | slack |
+  |---|---|
+  | decode into S | −0.62 ns |
+  | A's operand | −0.64 ns |
+  | D2 | −0.09 ns |
+  | the BTB's read address | −0.01 ns |
+
+  So the remaining loss is placement pressure, not one path.
+- **The caches** (section 4) restructure F and M next. Timing is closed
+  on the integrated core, where the CPU can have its own clock
+  (section 2).
 
 **The core's project is set for area.** It uses
 `OPTIMIZATION_MODE "AGGRESSIVE AREA"`, `OPTIMIZATION_TECHNIQUE AREA` and a
@@ -437,6 +483,130 @@ Cycles lost to branches per instruction, eight stages:
 - **The same BTB one cycle late** gives 1.72–1.75, which is 55–56 MIPS.
 - **1,024 entries** save a further 0.05–0.07 CPI. That is M10K blocks
   rather than logic, so it is cheap if the same-cycle loop still closes.
+
+The 256-entry BTB, answering in F1's cycle, is built: section 5.6.
+
+### 5.6 Branch prediction
+
+Section 5.5 showed the BTB is needed. This is the one built
+(`rtl/arm_cpu.sv`: "branch prediction" and "BTB update").
+
+**Fetch.**
+
+- **The BTB:** 256 entries, direct-mapped, indexed by `pc[8:1]`.
+  - Each entry holds the full tag `pc[31:9]`, the target with the Thumb bit
+    as bit 0, and a kind: plain, call or return.
+  - The 2-bit counters sit in a RAM of their own, so a branch that is not
+    taken can count down without rewriting the target.
+  - Both RAMs are read at the edge that loads `f1_pc`, with `f1_pc`'s next
+    value. The entry for an address is therefore there in the same cycle F1
+    holds it, so a correct prediction costs nothing.
+  - Quartus places the entries in M10K block RAM (3 blocks, 15,104 bits).
+- **A hit** (tag match and counter ≥ 2) sends F1 to the stored target. For
+  a return, it goes to the top of the return stack instead.
+- **The return stack:** 8 entries in flops.
+  - F1 pushes when it predicts a call and pops when it predicts a return.
+  - When F2 misses the cache and F1 is sent back, the stack depth goes back
+    with it.
+- **The instruction buffer is a ring.** An entry stays where F2 put it, and
+  D1 reads the entry at a pointer.
+  - Taking an instruction, which is the end of D2's handshake, moves only
+    the pointer.
+  - The prediction for each entry sits in a second ring beside it, because
+    only D2 reads it.
+  - Both rings are kept in flops. Quartus made the first versions block
+    RAMs, whose late read data and next-pointer address put the stall
+    chain back on the path. The buffer carries `ramstyle "logic"`. The
+    prediction ring is stored as plain vectors, because Quartus splits an
+    array of structs before it reads the attribute.
+
+**Checking.** Every prediction travels with its instruction: `p_taken`,
+`p_next`, and the stack depth before it, `p_sp`.
+
+| what reached A | result |
+|---|---|
+| a direct branch (B, BL), predicted, with the target S compared a cycle early (`a_tgt_ok`) | nothing |
+| a direct branch, not predicted | D2 redirects it, as before (3 cycles) |
+| BX, predicted, wrong target | redirect from M, so the 32-bit compare ends at a flop (6 cycles) |
+| BX, not predicted | redirect from A (5 cycles) |
+| anything predicted taken that did not branch: a failed condition, an alias, an entry left from other code | redirect from A to the next instruction (5 cycles) |
+
+**Repairing the return stack.** Any redirect restores the stack depth
+carried by the redirecting instruction. If that instruction itself called
+or returned, the redirect also applies its push or pop. The link pushed
+is the instruction's address plus 4, or plus 3 in Thumb, taken from flops
+rather than A's result mux.
+
+The stack's contents are not restored, so a wrong path that pushed can
+overwrite an entry below the top. The only cost is a wrong return
+prediction later, which the checking above catches.
+
+**Updating.** A decides each update as a branch or BX commits:
+
+- a taken branch allocates its entry with counter 2, or retargets it;
+- a branch whose entry was already there moves the counter one step
+  towards what happened.
+
+The write lands a cycle later, from flops, so A's forwarding and adders
+end at a register. A fetch in between sees the old entry, which is
+checked like any other.
+
+**Not predicted.**
+
+- **Loads to PC** (`LDR pc`, `LDM`/`POP` with pc). These redirect from W
+  (7 cycles). They still pop the return stack, so returns made by BX lr
+  stay matched.
+- **ALU writes to PC** (`MOV pc, lr`, `ADD pc, …`). These redirect from M
+  (6 cycles).
+- **A Thumb BL whose two halves reach D2 apart.** It redirects from M.
+  D2 normally sees the pair whole and turns it into one BL.
+
+The bench's model `btb256/0B` (`sim/cpu/bpred.h`) is this design. It does
+not predict loads or ALU writes to PC, and its return stack still counts
+them.
+
+**Measured** with `sim/run_cpu.sh`, in lockstep with Unicorn and with
+ideal memories, over the runs of section 5.5. All three are identical to
+Unicorn.
+
+| | Virtua Cop | Bomberman (30 s) | Sonic N |
+|---|---|---|---|
+| CPI | **1.594** (2.205 without) | **1.645** (2.213) | **1.660** (2.121) |
+| MIPS at 88.7 MHz (section 5.4) | 55.6 | 53.9 | 53.4 |
+| branch cycles per instruction, RTL | 0.234 | 0.229 | 0.182 |
+| ... of which D2 | 0.047 | 0.044 | 0.036 |
+| ... of which A: conditional B, BX | 0.097 | 0.093 | 0.075 |
+| ... of which M | 0.026 | 0.032 | 0.020 |
+| ... of which W | 0.064 | 0.060 | 0.050 |
+| model `btb256/0B` | 0.228 | 0.221 | 0.175 |
+| model, every PC write predicted (`btb256/0`) | 0.201 | 0.198 | 0.156 |
+| SWI and MSR (in neither model) | 0.026 | 0.025 | 0.021 |
+
+- **The RTL is within 0.008 of its model.** The difference is about what
+  the model leaves out: split BL pairs, and wrong-path damage to the
+  return stack.
+- **Predicting loads and ALU writes to PC** would save a further
+  0.02–0.03 CPI.
+- **Instruction counts.** The runs execute fewer instructions in the
+  same 15 virtual seconds than without the BTB: 541 M against 590 M for
+  Virtua Cop. The faster CPU reaches the same events sooner and then
+  idles until the timer, so the CPIs cover slightly different work.
+- **Random programs.** 300 random programs passed (seeds 10001–10300),
+  and 100 more after each structural change (11001–14100). Random
+  programs do not repeat their branches, so they test that a prediction
+  is never trusted unchecked, not the prediction itself.
+
+**Not shown.**
+
+- **96 MHz.** The BTB build fits at a median of 88.7 MHz (section 5.4).
+- **Timing inside the core's own project**, which is set for area.
+- **The BTB under an MMU.** The BTB is indexed and tagged by virtual
+  address and is never flushed. After a process switch, entries from the
+  old process can steer fetch for the new one. That costs time, never
+  correctness, because every prediction is checked; how much time is not
+  measured.
+- **Wrong-path corruption of the return stack.** It is allowed by the
+  design and is not counted separately.
 
 ## 6. Verification
 
@@ -551,9 +721,9 @@ CPU in reset until all slots are loaded.
 
 | stage | budget | ideal-memory bench | real-memory bench | hardware |
 |---|---|---|---|---|
-| CPU Fmax, alone | ≥ 96 MHz | 94.6–98.5 MHz over four seeds, median 97.0; eight stages, high-performance fit (section 5.4) | | |
-| CPI, ideal memories, first 15 s of a game | as low as the clock allows | 2.12–2.21 without a BTB (section 5.5) | | |
-| MIPS delivered, Virtua Cop | ≥ the phone's (about 50); 70 a stretch | | | |
+| CPU Fmax, alone | ≥ 96 MHz | without a BTB: median 97.0 MHz over four seeds (parallel fit), 100.3 (one processor); with the BTB: 87.2–90.6, median 88.7 (one processor); high-performance fit (section 5.4) | | |
+| CPI, ideal memories, first 15 s of a game | as low as the clock allows | 1.59–1.66 with the BTB, 2.12–2.21 without (sections 5.5, 5.6) | | |
+| MIPS delivered, Virtua Cop | ≥ the phone's (about 50); 70 a stretch | 55.6 at 88.7 MHz, ideal memories, before any cache miss | | |
 | LCD line fetch | 176 words in one line (63.75 µs) | | | |
 | audio FIFO | never empty while playing | | | |
 
