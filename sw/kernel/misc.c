@@ -201,19 +201,22 @@ s32 hal_get(u32 fn, u32 a1, u32 a2)
 
 /* ---- the screen -------------------------------------------------------------
  * EColor4K, 176 x 208, 16 bits a pixel, preceded by the 32-byte palette
- * header EKA1 Nokia drivers put there; the LCD scans from +0x20. */
+ * header EKA1 Nokia drivers put there; the LCD scans from +0x20.  The
+ * firmware draws at a chunk address; the LCD reads RAM, so the pages are a
+ * run and the LCD is given their physical alias (ngvm_hw.h). */
 #define LCD_HDR 0x20
 static u32 lcd_mem;
 
 u32 lcd_buffer(void)
 {
     if (!lcd_mem) {
-        extern u32 vm_reserve(u32);
-        extern int vm_commit(u32, u32);
         u32 size = LCD_HDR + LCD_W * LCD_H * 2;
+        int n = (size + NGVM_PAGE_SIZE - 1) >> NGVM_PAGE_SHIFT;
+        int p0 = pg_alloc_run(n);
         lcd_mem = vm_reserve(size);
-        if (!lcd_mem || vm_commit(lcd_mem, size)) kpanic("no memory for the screen");
-        IO(IO_LCD_BASE) = lcd_mem + LCD_HDR;
+        if (p0 < 0 || !lcd_mem) kpanic("no memory for the screen");
+        for (int i = 0; i < n; i++) vm_alias(lcd_mem + ((u32)i << NGVM_PAGE_SHIFT), (u32)(p0 + i));
+        IO(IO_LCD_BASE) = NGVM_PHYS_BASE + ((u32)p0 << NGVM_PAGE_SHIFT) + LCD_HDR;
         IO(IO_LCD_CTRL) = 1;
     }
     return lcd_mem;

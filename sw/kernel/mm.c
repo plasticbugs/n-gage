@@ -41,6 +41,21 @@ int pg_alloc(void)
     return -1;
 }
 
+/* n pages in a row, zeroed, for what the gateware reads by RAM address */
+int pg_alloc_run(int n)
+{
+    for (int i = KPAGES; i + n <= NPAGES; i++) {
+        int j = 0;
+        while (j < n && !(page_used[(i + j) / 32] & (1u << ((i + j) % 32)))) j++;
+        if (j < n) { i += j; continue; }
+        for (j = 0; j < n; j++) page_used[(i + j) / 32] |= 1u << ((i + j) % 32);
+        free_pages -= n;
+        memset((void *)(NGVM_PHYS_BASE + ((u32)i << NGVM_PAGE_SHIFT)), 0, (u32)n << NGVM_PAGE_SHIFT);
+        return i;
+    }
+    return -1;
+}
+
 void pg_free(int p)
 {
     if (p < KPAGES || p >= NPAGES) kpanic("pg_free %d", p);

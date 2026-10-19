@@ -12,7 +12,7 @@ UC=$("$root"/.venv/bin/python -c 'import unicorn, os; print(os.path.dirname(unic
 OBJ=${OBJ:-$here/obj_cpu}
 make -s -C "$root"/sw/kernel >/dev/null
 RTL="$root/rtl/arm_pkg.sv $(ls "$root"/rtl/arm_*.sv | grep -v _pkg.sv)"
-verilator --cc --exe --build -O3 -j 8 --top-module arm_cpu --public-flat-rw \
+verilator --cc --exe --build -O3 -j ${JOBS:-8} --top-module arm_cpu --public-flat-rw \
     -Wno-fatal -Wno-WIDTH -Wno-UNUSEDSIGNAL -Wno-DECLFILENAME \
     -Mdir "$OBJ" -CFLAGS "-O2 -I$UC/include -std=c++17" \
     -LDFLAGS "$UC/lib/libunicorn.a -lpthread -lm" \

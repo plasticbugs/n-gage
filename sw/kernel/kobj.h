@@ -111,6 +111,7 @@ struct process {
     u32  code_base, code_size, text_size;
     u32  data_base, data_size, bss_size;
     int  win_pages;                   /* pages of the 0x400000 data window   */
+    int  winid;                       /* IO_WIN_ID while they are mapped     */
     u16  win[64];                     /* their RAM pages                     */
     u32  data_home;                   /* loader-visible alias, while loading */
     u16  cmd[256]; int cmdlen;
@@ -274,6 +275,8 @@ struct process *proc_from_rom(const struct rom_image *img, const char *fname);
 struct thread *thread_create(struct process *p, u32 func, u32 ptr, u32 stack, u32 heap,
                              u32 heap_min, u32 heap_max, int first);
 void proc_switch_in(struct process *p);     /* 0: unmap the data window */
+int  winid_alloc(void);
+void winid_free(int id);
 void thread_reprioritise(struct thread *t);
 void thread_resume(struct thread *t);       /* one resume; runs at zero    */
 u32  proc_static_calls(struct process *p, u32 *list, int max);

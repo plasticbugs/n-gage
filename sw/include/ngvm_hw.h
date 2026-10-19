@@ -53,7 +53,7 @@
 #define IO_TIMER_CMP      0x018  /* W: raise IRQ_TIMER when US >= this        */
 #define IO_IRQ_STATUS     0x01C  /* R: pending; W: write 1s to clear          */
 #define IO_IRQ_ENABLE     0x020  /* RW                                        */
-#define IO_LCD_BASE       0x030  /* RW: framebuffer address                   */
+#define IO_LCD_BASE       0x030  /* RW: framebuffer address, through NGVM_PHYS_BASE */
 #define IO_LCD_CTRL       0x034  /* RW: bit 0 display on                      */
 #define IO_LCD_FRAME      0x038  /* R: frames scanned out since reset         */
 #define IO_KEYS           0x040  /* R: KEY_* bits, 1 = pressed                */
@@ -64,6 +64,9 @@
 #define IO_PT_INDEX       0x060  /* W: chunk-space page number to set         */
 #define IO_PT_DATA        0x064  /* W: RAM page for it, or NGVM_PT_NONE       */
 #define IO_CACHE_FLUSH    0x068  /* W: write back and invalidate all caches   */
+#define IO_WIN_ID         0x06C  /* W: the number of the process whose data the
+                                     window maps (1-63; 0 none): the caches tag
+                                     window lines with it                    */
 #define IO_DRIVE_SIZE     0x070  /* R: bytes loaded at NGVM_DRIVE_BASE        */
 #define IO_ROM_SIZE       0x074  /* R: bytes loaded at NGVM_ROM_BASE          */
 
@@ -78,7 +81,15 @@
 #define IRQ_AUDIO         (1u << 2)   /* FIFO at or below half full           */
 
 /* The LCD: 176 x 208, 16 bits a pixel, 0x0RGB (4 bits per channel), rows
- * of 176 halfwords, scanned from IO_LCD_BASE.  60 frames a second.          */
+ * of 176 halfwords, scanned from IO_LCD_BASE.  60 frames a second.  The
+ * gateware reads it from RAM, so IO_LCD_BASE is an address in the physical
+ * alias over contiguous pages; the CPU may draw through any other mapping,
+ * and the D-cache writes its dirty lines back at the start of each frame.
+ *
+ * Caching (docs/core-design.md 4.2): everything is cached but the physical
+ * alias, the drive and the devices.  Tags are virtual; the data window's
+ * lines carry IO_WIN_ID.  A page must be flushed (IO_CACHE_FLUSH) between
+ * being unmapped and being handed out again.                                */
 #define LCD_W             176
 #define LCD_H             208
 

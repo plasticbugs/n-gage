@@ -130,6 +130,7 @@ void proc_switch_in(struct process *p)
     if (mapped_proc)
         for (int i = 0; i < mapped_proc->win_pages; i++) pt_set(NGVM_PT_CHUNK + i, NGVM_PT_NONE);
     mapped_proc = p;
+    IO(IO_WIN_ID) = p ? (u32)p->winid : 0;
     if (!p) return;
     for (int i = 0; i < p->win_pages; i++) pt_set(NGVM_PT_CHUNK + i, p->win[i]);
 }
@@ -347,6 +348,12 @@ void proc_kill(struct process *p, int type, s32 reason, const u16 *cat, int catl
         mapped_proc = 0;
     }
     for (int i = 0; i < p->win_pages; i++) pg_free(p->win[i]);
+    /* the caches may hold the window's lines, tagged with its number: they
+     * go before the pages or the number are handed out again */
+    if (p->win_pages) {
+        IO(IO_CACHE_FLUSH) = 1;
+        winid_free(p->winid);
+    }
     p->win_pages = 0;
 }
 

@@ -67,6 +67,17 @@ struct thread *thread_create(struct process *p, u32 func, u32 ptr, u32 stack, u3
     return t;
 }
 
+/* The data window's numbers (IO_WIN_ID), 1-63: a process with a window has
+ * one while it lives, and the caches tell its window's lines apart by it. */
+static u64 winids = 1;                  /* bit 0: none */
+int winid_alloc(void)
+{
+    for (int i = 1; i < 64; i++)
+        if (!(winids >> i & 1)) { winids |= (u64)1 << i; return i; }
+    kpanic("no data window number left");
+}
+void winid_free(int id) { winids &= ~((u64)1 << id); }
+
 /* Initialised data and bss: in the kernel section for fixed processes (they
  * were linked there), else in pages of the data window. */
 static void proc_load_data(struct process *p, u32 src)
@@ -90,6 +101,7 @@ static void proc_load_data(struct process *p, u32 src)
         p->win[i] = (u16)pg;
     }
     p->win_pages = n;
+    p->winid = winid_alloc();
     /* fill through the RAM alias, so the window need not be mapped */
     for (u32 off = 0; off < p->data_size; off++) {
         u32 va = b - NGVM_DATA_BASE + off;

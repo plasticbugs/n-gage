@@ -5,6 +5,7 @@
 void mm_init(void);
 u32  mm_free_bytes(void);
 int  pg_alloc(void);                 /* a zeroed RAM page, or -1 */
+int  pg_alloc_run(int n);            /* n of them in a row: the first, or -1 */
 void pg_free(int page);
 void pt_set(int index, u32 page);
 u32  pt_get_va(u32 va);
