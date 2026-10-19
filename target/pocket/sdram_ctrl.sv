@@ -15,8 +15,10 @@
 //     a random client never waits more than a chunk (BURST_CHUNK words);
 //   * refresh every CYCLES_PER_REFRESH clocks, 7.8 us.
 //
-// Address mapping (word address a[24:1]): bank = a[24:23], row = a[22:10],
-// column = a[9:1]. BL=1 so a burst is a run of READ commands in an open row,
+// Address mapping (word address a[25:1]): bank = a[25:24], row = a[23:11],
+// column = a[10:1] -- all 64 MB of the Pocket's chip; the S.T.U.N. Runner
+// original used nine column bits, 32 MB (NGVM needs RAM, ROM and KSEC, 56 MB).
+// BL=1 so a burst is a run of READ commands in an open row,
 // one every 2 clocks (`burst_slow` = 1 stretches that to the 5-clock spacing
 // the Punch-Out!! core used, selectable from the Pocket menu as a diagnostic).
 //------------------------------------------------------------------------------
@@ -42,7 +44,7 @@ module sdram_ctrl #(
     output logic        SDRAM_CKE, SDRAM_CLK,
 
     // random-access clients
-    input  logic [24:1] c_addr  [NCLI],
+    input  logic [25:1] c_addr  [NCLI],
     input  logic        c_req   [NCLI],
     input  logic        c_we    [NCLI],
     input  logic [15:0] c_wdata [NCLI],
@@ -51,7 +53,7 @@ module sdram_ctrl #(
     output logic [15:0] rdata,        // shared: valid on the cycle of c_ack[i]
 
     // burst client
-    input  logic [24:1] b_addr,       // first word
+    input  logic [25:1] b_addr,       // first word
     input  logic  [9:0] b_len,        // number of words, 1..512
     input  logic        b_req,        // level; hold until b_done
     input  logic        b_abort,      // level: end the burst as soon as possible; b_done then
@@ -116,7 +118,7 @@ module sdram_ctrl #(
     // interval, and the interval itself is unchanged.
     logic        refresh_due;
     logic  [2:0] cur;            // client being served
-    logic  [9:1] cur_col;
+    logic [10:1] cur_col;
     logic        cur_we;
     logic [15:0] cur_wdata;
     logic  [1:0] cur_be;
@@ -124,7 +126,7 @@ module sdram_ctrl #(
 
     // burst context
     logic        b_active;       // a burst is in progress (possibly paused)
-    logic [24:1] b_next;         // next word address
+    logic [25:1] b_next;         // next word address
     logic  [9:0] b_remain;       // words still to issue
     logic  [9:0] b_issued;       // index of the next word
     logic  [5:0] b_chunk;        // words issued in this chunk
@@ -255,8 +257,8 @@ module sdram_ctrl #(
                 // missed setup by 0.07 ns on one placement). If the refresh does
                 // win, the row is simply loaded again when the burst reopens.
                 if (b_start && b_active) begin
-                    SDRAM_A  <= b_next[22:10];
-                    SDRAM_BA <= b_next[24:23];
+                    SDRAM_A  <= b_next[23:11];
+                    SDRAM_BA <= b_next[25:24];
                 end
             end
 
@@ -264,19 +266,19 @@ module sdram_ctrl #(
             // Grant: the winner is now a register, so the client address mux
             // and the ACTIVE command are one clock clear of the request scan.
             S_ARB: begin
-                cur_col   <= c_addr[cur][9:1];
+                cur_col   <= c_addr[cur][10:1];
                 cur_we    <= c_we[cur];
                 cur_wdata <= c_wdata[cur];
                 cur_be    <= c_be[cur];
-                SDRAM_A   <= c_addr[cur][22:10];
-                SDRAM_BA  <= c_addr[cur][24:23];
+                SDRAM_A   <= c_addr[cur][23:11];
+                SDRAM_BA  <= c_addr[cur][25:24];
                 command   <= CMD_ACTIVE;
                 state     <= S_OPEN1;
             end
             S_OPEN1: state <= S_OPEN2;                          // tRCD
             S_OPEN2: begin
                 // A10 = auto precharge; A12:11 drive DQM (write byte enables)
-                SDRAM_A <= {cur_we ? ~cur_be : 2'b00, 2'b10, cur_col};
+                SDRAM_A <= {cur_we ? ~cur_be : 2'b00, 1'b1, cur_col};
                 if (cur_we) begin
                     command <= CMD_WRITE;
                     dq_out  <= cur_wdata;
@@ -311,7 +313,7 @@ module sdram_ctrl #(
                     state  <= S_BEND;
                     wait_n <= 3'd1;
                 end else if (b_gap == 3'd0) begin
-                    SDRAM_A <= {b_is_we ? ~b_be : 2'b00, 2'b00, b_next[9:1]};   // A12:11 = DQM
+                    SDRAM_A <= {b_is_we ? ~b_be : 2'b00, 1'b0, b_next[10:1]};   // A12:11 = DQM
                     if (b_is_we) begin
                         command <= CMD_WRITE;
                         dq_out  <= b_wdata;
@@ -320,13 +322,13 @@ module sdram_ctrl #(
                         command <= CMD_READ;
                         cap[rd_late ? 4 : 3] <= {1'b1, 1'b1, 3'd0, b_issued};
                     end
-                    b_next   <= b_next + 24'd1;
+                    b_next   <= b_next + 25'd1;
                     b_issued <= b_issued + 10'd1;
                     b_remain <= b_remain - 10'd1;
                     b_chunk  <= b_chunk + 6'd1;
                     b_gap    <= burst_slow ? 3'd4 : 3'd1;
                     // stop at: end of burst, end of chunk, end of SDRAM row
-                    if (b_remain == 10'd1 || b_chunk == 6'(BURST_CHUNK - 10'd1) || b_next[9:1] == 9'h1ff) begin
+                    if (b_remain == 10'd1 || b_chunk == 6'(BURST_CHUNK - 10'd1) || b_next[10:1] == 10'h3ff) begin
                         state  <= S_BEND;
                         wait_n <= 3'd1;
                     end

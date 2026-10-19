@@ -9,6 +9,13 @@
 # core sets USE_ANALOGIZER = 0 that output drives nothing and this name
 # matches nothing -- take it out of the group then (the CI constraint check
 # says so).
+#
+# The sixth output is NGVM's CPU clock, 64 MHz, in a group of its own: every
+# path between it and the 96 MHz side is a crossing built not to need timing
+# (rtl/ngvm_xbus.sv: fields held still for clocks before a synchronised
+# toggle says they may be taken; rtl/ngage_core.sv lists the rest).  The two
+# share a VCO, so Quartus would otherwise time them as related clocks whose
+# edges come 2 ns apart.
 # ==============================================================================
 set_clock_groups -asynchronous \
  -group { bridge_spiclk } \
@@ -19,6 +26,7 @@ set_clock_groups -asynchronous \
           ic|core_pll|core_pll_inst|altera_pll_i|general[2].gpll~PLL_OUTPUT_COUNTER|divclk \
           ic|core_pll|core_pll_inst|altera_pll_i|general[3].gpll~PLL_OUTPUT_COUNTER|divclk \
           ic|core_pll|core_pll_inst|altera_pll_i|general[4].gpll~PLL_OUTPUT_COUNTER|divclk } \
+ -group { ic|core_pll|core_pll_inst|altera_pll_i|general[5].gpll~PLL_OUTPUT_COUNTER|divclk } \
  -group { ic|pocket_audio_mixer|audio_pll|mf_audio_pll_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk } \
  -group { ic|pocket_audio_mixer|audio_pll|mf_audio_pll_inst|altera_pll_i|general[1].gpll~PLL_OUTPUT_COUNTER|divclk }
 
@@ -71,7 +79,10 @@ set_multicycle_path -hold  2 -start -from [get_clocks {ic|core_pll|core_pll_inst
 set_false_path -to   [get_ports {sram_*}]
 set_false_path -from [get_ports {sram_dq[*]}]
 
-# The PSRAMs are unused on this board; the BSP still brings their pins out.
+# The PSRAMs (the drive image) are driven asynchronously, a strobe at a time
+# with whole system cycles between (target/pocket/cram_ctrl.sv), and DQ is
+# taken into a register cycles after the chip's access time, so the pins are
+# not timed against a clock either.
 set_false_path -to   [get_ports {cram0_* cram1_*}]
 set_false_path -from [get_ports {cram0_dq[*] cram1_dq[*] cram0_wait cram1_wait}]
 

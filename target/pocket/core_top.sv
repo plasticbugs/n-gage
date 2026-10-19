@@ -30,9 +30,9 @@
 // Instantiated by the real top-level: apf_top
 //
 // The machine (rtl/ngage_core.sv) is platform-agnostic; this file is the APF
-// glue: bridge, the ROM slot, the interact menu, video and audio hand-off, the
-// memories, and the bring-up panel.  The ROM image lives in SDRAM and the
-// tilemap RAM in the SRAM (target/pocket/ngage_mem.sv).
+// glue: bridge, the three slots, the interact menu, video and audio hand-off,
+// the memories, and the bring-up panel.  RAM, the kernel and SYM.ROM live in
+// SDRAM, the game's drive image in the two CRAMs (target/pocket/ngage_mem.sv).
 //
 // Everything above the "@ The game" banner is the framework's and is the same
 // in every core here.  Below it, the shapes are proven on hardware -- the
@@ -49,10 +49,10 @@ module core_top
          //! System Configuration Parameters
          //! ------------------------------------------------------------------------
          // Memory
-         parameter USE_SDRAM    = 1,       //! Enable SDRAM (the whole ROM image)
-         parameter USE_SRAM     = 1,       //! Enable SRAM (tilemap VRAM)
-         parameter USE_CRAM0    = 0,       //! Cellular RAM #1: unused
-         parameter USE_CRAM1    = 0,       //! Cellular RAM #2: unused
+         parameter USE_SDRAM    = 1,       //! Enable SDRAM (RAM, the kernel, SYM.ROM)
+         parameter USE_SRAM     = 1,       //! Enable SRAM (idle: its pins are driven quiet)
+         parameter USE_CRAM0    = 1,       //! Cellular RAM #1: the drive image's first 16 MB
+         parameter USE_CRAM1    = 1,       //! Cellular RAM #2: the rest of it
          // Cartridge port
          parameter USE_ANALOGIZER = 1,     //! Analogizer adapter (docs/analogizer.md)
          // Video
@@ -810,11 +810,12 @@ module core_top
     //! Clocks
     //! ------------------------------------------------------------------------
     wire pll_core_locked, pll_core_locked_s;
-    wire clk_sys;       // Machine, renderers and memories: 96.0 MHz
-    wire clk_vid;       // Video: 8.0 MHz dot clock, exactly clk_sys / 12, half a system cycle late
-    wire clk_vid_90deg; // Video: 8.0 MHz @ 90deg (Pocket RGB clock pair)
+    wire clk_sys;       // Memories, LCD: 96.0 MHz
+    wire clk_vid;       // Video: 6.857 MHz dot clock, exactly clk_sys / 14, half a system cycle late
+    wire clk_vid_90deg; // Video: 6.857 MHz @ 90deg (Pocket RGB clock pair)
     wire clk_sdram;     // SDRAM chip clock: 96.0 MHz, phase-shifted (see the SDC)
     wire clk_ana;       // Analogizer: 48.0 MHz, clk_sys / 2, in phase with it
+    wire clk_cpu;       // NGVM's CPU side: 80.0 MHz, asynchronous to the rest by design
 
     core_pll core_pll
     (
@@ -825,6 +826,7 @@ module core_top
         .outclk_2 ( clk_vid_90deg ),
         .outclk_3 ( clk_sdram     ),
         .outclk_4 ( clk_ana       ),
+        .outclk_5 ( clk_cpu       ),
         .locked   ( pll_core_locked )
     );
 
@@ -842,125 +844,79 @@ module core_top
     //! The SDRAM initialises on the hardware reset; the machine is held until
     //! the SDRAM is ready and the host's first "all complete" has been seen
     //! (sticky, because the bridge clears all-complete on any later slot
-    //! request), and by the menu's reset switch.
+    //! request), and by the menu's reset switch.  A reset runs the kernel
+    //! again over the memory as the last run left it: the kernel restores
+    //! its own data at boot (sw/kernel/kernel.ld), nothing writes SYM.ROM,
+    //! and what a game saved to its drive stays there, as on the phone.
     wire mem_init  = ~pll_locked_sys;
     wire mem_ready;
     logic loaded = 1'b0;
     wire  allc_s;
     synch_3 sync_allc(dataslot_allcomplete, allc_s, clk_sys);
     always_ff @(posedge clk_sys) if (allc_s) loaded <= 1'b1;
-    wire  g_reset = reset_sw_s | ~loaded | ~mem_ready | ~sram_done;
+    wire  g_reset = reset_sw_s | ~loaded | ~mem_ready;
 
-    //! ROM: one slot with the flat image tools/mra_build.py makes from ngage.mra.
-    //! Its layout is in target/pocket/ngage_mem.sv; change the two together.
-    wire        ioctl_isROM = ioctl_download && ioctl_index == 16'h0;
-    wire        dl_we       = ioctl_isROM && ioctl_wr;
-    wire [24:0] dl_addr     = ioctl_addr[24:0];
-    wire  [7:0] dl_data     = ioctl_data;
+    //! The three slots (data.json) arrive at their bus addresses: the kernel
+    //! at 0, SYM.ROM at 0x2000000, the game's drive image at 0x4000000.
+    //! ngage_mem.sv routes each by its address; change the two together.
+    wire        dl_we   = ioctl_download && ioctl_wr;
+    wire [26:0] dl_addr = ioctl_addr[26:0];
+    wire  [7:0] dl_data = ioctl_data;
 
-    //! Controls, active low as arcade boards read them.  IN0 and IN1 are the
-    //! two players: bit 0 up, 1 down, 2 left, 3 right, 4 button 1, 5 button 2.
-    //! IN2 is the system port: bit 1 service, 2 coin 1, 3 coin 2, 6 start 1,
-    //! 7 start 2.  REARRANGE THESE to the board's own bit order, from MAME's
-    //! PORT_START blocks -- and write the order into docs/hardware.md first.
-    //!
-    //! A and Y are both button 1 and B and X both button 2, so either thumb
-    //! position works; select inserts a coin.
-    wire p1_b1 = p1_btn_a | p1_btn_y, p1_b2 = p1_btn_b | p1_btn_x;
-    wire p2_b1 = p2_btn_a | p2_btn_y, p2_b2 = p2_btn_b | p2_btn_x;
-    wire svc   = mod_sw1[0] | svc_sw;
-
-    wire [7:0] g_in0 = ~{2'b00, p1_b2, p1_b1,
+    //! Controls, as the kernel reads them (IO_KEYS, sw/include/ngvm_hw.h):
+    //! bit 0 up, 1 down, 2 left, 3 right, 4 A, 5 B, 6 X, 7 Y, 8 L, 9 R,
+    //! 10 select, 11 start; 1 = pressed.  The kernel maps them to the
+    //! phone's keys (docs/hardware.md).
+    wire [11:0] g_keys = {p1_start, p1_select, p1_btn_r1, p1_btn_l1,
+                          p1_btn_y, p1_btn_x, p1_btn_b, p1_btn_a,
                           p1_right | j1_right, p1_left | j1_left,
                           p1_down  | j1_down,  p1_up   | j1_up};
-    wire [7:0] g_in1 = ~{2'b00, p2_b2, p2_b1,
-                          p2_right | j2_right, p2_left | j2_left,
-                          p2_down  | j2_down,  p2_up   | j2_up};
-    wire [7:0] g_in2 = ~{p2_start, p1_start, 2'b00,
-                          p2_select, p1_select, svc, 1'b0};
-
-    //! The two DIP banks.  The menu word starts at zero and is XORed with the
-    //! board's factory setting, so nothing set is the board as it shipped and
-    //! each menu value is only the difference from it -- which also means a
-    //! switch the menu does not expose keeps its factory value instead of
-    //! reading as pressed before the Pocket has written the word.
-    //!   DSWA 0xFF, DSWB 0xFF: REPLACE with the board's factory settings and
-    //!   say here what each means.  Every entry in interact.json must do
-    //!   something on hardware (METHODOLOGY section 5.5).
-    wire [7:0] g_dswa = 8'hFF ^ dip_sw0;
-    wire [7:0] g_dswb = 8'hFF ^ dip_sw1;
 
     //! Bring-up switches from the modifier word (the "Bring-up" entries of
     //! interact.json; take them off the menu for a release, leave them here):
-    //! bit 4 SDRAM read capture alternate, 5 slow bursts, 7 slow SRAM reads,
-    //! and mod_sw1 bit 7 stretched SRAM writes.
-    wire g_rd_late      = ~mod_sw0[4];
-    wire g_burst_slow   =  mod_sw0[5];
-    wire g_sram_slow    =  mod_sw0[7];
-    wire g_sram_slow_wr =  mod_sw1[7];
+    //! bit 4 SDRAM read capture alternate, 5 slow bursts.
+    wire g_rd_late    = ~mod_sw0[4];
+    wire g_burst_slow =  mod_sw0[5];
 
-    // the core's memory ports
-    wire        mrom_req, mrom_ack;  wire [18:1] mrom_addr;  wire [15:0] mrom_q;
-    wire        srom_req, srom_ack;  wire [15:0] srom_addr;  wire  [7:0] srom_q;
-    wire        gfxl_req, gfxl_ack;  wire [17:0] gfxl_addr;  wire [31:0] gfxl_q;
-    wire        gfxs_req, gfxs_ack;  wire [17:0] gfxs_addr;  wire [31:0] gfxs_q;
-    wire        vram_req, vram_we, vram_ack;
-    wire [14:0] vram_addr;  wire [15:0] vram_din, vram_q;  wire [1:0] vram_ben;
-
-    //! ------------------------------------------------------------------
-    //! SRAM bring-up test.  A dead tilemap RAM blanks every tilemap while
-    //! leaving the CPU and the sprite engine looking healthy -- a black
-    //! screen with a running frame counter.  So before the core is let out
-    //! of reset, two known words go into the SRAM and come back out, and
-    //! what came back is shown on the panel.  The core is still in reset here, so nothing else is driving
-    //! the port and the two cannot collide.
-    //!
-    //! A55A and 5AA5 are chosen to be each other's byte-swap and nibble
-    //! inverse, so a stuck bit, a swapped byte lane and a dead bus all read
-    //! differently from a pass.
-    //!
-    //! The test is target/pocket/sram_selftest.sv, and it PUTS BACK the two
-    //! words it overwrites: a core that loads anything into the SRAM (NBA
-    //! Jam's sound program) would otherwise have two words of it replaced by
-    //! the test pattern, with the panel still reading a pass (METHODOLOGY
-    //! 5.25).  It runs after the load, and its addresses sit either side of
-    //! the port's top address line (A14 on this 15-bit port).
-    wire        cv_req, cv_we, cv_ack;
-    wire [14:0] cv_addr;  wire [15:0] cv_din;  wire [1:0] cv_ben;
-    wire [15:0] sram_rd0, sram_rd1;
-    wire        sram_done, tv_req, tv_we;
-    wire [16:0] tv_addr17;
-    wire [14:0] tv_addr = tv_addr17[14:0];
-    wire [15:0] tv_din;
-    sram_selftest #(.A0(17'h00000), .A1(17'h04000)) u_sramtest (
-        .clk(clk_sys), .hold(!mem_ready || !loaded),
-        .req(tv_req), .we(tv_we), .addr(tv_addr17), .d(tv_din), .ack(vram_ack), .q(vram_q),
-        .done(sram_done), .rd0(sram_rd0), .rd1(sram_rd1)
-    );
-
-    assign vram_req  = sram_done ? cv_req  : tv_req;
-    assign vram_we   = sram_done ? cv_we   : tv_we;
-    assign vram_addr = sram_done ? cv_addr : tv_addr;
-    assign vram_din  = sram_done ? cv_din  : tv_din;
-    assign vram_ben  = sram_done ? cv_ben  : 2'b11;
-    assign cv_ack    = sram_done ? vram_ack : 1'b0;
+    // NGVM's bus and the LCD's line fetch, between the machine and the memories
+    wire         m_req, m_done;
+    wire   [1:0] m_cmd;
+    wire  [26:0] m_addr;
+    wire  [31:0] m_be;
+    wire [255:0] m_wdata, m_rdata;
+    wire         l_req, l_wr, l_done;
+    wire  [25:1] l_addr;
+    wire   [5:0] l_len;
+    wire   [4:0] l_idx;
+    wire  [15:0] l_data;
+    wire  [31:0] rom_size, drive_size;
 
     ngage_mem u_mem (
         .clk(clk_sys), .clk_sdram(clk_sdram), .init(mem_init), .ready(mem_ready),
-        .rd_late(g_rd_late), .burst_slow(g_burst_slow),
-        .sram_slow(g_sram_slow), .sram_slow_wr(g_sram_slow_wr),
-        .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_isROM),
-        .mrom_req(mrom_req), .mrom_addr(mrom_addr), .mrom_ack(mrom_ack), .mrom_q(mrom_q),
-        .srom_req(srom_req), .srom_addr(srom_addr), .srom_ack(srom_ack), .srom_q(srom_q),
-        .gfxl_req(gfxl_req), .gfxl_addr(gfxl_addr), .gfxl_ack(gfxl_ack), .gfxl_q(gfxl_q),
-        .gfxs_req(gfxs_req), .gfxs_addr(gfxs_addr), .gfxs_ack(gfxs_ack), .gfxs_q(gfxs_q),
-        .vram_req(vram_req), .vram_we(vram_we), .vram_addr(vram_addr),
-        .vram_din(vram_din), .vram_ben(vram_ben), .vram_ack(vram_ack), .vram_q(vram_q),
+        .rd_late(g_rd_late), .burst_slow(g_burst_slow), .sram_slow(1'b0), .sram_slow_wr(1'b0),
+        .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_download),
+        .rom_size(rom_size), .drive_size(drive_size),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata),
+        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
+        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
+        .vram_req(1'b0), .vram_we(1'b0), .vram_addr(15'd0), .vram_din(16'd0), .vram_ben(2'b00),
+        .vram_ack(), .vram_q(),
         .SDRAM_DQ(dram_dq), .SDRAM_A(dram_a), .SDRAM_BA(dram_ba),
         .SDRAM_DQML(dram_dqm[0]), .SDRAM_DQMH(dram_dqm[1]),
         .SDRAM_CLK(dram_clk), .SDRAM_CKE(dram_cke),
         .SDRAM_nRAS(dram_ras_n), .SDRAM_nCAS(dram_cas_n), .SDRAM_nWE(dram_we_n),
         .SDRAM_nCS(),
+        .cram0_a(cram0_a), .cram0_dq(cram0_dq), .cram0_clk(cram0_clk),
+        .cram0_adv_n(cram0_adv_n), .cram0_cre(cram0_cre),
+        .cram0_ce0_n(cram0_ce0_n), .cram0_ce1_n(cram0_ce1_n),
+        .cram0_oe_n(cram0_oe_n), .cram0_we_n(cram0_we_n),
+        .cram0_ub_n(cram0_ub_n), .cram0_lb_n(cram0_lb_n),
+        .cram1_a(cram1_a), .cram1_dq(cram1_dq), .cram1_clk(cram1_clk),
+        .cram1_adv_n(cram1_adv_n), .cram1_cre(cram1_cre),
+        .cram1_ce0_n(cram1_ce0_n), .cram1_ce1_n(cram1_ce1_n),
+        .cram1_oe_n(cram1_oe_n), .cram1_we_n(cram1_we_n),
+        .cram1_ub_n(cram1_ub_n), .cram1_lb_n(cram1_lb_n),
         .sram_a(sram_a), .sram_dq(sram_dq),
         .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n),
         .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n)
@@ -968,9 +924,10 @@ module core_top
 
     wire        g_pix_ce, g_hs, g_vs, g_de, g_vb, g_hb;
     wire [23:0] g_rgb;
-    wire signed [15:0] g_snd;
-    wire        g_halted, g_watchdog;
-    wire [23:1] g_dbg_addr;  wire g_dbg_bus, g_dbg_wait;
+    wire [31:0] g_snd;
+    wire        g_snd_tog;
+    wire [31:0] g_dbg_pc, g_dbg_chars;
+    wire        g_exited, g_lcd_on;
 
     //! The dot enable's phase is pinned to clk_vid: the clock's own toggle,
     //! seen through two system-clock flops, restarts the core's dot divider
@@ -983,24 +940,20 @@ module core_top
     always @(posedge clk_sys) begin vt_s <= vt; vt_d <= vt_s; end
     wire pix_sync = vt_s ^ vt_d;
 
-    ngage_core u_core (
-        //! pause_core is the Pocket's menu being open.  It used to be ORed into
-        //! reset here, which held the whole board in reset while the menu was
-        //! up and booted it from scratch when the menu closed.
-        .clk(clk_sys), .rst(g_reset), .pause(pause_core), .pix_sync(pix_sync),
-        .mrom_req(mrom_req), .mrom_addr(mrom_addr), .mrom_ack(mrom_ack), .mrom_q(mrom_q),
-        .srom_req(srom_req), .srom_addr(srom_addr), .srom_ack(srom_ack), .srom_q(srom_q),
-        .gfxl_req(gfxl_req), .gfxl_addr(gfxl_addr), .gfxl_ack(gfxl_ack), .gfxl_q(gfxl_q),
-        .gfxs_req(gfxs_req), .gfxs_addr(gfxs_addr), .gfxs_ack(gfxs_ack), .gfxs_q(gfxs_q),
-        .vram_req(cv_req), .vram_we(cv_we), .vram_addr(cv_addr),
-        .vram_din(cv_din), .vram_ben(cv_ben), .vram_ack(cv_ack), .vram_q(vram_q),
-        .dswa(g_dswa), .dswb(g_dswb),
-        .in0(g_in0), .in1(g_in1), .in2(g_in2),
+    ngage_core #(.CPU_HZ(64_000_000)) u_core (
+        //! pause_core is the Pocket's menu being open.  NGVM does not use it
+        //! yet: the game runs on behind the menu.  It must never be ORed into
+        //! reset, which would boot the phone again when the menu closed.
+        .clk(clk_sys), .clk_cpu(clk_cpu), .rst(g_reset), .pause(pause_core), .pix_sync(pix_sync),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata),
+        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
+        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
+        .keys(g_keys), .rom_size(rom_size), .drive_size(drive_size),
         .rgb(g_rgb), .hsync(g_hs), .vsync(g_vs),
         .hblank(g_hb), .vblank(g_vb), .pix_ce(g_pix_ce), .de(g_de),
-        .snd(g_snd),
-        .dbg_halted(g_halted), .dbg_addr(g_dbg_addr), .dbg_bus(g_dbg_bus), .dbg_wait(g_dbg_wait),
-        .watchdog_reset(g_watchdog)
+        .snd(g_snd), .snd_tog(g_snd_tog),
+        .dbg_pc(g_dbg_pc), .dbg_chars(g_dbg_chars), .dbg_exited(g_exited), .dbg_lcd_on(g_lcd_on)
     );
 
     //! Screen shape from the Interact menu.  The aspect in video.json
@@ -1019,69 +972,36 @@ module core_top
     //! be read.  KEEP docs/bringup.md IN STEP WITH THIS: it is what the
     //! person holding the Pocket reads from.
     //!   row 0  1010 1010 | frame count | pll locked, memory ready,
-    //!          downloading, all-complete, loaded, core reset, CPU halted,
-    //!          watchdog seen | in2
-    //!   row 1  first-fault capture: vector | code address before it
-    //!   row 2  first word of the program ROM | first sound ROM byte |
-    //!          first graphics byte -- the path, not the image
-    //!   row 3  the SRAM self-test: A55A 5AA5 is a pass
+    //!          downloading, all-complete, loaded, core reset, kernel
+    //!          panicked, LCD on | keys 7:0
+    //!   row 1  an instruction the CPU retired lately (its address)
+    //!   row 2  the last four characters the kernel printed
+    //!   row 3  KB loaded at 0x2000000 (SYM.ROM) | KB loaded at 0x4000000 (drive)
     //! ------------------------------------------------------------------
     wire        ovl_en = mod_sw0[3];
     logic [7:0] ovl_frames;
-    logic       ovl_wdog;
     logic       vb_d;
     always_ff @(posedge clk_sys) begin
         vb_d <= g_vb;
         if (g_vb && !vb_d) ovl_frames <= ovl_frames + 8'd1;
-        if (g_watchdog) ovl_wdog <= 1'b1;
     end
-
-    //! the first word each memory answered with, latched once
-    logic [15:0] first_prog;  logic first_prog_v;
-    logic  [7:0] first_snd;   logic first_snd_v;
-    logic  [7:0] first_gfx;   logic first_gfx_v;
-    always_ff @(posedge clk_sys) begin
-        if (mem_init) begin first_prog_v <= 1'b0; first_snd_v <= 1'b0; first_gfx_v <= 1'b0; end
-        else begin
-            if (mrom_ack && !first_prog_v) begin first_prog <= mrom_q; first_prog_v <= 1'b1; end
-            if (srom_ack && !first_snd_v)  begin first_snd  <= srom_q; first_snd_v  <= 1'b1; end
-            if (gfxl_ack && !first_gfx_v)  begin first_gfx  <= gfxl_q[31:24]; first_gfx_v <= 1'b1; end
-        end
-    end
-
-    //! First-fault capture (rtl/dbg_fault.sv): the first exception vector a
-    //! 68000 fetches that a healthy run never does, and where it was.  It
-    //! reads all zeros with no CPU on the bus.  For another CPU, write the
-    //! equivalent -- "the first thing a healthy run never does" -- and prove
-    //! it quiet on a healthy boot and firing on a sick one in simulation
-    //! before it costs a flash cycle.
-    logic        flt_rst;
-    always_ff @(posedge clk_sys) flt_rst <= g_reset;
-    wire         flt_hit;
-    wire   [7:0] flt_vec, flt_n;
-    wire  [23:0] flt_pc0, flt_pc1, flt_io;
-    dbg_fault u_fault (
-        .clk(clk_sys), .rst(flt_rst), .addr(g_dbg_addr), .bus(g_dbg_bus),
-        .hit(flt_hit), .vec(flt_vec), .pc0(flt_pc0), .pc1(flt_pc1), .io(flt_io), .faults(flt_n)
-    );
 
     wire [127:0] ovl_status = {
         // row 0: the marker first, so a reading can check its own alignment
         8'b1010_1010, ovl_frames,
         pll_locked_sys, mem_ready, ioctl_download, allc_s,
-        loaded, g_reset, g_halted, ovl_wdog,
-        g_in2,
-        // row 1: the vector first fetched in error (00 = none), then the code
-        // address just before it
-        flt_vec, flt_pc0,
-        // row 2: the first word each ROM region handed back
-        first_prog, first_snd, first_gfx,
-        // row 3: what came back out of the SRAM.  A55A 5AA5 is a pass.
-        sram_rd0, sram_rd1
+        loaded, g_reset, g_exited, g_lcd_on,
+        g_keys[7:0],
+        // row 1: where the CPU is
+        g_dbg_pc,
+        // row 2: what the kernel said last
+        g_dbg_chars,
+        // row 3: what the loader delivered, in KB
+        rom_size[25:10], drive_size[25:10]
     };
 
     wire [7:0] ovl_r, ovl_g, ovl_b;
-    dbg_overlay ovl (
+    dbg_overlay #(.SQW(5)) ovl (
         .clk(clk_sys), .cen_pix(g_pix_ce), .enable(ovl_en), .de(g_de), .vsync(g_vs),
         .r_in(g_rgb[23:16]), .g_in(g_rgb[15:8]), .b_in(g_rgb[7:0]),
         .status(ovl_status), .r_out(ovl_r), .g_out(ovl_g), .b_out(ovl_b)
@@ -1155,32 +1075,21 @@ module core_top
     endgenerate
 
     //! ------------------------------------------------------------------
-    //! Audio clock domain crossing (METHODOLOGY section 5.4).  The mixer's
-    //! output moves on every 96 MHz clock, so it must never be sampled
-    //! directly by the audio side: it is sampled here at 48 kHz, held, and
-    //! handed over with a toggle flag, which is the only way the audio
-    //! domain can be sure of a whole sample rather than a mix of two.
+    //! Audio clock domain crossing (METHODOLOGY section 5.4).  NGVM's audio
+    //! device plays a sample at the game's rate and flips g_snd_tog each
+    //! time it changes (rtl/ngvm_io.sv), in the CPU's clock; the sample then
+    //! stands for at least 1 / 48,000 s, so the audio side takes it whole
+    //! when it sees the flip through three of its own flops.  The mixer
+    //! holds it to its 48 kHz.
     //! ------------------------------------------------------------------
-    localparam int SND_DIV = 2000;              // 96 MHz / 48 kHz
-    logic [11:0] snd_div = 12'd0;
-    logic signed [15:0] snd_hold = 16'sd0;
-    logic        snd_tog = 1'b0;
-    always_ff @(posedge clk_sys) begin
-        if (snd_div == 12'(SND_DIV - 1)) begin
-            snd_div  <= 12'd0;
-            snd_hold <= g_snd;
-            snd_tog  <= ~snd_tog;
-        end else begin
-            snd_div <= snd_div + 12'd1;
-        end
-    end
-    logic [2:0] snd_tog_s = 3'd0;
-    logic signed [15:0] snd_xfer = 16'sd0;
+    logic [2:0]  snd_tog_s = 3'd0;
+    logic [31:0] snd_xfer = 32'd0;
     always_ff @(posedge clk_74b) begin
-        snd_tog_s <= {snd_tog_s[1:0], snd_tog};
-        if (snd_tog_s[2] != snd_tog_s[1]) snd_xfer <= snd_hold;
+        snd_tog_s <= {snd_tog_s[1:0], g_snd_tog};
+        if (snd_tog_s[2] != snd_tog_s[1]) snd_xfer <= g_snd;
     end
-    assign core_snd_l = snd_xfer;
-    assign core_snd_r = snd_xfer;
+    assign core_snd_l = snd_xfer[15:0];
+    assign core_snd_r = snd_xfer[31:16];
 
 endmodule
+

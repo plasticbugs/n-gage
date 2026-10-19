@@ -1,182 +1,170 @@
 //------------------------------------------------------------------------------
-// N-Gage -- the machine, platform-agnostic.
+// N-Gage -- the machine, platform-agnostic: NGVM (docs/core-design.md).
 //
-// THIS IS THE SKELETON.  It is a whole, working core that contains no game: a
-// raster, a test pattern, a cursor on the d-pad, a beep on button 1, and one
-// read from each ROM region so the bring-up panel has something to show.  It
-// exists so that the first thing a new core does on a Pocket is work -- the
-// PLL, the SDRAM, the SRAM, the download, the video hand-over, the controls
-// and the audio path are all proven before there is a CPU to blame.
+// Two clocks.  The CPU side -- the ARMv4T, its caches, the miss handler and
+// the devices (ngvm_sys.sv) -- runs on clk_cpu, as fast as it closes timing.
+// Memory and video run on the platform's 96 MHz: the bus crosses by a
+// toggle handshake (ngvm_xbus.sv), and so does everything else that crosses,
+// each the simplest way that is safe for what it carries:
 //
-// Replace the inside; keep the outside.  The port list is the contract with
-// target/pocket/core_top.sv and with the benches in sim/, and it is shaped
-// the way these boards usually are: a 16-bit program ROM, a byte-wide sound
-// ROM, graphics read a word at a time by a line renderer and a tile at a time
-// by a sprite engine, and a tilemap RAM in the Pocket's SRAM.  Drop what the
-// board does not have; add nothing the platform side does not already carry
-// without reading docs/core-design.md first.
+//   rst            96 MHz -> CPU   two flops; the CPU side is held in reset
+//                                  a further 16,640 clocks clearing its page
+//                                  table, which is far longer than the bus
+//                                  takes to finish anything in flight
+//   frame          96 MHz -> CPU   a toggle: NGVM's vblank, one pulse a frame
+//   keys           96 MHz -> CPU   two flops; each bit is a button on its own
+//   rom/drive size 96 MHz -> CPU   none: set by the load, before reset ends
+//   lcd_base, on   CPU -> 96 MHz   two flops, taken once a frame (ngvm_lcd.sv)
+//   snd, snd_tog   CPU -> audio    the sample and a toggle, to core_top, which
+//                                  hands them to the audio clock
+//   dbg_*          CPU -> 96 MHz   a snapshot and a toggle, sixteen times a
+//                                  second or so: for the bring-up panel
+//
+// `pause` is not used yet: with the Pocket's menu open the game runs on.
 //------------------------------------------------------------------------------
 `default_nettype none
 
-module ngage_core (
-    input  logic        clk,            // 96 MHz
-    input  logic        rst,
-    input  logic        pause,          // freeze the CPUs and sound, keep the picture
-    input  logic        pix_sync,       // see clk_enables.sv
+module ngage_core #(
+    parameter int CPU_HZ = 64_000_000
+) (
+    input  logic         clk,           // 96 MHz
+    input  logic         clk_cpu,       // CPU_HZ
+    input  logic         rst,
+    input  logic         pause,
+    input  logic         pix_sync,      // see clk_enables.sv
 
-    // ---------------- memory, all through target/pocket/ngage_mem.sv
-    output logic        mrom_req,  output logic [18:1] mrom_addr,
-    input  logic        mrom_ack,  input  logic [15:0] mrom_q,
-    output logic        srom_req,  output logic [15:0] srom_addr,
-    input  logic        srom_ack,  input  logic  [7:0] srom_q,
-    output logic        gfxl_req,  output logic [17:0] gfxl_addr,
-    input  logic        gfxl_ack,  input  logic [31:0] gfxl_q,
-    output logic        gfxs_req,  output logic [17:0] gfxs_addr,
-    input  logic        gfxs_ack,  input  logic [31:0] gfxs_q,
-    output logic        vram_req,  output logic        vram_we,
-    output logic [14:0] vram_addr, output logic [15:0] vram_din,
-    output logic  [1:0] vram_ben,
-    input  logic        vram_ack,  input  logic [15:0] vram_q,
+    // ---------------- NGVM's bus, in clk's domain (target/pocket/ngage_mem.sv)
+    output logic         m_req,
+    output logic   [1:0] m_cmd,
+    output logic  [26:0] m_addr,
+    output logic  [31:0] m_be,
+    output logic [255:0] m_wdata,
+    input  logic         m_done,
+    input  logic [255:0] m_rdata,
 
-    // ---------------- inputs, active low as arcade boards read them
-    input  logic  [7:0] dswa, dswb,
-    input  logic  [7:0] in0, in1, in2,  // bit 0 up, 1 down, 2 left, 3 right, 4 b1, 5 b2
+    // ---------------- the LCD's line fetch, the same
+    output logic         l_req,
+    output logic  [25:1] l_addr,
+    output logic   [5:0] l_len,
+    input  logic         l_wr,
+    input  logic   [4:0] l_idx,
+    input  logic  [15:0] l_data,
+    input  logic         l_done,
+
+    input  logic  [11:0] keys,          // KEY_* (ngvm_hw.h), 1 = pressed
+    input  logic  [31:0] rom_size,
+    input  logic  [31:0] drive_size,
 
     // ---------------- video, one pixel per pix_ce in the clk domain
-    output logic [23:0] rgb,
-    output logic        hsync, vsync, hblank, vblank,
-    output logic        pix_ce, de,
+    output logic  [23:0] rgb,
+    output logic         hsync, vsync, hblank, vblank,
+    output logic         pix_ce, de,
 
-    output logic signed [15:0] snd,
+    // ---------------- sound, in clk_cpu's domain: L 15:0, R 31:16, signed
+    output logic  [31:0] snd,
+    output logic         snd_tog,
 
-    // ---------------- bring-up (rtl/dbg_fault.sv, the panel in core_top)
-    output logic        dbg_halted,
-    output logic [23:1] dbg_addr,
-    output logic        dbg_bus, dbg_wait,
-    output logic        watchdog_reset
+    // ---------------- bring-up, in clk's domain
+    output logic  [31:0] dbg_pc,        // an instruction retired lately
+    output logic  [31:0] dbg_chars,     // the last four characters of IO_DBG_PUTC
+    output logic         dbg_exited,    // IO_DBG_EXIT written: the kernel panicked
+    output logic         dbg_lcd_on
 );
     // ------------------------------------------------------------ clocks
     logic cen_phi1, cen_phi2, cen_z80, cen_ym, cen_pix;
     clk_enables u_cen (
-        .clk(clk), .rst(rst), .pause(pause), .pix_sync(pix_sync),
+        .clk(clk), .rst(rst), .pause(1'b0), .pix_sync(pix_sync),
         .cen_phi1(cen_phi1), .cen_phi2(cen_phi2), .cen_z80(cen_z80),
         .cen_ym(cen_ym), .cen_pix(cen_pix)
     );
     assign pix_ce = cen_pix;
 
-    // ------------------------------------------------------------ raster
-    // 452 x 253 at 96/14 MHz is 59.96 Hz; 320 x 224 of it is picture.
-    localparam int HTOTAL = 452, VTOTAL = 253;
-    localparam int W = 320, VIS_Y0 = 16, VIS_Y1 = 239;
-    logic [9:0] hpos;
-    logic [8:0] vpos;
+    // ------------------------------------------------------------ reset
+    logic [1:0] rst_s;
+    always_ff @(posedge clk_cpu) rst_s <= {rst_s[0], rst};
+    wire rst_c = rst_s[1];
+
+    // ------------------------------------------------------------ the CPU side
+    logic         bus_req, bus_done;
+    logic   [1:0] bus_cmd;
+    logic  [26:0] bus_addr;
+    logic  [31:0] bus_be;
+    logic [255:0] bus_wdata, bus_rdata;
+    logic  [31:0] lcd_base;
+    logic         lcd_on, vb_c;
+    logic  [11:0] keys_s0, keys_s1;
+    logic         dbg_putc, dbg_exit, dbg_hex;
+    logic  [31:0] dbg_data;
+    logic         rt_valid, rt_irq, rt_thumb, io_rd;
+    logic  [31:0] rt_pc, rt_instr, rt_cpsr, io_rd_data;
+    logic   [9:0] io_rd_off;
+
+    always_ff @(posedge clk_cpu) begin keys_s0 <= keys; keys_s1 <= keys_s0; end
+
+    ngvm_sys #(.CPU_HZ(CPU_HZ)) u_sys (
+        .clk(clk_cpu), .rst(rst_c),
+        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_be(bus_be),
+        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata),
+        .lcd_base(lcd_base), .lcd_on(lcd_on), .vblank(vb_c), .keys(keys_s1),
+        .rom_size(rom_size), .drive_size(drive_size),
+        .snd(snd), .snd_tog(snd_tog),
+        .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data),
+        .rt_valid(rt_valid), .rt_irq(rt_irq), .rt_pc(rt_pc), .rt_instr(rt_instr),
+        .rt_thumb(rt_thumb), .rt_cpsr(rt_cpsr),
+        .io_rd(io_rd), .io_rd_off(io_rd_off), .io_rd_data(io_rd_data)
+    );
+
+    ngvm_xbus u_xbus (
+        .clk_a(clk_cpu), .rst_a(rst_c),
+        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_be(bus_be),
+        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata),
+        .clk_b(clk), .rst_b(rst),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata)
+    );
+
+    // ------------------------------------------------------------ the LCD
+    logic frame, frame_t;          // toggles: never reset (ngvm_xbus.sv)
+    ngvm_lcd u_lcd (
+        .clk(clk), .rst(rst), .cen_pix(cen_pix),
+        .lcd_base(lcd_base), .lcd_on(lcd_on), .frame(frame),
+        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
+        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
+        .rgb(rgb), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank), .de(de)
+    );
+    always_ff @(posedge clk) if (frame) frame_t <= !frame_t;
+
+    logic [2:0] frame_s;
+    always_ff @(posedge clk_cpu) begin
+        frame_s <= {frame_s[1:0], frame_t};
+        vb_c    <= frame_s[2] != frame_s[1];
+    end
+
+    // ------------------------------------------------------------ bring-up
+    logic [31:0] pc_c, chars_c, pc_h, chars_h;
+    logic        exit_c, exit_h, on_h, snap_t;
+    logic [19:0] snap_n;
+    always_ff @(posedge clk_cpu) begin
+        if (rt_valid) pc_c <= rt_pc;
+        if (dbg_putc) chars_c <= {chars_c[23:0], dbg_data[7:0]};
+        if (dbg_exit) exit_c <= 1'b1;
+        snap_n <= snap_n + 20'd1;
+        if (snap_n == 20'd0) begin
+            pc_h <= pc_c; chars_h <= chars_c; exit_h <= exit_c; on_h <= lcd_on;
+            snap_t <= !snap_t;
+        end
+        if (rst_c) begin pc_c <= '0; chars_c <= '0; exit_c <= 1'b0; end
+    end
+    logic [2:0] snap_s;
     always_ff @(posedge clk) begin
-        if (rst) begin hpos <= '0; vpos <= '0; end
-        else if (cen_pix) begin
-            if (hpos == 10'(HTOTAL - 1)) begin
-                hpos <= '0;
-                vpos <= (vpos == 9'(VTOTAL - 1)) ? 9'd0 : vpos + 9'd1;
-            end else hpos <= hpos + 10'd1;
+        snap_s <= {snap_s[1:0], snap_t};
+        if (snap_s[2] != snap_s[1]) begin
+            dbg_pc <= pc_h; dbg_chars <= chars_h; dbg_exited <= exit_h; dbg_lcd_on <= on_h;
         end
     end
-    wire vis_x = (hpos < 10'(W));
-    wire vis_y = (vpos >= 9'(VIS_Y0)) && (vpos <= 9'(VIS_Y1));
 
-    // ------------------------------------------------------------ pattern
-    // A crosshatch every 16 pixels with colour bars across the middle: a
-    // regular pattern turns "the picture is garbled" into coordinates
-    // (METHODOLOGY section 5.18).  The cursor proves the controls and their
-    // polarity; its colour proves the two buttons.
-    logic [8:0] cx, cy;
-    logic       vb_d;
-    wire        frame_tick = vblank && !vb_d;
-    always_ff @(posedge clk) begin
-        vb_d <= vblank;
-        if (rst) begin cx <= 9'd152; cy <= 9'd104; end
-        else if (frame_tick && !pause) begin
-            if (!in0[0] && cy != 9'd0)   cy <= cy - 9'd1;
-            if (!in0[1] && cy != 9'd208) cy <= cy + 9'd1;
-            if (!in0[2] && cx != 9'd0)   cx <= cx - 9'd1;
-            if (!in0[3] && cx != 9'd304) cx <= cx + 9'd1;
-        end
-    end
-
-    wire [8:0] x = hpos[8:0];
-    wire [8:0] y = vpos - 9'(VIS_Y0);
-    wire grid   = (x[3:0] == 4'd0) || (y[3:0] == 4'd0) || (x == 9'd319) || (y == 9'd223);
-    wire in_bar = (y >= 9'd80) && (y < 9'd144) && (x >= 9'd64) && (x < 9'd256);
-    wire [1:0] bar = 2'((x - 9'd64) >> 6);      // three 64-pixel bars
-    wire bright = (y >= 9'd112);
-    wire in_cur = (x >= cx) && (x < cx + 9'd16) && (y >= cy) && (y < cy + 9'd16);
-
-    logic [23:0] px;
-    always_comb begin
-        px = grid ? 24'hFFFFFF : 24'h000000;
-        if (in_bar) begin
-            case (bar)
-                2'd0:    px = bright ? 24'hFF0000 : 24'h800000;
-                2'd1:    px = bright ? 24'h00FF00 : 24'h008000;
-                default: px = bright ? 24'h0000FF : 24'h000080;
-            endcase
-        end
-        if (in_cur) px = !in0[4] ? 24'hFFFF00 : !in0[5] ? 24'hFF00FF : 24'h00FFFF;
-    end
-
-    always_ff @(posedge clk) begin
-        if (cen_pix) begin
-            rgb    <= (vis_x && vis_y) ? px : 24'h000000;
-            de     <= vis_x && vis_y;
-            hblank <= !vis_x;
-            hsync  <= (hpos >= 10'd344) && (hpos < 10'd376);
-        end
-    end
-    assign vblank = !vis_y;
-    assign vsync  = (vpos >= 9'(VIS_Y1 + 3)) && (vpos < 9'(VIS_Y1 + 6));
-
-    // ------------------------------------------------------------ sound
-    // Button 1 beeps, so the audio path is heard before there is a sound
-    // board: 96 MHz / 2^17 / 2 is 366 Hz.  Small: it goes straight to the DAC.
-    logic [17:0] tone;
-    always_ff @(posedge clk) if (!pause) tone <= tone + 18'd1;
-    assign snd = in0[4] ? 16'sd0 : (tone[17] ? 16'sd3000 : -16'sd3000);
-
-    // ------------------------------------------------------------ memory
-    // One read from each ROM region after reset, so the panel's read-back row
-    // shows the first word of each -- which proves the path, not the image;
-    // sim/run_mem.sh proves the image.  A real core's CPUs and video engines
-    // drive these ports instead.
-    typedef enum logic [2:0] { M_PROG, M_SND, M_GFXL, M_IDLE } mst_t;
-    mst_t mst;
-    always_ff @(posedge clk) begin
-        if (rst) begin
-            mst <= M_PROG; mrom_req <= 1'b0; srom_req <= 1'b0; gfxl_req <= 1'b0;
-        end else case (mst)
-            M_PROG: begin mrom_req <= 1'b1; if (mrom_ack) begin mrom_req <= 1'b0; mst <= M_SND;  end end
-            M_SND:  begin srom_req <= 1'b1; if (srom_ack) begin srom_req <= 1'b0; mst <= M_GFXL; end end
-            M_GFXL: begin gfxl_req <= 1'b1; if (gfxl_ack) begin gfxl_req <= 1'b0; mst <= M_IDLE; end end
-            default: ;
-        endcase
-    end
-    assign mrom_addr = '0;
-    assign srom_addr = '0;
-    assign gfxl_addr = '0;
-    assign gfxs_req  = 1'b0;
-    assign gfxs_addr = '0;
-    assign vram_req  = 1'b0;
-    assign vram_we   = 1'b0;
-    assign vram_addr = '0;
-    assign vram_din  = '0;
-    assign vram_ben  = 2'b00;
-
-    // no CPU yet: nothing to halt, nothing on the bus, nothing to watch
-    assign dbg_halted     = 1'b0;
-    assign dbg_addr       = '0;
-    assign dbg_bus        = 1'b0;
-    assign dbg_wait       = 1'b0;
-    assign watchdog_reset = 1'b0;
-
-    wire _unused = &{1'b0, cen_phi1, cen_phi2, cen_z80, cen_ym, dswa, dswb, in1, in2,
-                     mrom_q, srom_q, gfxl_q, gfxs_ack, gfxs_q, vram_ack, vram_q, 1'b0};
+    wire _unused = &{1'b0, pause, cen_phi1, cen_phi2, cen_z80, cen_ym, dbg_hex, rt_irq,
+                     rt_instr, rt_thumb, rt_cpsr, io_rd, io_rd_off, io_rd_data, 1'b0};
 endmodule
 
 `default_nettype wire

@@ -5,7 +5,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "
 set_global_assignment -name QIP_FILE           [file join $::quartus(qip_path) "core_pll/core_pll.qip"]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "ngage_mem.sv"]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "sdram_ctrl.sv"]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "cram_ctrl.sv"]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "sram_port.sv"]
-set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "sram_selftest.sv"]
 set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "pocket_analogizer.sv"]
 set_global_assignment -name QIP_FILE           [file join $::quartus(qip_path) "analogizer/analogizer.qip"]

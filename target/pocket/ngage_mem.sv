@@ -1,226 +1,278 @@
 //------------------------------------------------------------------------------
-// The Pocket's memories behind the core's ports (docs/core-design.md section 2).
+// The Pocket's memories behind NGVM's bus (docs/core-design.md 3).
 //
-//   SDRAM   68000 program   512 KB   word 0x000000   single words, cached
-//           Z80 program      64 KB   word 0x040000   single words, cached
-//           graphics          1 MB   word 0x080000   single words for the line
-//                                                    renderer, 64-word bursts
-//                                                    for the sprite engine
-//   SRAM    tilemap VRAM     64 KB   word 0x00000    single words, byte enables
+//   bus 0x0000000  RAM, 32 MB           SDRAM  word 0x0000000
+//       0x2000000  ROM, up to 20 MB     SDRAM  word 0x1000000
+//       0x3400000  KSEC, 4 MB           SDRAM  word 0x1A00000
+//       0x4000000  the drive, 24 MB     CRAM0 then CRAM1, 16 bits a halfword
 //
-// The image arrives from the Pocket as a stream of bytes in the order
-// ngage.mra builds it, and is written into SDRAM a word at a time through
-// the same controller the core reads it back through.
+// SDRAM word addresses are bus byte addresses over two, so the bus maps onto
+// the chip with no adder.  The loader's three slots (data.json) write the
+// same bus addresses: the kernel at 0, SYM.ROM at 0x2000000, the drive at
+// 0x4000000.
 //
-// The graphics ports are 32 bits wide where the SDRAM is 16, so each 32-bit
-// word is two SDRAM words: the line renderer's port reads them one after the
-// other, and the sprite engine's burst of 32 is a 64-word SDRAM burst.
+// The bus port is ngvm_sys's, crossed into this clock (ngvm_xbus.sv): one
+// request at a time, held until m_done.  A line read is one 16-halfword
+// SDRAM burst, a line write the same burst writing, with DQM masking the
+// halfwords and bytes the mask leaves out, and a word read a 2-halfword
+// burst.  The drive is uncached, so CRAM sees word reads and masked line
+// writes (the D-cache's combining buffer): those go a halfword at a time,
+// and a line write skips the halfwords with nothing to write.
+//
+// The LCD's line fetch shares the burst port.  Neither user can be cut off
+// mid-burst, so the two take turns when both are waiting: a burst of the
+// LCD's is 32 halfwords at most, and the CPU waits no longer than that.
 //------------------------------------------------------------------------------
 `default_nettype none
 
 module ngage_mem (
-    input  logic        clk,            // 96 MHz
-    input  logic        clk_sdram,      // 96 MHz, phase shifted, drives the pin
-    input  logic        init,           // hold to (re)initialise the SDRAM
-    output logic        ready,
+    input  logic         clk,           // 96 MHz
+    input  logic         clk_sdram,     // 96 MHz, phase shifted, drives the pin
+    input  logic         init,          // hold to (re)initialise the SDRAM
+    output logic         ready,
 
-    input  logic        rd_late,        // SDRAM diagnostics, from the Pocket menu
-    input  logic        burst_slow,
-    input  logic        sram_slow,
-    input  logic        sram_slow_wr,
+    input  logic         rd_late,       // SDRAM diagnostics, from the Pocket menu
+    input  logic         burst_slow,
+    input  logic         sram_slow,
+    input  logic         sram_slow_wr,
 
-    // the ROM image arriving from the Pocket
-    input  logic        dl_we,
-    input  logic [24:0] dl_addr,
-    input  logic  [7:0] dl_data,
-    input  logic        dl_active,
+    // the slots arriving from the Pocket, a byte at a time at their bus address
+    input  logic         dl_we,
+    input  logic  [26:0] dl_addr,
+    input  logic   [7:0] dl_data,
+    input  logic         dl_active,
+    output logic  [31:0] rom_size,      // bytes loaded from 0x2000000 on
+    output logic  [31:0] drive_size,    // bytes loaded from 0x4000000 on
 
-    // core ports
-    input  logic        mrom_req,  input  logic [18:1] mrom_addr,
-    output logic        mrom_ack,  output logic [15:0] mrom_q,
+    // NGVM's bus (ngvm_sys.sv), level request held until the done pulse
+    input  logic         m_req,
+    input  logic   [1:0] m_cmd,
+    input  logic  [26:0] m_addr,
+    input  logic  [31:0] m_be,
+    input  logic [255:0] m_wdata,
+    output logic         m_done,
+    output logic [255:0] m_rdata,       // held from m_done to the next request
 
-    input  logic        srom_req,  input  logic [15:0] srom_addr,
-    output logic        srom_ack,  output logic  [7:0] srom_q,
+    // the LCD's line fetch: up to 32 halfwords of SDRAM, held until l_done
+    input  logic         l_req,
+    input  logic  [25:1] l_addr,
+    input  logic   [5:0] l_len,
+    output logic         l_wr,          // one halfword: l_data for index l_idx
+    output logic   [4:0] l_idx,
+    output logic  [15:0] l_data,
+    output logic         l_done,
 
-    input  logic        gfxl_req,  input  logic [17:0] gfxl_addr,
-    output logic        gfxl_ack,  output logic [31:0] gfxl_q,
-
-    input  logic        gfxs_req,  input  logic [17:0] gfxs_addr,
-    output logic        gfxs_ack,  output logic [31:0] gfxs_q,
-
-    input  logic        vram_req,  input  logic        vram_we,
-    input  logic [14:0] vram_addr, input  logic [15:0] vram_din,
-    input  logic  [1:0] vram_ben,
-    output logic        vram_ack,  output logic [15:0] vram_q,
+    // the SRAM, for core_top's self-test only
+    input  logic         vram_req,  input  logic        vram_we,
+    input  logic  [14:0] vram_addr, input  logic [15:0] vram_din,
+    input  logic   [1:0] vram_ben,
+    output logic         vram_ack,  output logic [15:0] vram_q,
 
     // SDRAM pins
-    inout  wire  [15:0] SDRAM_DQ,
-    output logic [12:0] SDRAM_A,
-    output logic        SDRAM_DQML, SDRAM_DQMH,
-    output logic  [1:0] SDRAM_BA,
-    output logic        SDRAM_nCS, SDRAM_nWE, SDRAM_nRAS, SDRAM_nCAS,
-    output logic        SDRAM_CKE, SDRAM_CLK,
+    inout  wire   [15:0] SDRAM_DQ,
+    output logic  [12:0] SDRAM_A,
+    output logic         SDRAM_DQML, SDRAM_DQMH,
+    output logic   [1:0] SDRAM_BA,
+    output logic         SDRAM_nCS, SDRAM_nWE, SDRAM_nRAS, SDRAM_nCAS,
+    output logic         SDRAM_CKE, SDRAM_CLK,
+
+    // CRAM pins
+    output logic [21:16] cram0_a,
+    inout  wire   [15:0] cram0_dq,
+    output logic         cram0_clk, cram0_adv_n, cram0_cre,
+    output logic         cram0_ce0_n, cram0_ce1_n, cram0_oe_n, cram0_we_n,
+    output logic         cram0_ub_n, cram0_lb_n,
+    output logic [21:16] cram1_a,
+    inout  wire   [15:0] cram1_dq,
+    output logic         cram1_clk, cram1_adv_n, cram1_cre,
+    output logic         cram1_ce0_n, cram1_ce1_n, cram1_oe_n, cram1_we_n,
+    output logic         cram1_ub_n, cram1_lb_n,
 
     // SRAM pins
-    output logic [16:0] sram_a,
-    inout  wire  [15:0] sram_dq,
-    output logic        sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n
+    output logic  [16:0] sram_a,
+    inout  wire   [15:0] sram_dq,
+    output logic         sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n
 );
-    // Where each region starts, as an SDRAM word address.  The bases are
-    // powers of two and every region fits inside its own, so the offsets go
-    // in with an OR and cost no adder.
-    localparam logic [24:1] PROG_W = 24'h000000;
-    localparam logic [24:1] SND_W  = 24'h040000;
-    localparam logic [24:1] GFX_W  = 24'h080000;
-    // and where each starts in the image, as a byte offset
-    localparam logic [24:0] SND_B  = 25'h080000;
-    localparam logic [24:0] GFX_B  = 25'h090000;
+    localparam logic [1:0] BC_RDLINE = 2'd0, BC_WRLINE = 2'd1, BC_RDWORD = 2'd2;
+    localparam logic [26:0] BUS_ROM = 27'h2000000, BUS_DRIVE = 27'h4000000;
 
     // ------------------------------------------------------------ download
-    // A byte at a time from the Pocket, paired into a 16-bit word because the
-    // image is big-endian throughout.  The loader cannot be told to wait --
-    // it sends a byte every eight clocks whatever the SDRAM is doing -- so
-    // the words go into a FIFO deep enough to ride out a refresh or a row
-    // change.  Nothing here may ever drop or alter a word.
-    //
-    // This was a single pending word, and it was wrong the way Cadash's was
-    // before it: the even byte of the next word landed in the pending word's
-    // high half while that word was still waiting for its write, so what
-    // finally went out was this word's low byte under the next word's high
-    // one.  The first words of every region read back right, which is what
-    // the panel showed, and the image behind them was peppered with bad
-    // words; the 68000 reached one within a few frames, took an address
-    // error and never came back -- a black screen on the first hardware run.
-    // The ideal-memory bench cannot see it.  sim/run_pocket.sh, at the
-    // loader's rate, can: it crashed the same way before this and boots now.
-    // Each byte is also taken once, on the rising edge of the strobe, which
-    // the Pocket holds for several clocks.
+    // A byte at a time, paired into little-endian halfwords: the even byte
+    // waits for the odd one.  The loader cannot be told to wait, so the
+    // halfwords go into a FIFO deep enough to ride out a refresh, a burst or
+    // a row change (METHODOLOGY 5.16), one for each memory.  Each byte is
+    // taken once, on the rising edge of the strobe, which the loader holds
+    // for several clocks.  An even byte still waiting when the download ends
+    // (a file of odd length) is written alone.
     localparam int DLQ = 64;
-    logic [39:0] dlq [DLQ];             // {word address [24:1], data [15:0]}
-    logic  [6:0] dlq_wp, dlq_rp;
-    logic  [7:0] dl_hi;
-    logic        dl_we_d;
-    wire         dlq_empty = (dlq_wp == dlq_rp);
-    wire  [39:0] dlq_head  = dlq[dlq_rp[5:0]];
-    wire         nb        = dl_we && !dl_we_d;   // one byte, once
+    logic        dl_we_d, dl_act_d, lo_v;
+    logic  [7:0] lo_b;
+    logic [26:1] lo_a;
+    wire         nb      = dl_we && !dl_we_d;
+    wire         dl_end  = dl_act_d && !dl_active;
 
-    wire [24:1] dl_target = (dl_addr >= GFX_B) ? (GFX_W | 24'((dl_addr - GFX_B) >> 1))
-                          : (dl_addr >= SND_B) ? (SND_W | 24'((dl_addr - SND_B) >> 1))
-                                               : (PROG_W | 24'(dl_addr >> 1));
-
-    always_ff @(posedge clk) begin
-        dl_we_d <= dl_we;
-        if (init) begin
-            dlq_wp <= '0;
-            dlq_rp <= '0;
-        end else begin
-            if (nb) begin
-                if (!dl_addr[0]) dl_hi <= dl_data;
-                else begin
-                    dlq[dlq_wp[5:0]] <= {dl_target, dl_hi, dl_data};
-                    dlq_wp <= dlq_wp + 7'd1;
-                end
-            end
-            if (!dlq_empty && dl_ack) dlq_rp <= dlq_rp + 7'd1;
-        end
+    logic        q_push;
+    logic [43:0] q_word;                // {be, halfword address [26:1], data}
+    always_comb begin
+        q_push = 1'b0; q_word = '0;
+        if (nb && dl_addr[0])
+            begin q_push = 1'b1; q_word = {2'b11, dl_addr[26:1], dl_data, lo_b}; end
+        else if (nb && lo_v)            // a new even byte with the last one unpaired
+            begin q_push = 1'b1; q_word = {2'b01, lo_a, 8'h00, lo_b}; end
+        else if (dl_end && lo_v)
+            begin q_push = 1'b1; q_word = {2'b01, lo_a, 8'h00, lo_b}; end
     end
 
-    // ---------------------------------------------------- SDRAM clients
-    // 0 download (writes), 1 graphics for the line renderer, 2 the 68000,
-    // 3 the Z80.  Fixed priority, first listed first: the download only runs
-    // while the core is held in reset, and the line renderer has the tightest
-    // deadline of the three that run.
-    localparam int NCLI = 4;
-    logic [24:1] c_addr  [NCLI];
+    always_ff @(posedge clk) begin
+        dl_we_d <= dl_we; dl_act_d <= dl_active;
+        if (nb && !dl_addr[0]) begin lo_v <= 1'b1; lo_b <= dl_data; lo_a <= dl_addr[26:1]; end
+        else if (q_push) lo_v <= 1'b0;
+        // the sizes: one past the last byte loaded into each region
+        if (nb && dl_addr >= BUS_DRIVE) drive_size <= {5'd0, dl_addr - BUS_DRIVE} + 32'd1;
+        else if (nb && dl_addr >= BUS_ROM) rom_size <= {5'd0, dl_addr - BUS_ROM} + 32'd1;
+        if (init) begin lo_v <= 1'b0; rom_size <= '0; drive_size <= '0; end
+    end
+    wire q_cram = q_word[41];           // halfword address 26:1 >= 0x2000000
+
+    // SDRAM side
+    logic [43:0] sq [DLQ];
+    logic  [6:0] sq_wp, sq_rp;
+    wire         sq_empty = sq_wp == sq_rp;
+    wire  [43:0] sq_head  = sq[sq_rp[5:0]];
+    // CRAM side
+    logic [43:0] cq [DLQ];
+    logic  [6:0] cq_wp, cq_rp;
+    wire         cq_empty = cq_wp == cq_rp;
+    wire  [43:0] cq_head  = cq[cq_rp[5:0]];
+    logic        sq_pop, cq_pop;
+    always_ff @(posedge clk) begin
+        if (q_push && !q_cram) begin sq[sq_wp[5:0]] <= q_word; sq_wp <= sq_wp + 7'd1; end
+        if (q_push &&  q_cram) begin cq[cq_wp[5:0]] <= q_word; cq_wp <= cq_wp + 7'd1; end
+        if (sq_pop) sq_rp <= sq_rp + 7'd1;
+        if (cq_pop) cq_rp <= cq_rp + 7'd1;
+        if (init) begin sq_wp <= '0; sq_rp <= '0; cq_wp <= '0; cq_rp <= '0; end
+    end
+
+    // ---------------------------------------------------- SDRAM random port
+    // Client 0 is the download's writes; nothing else needs a single access.
+    localparam int NCLI = 1;
+    logic [25:1] c_addr  [NCLI];
     logic        c_req   [NCLI];
     logic        c_we    [NCLI];
     logic [15:0] c_wdata [NCLI];
     logic  [1:0] c_be    [NCLI];
     logic        c_ack   [NCLI];
     logic [15:0] rdata;
-
-    wire dl_ack = c_ack[0];
-    assign c_addr[0]  = dlq_head[39:16];
-    assign c_req[0]   = !dlq_empty;
+    assign c_addr[0]  = sq_head[40:16];
+    assign c_req[0]   = !sq_empty;
     assign c_we[0]    = 1'b1;
-    assign c_wdata[0] = dlq_head[15:0];
-    assign c_be[0]    = 2'b11;
+    assign c_wdata[0] = sq_head[15:0];
+    assign c_be[0]    = sq_head[43:42];
+    assign sq_pop     = !sq_empty && c_ack[0];
 
-    // Client 1 was the line renderer, reading each 32-bit image word as two
-    // single accesses.  A single access is nine clocks of activate, read and
-    // precharge, so a word cost twenty and a line of three layers' worth ran
-    // to 5,700 of its 6,328 clocks in the real-memory bench -- and past them
-    // on the panel, where the first hardware picture came out with every
-    // other raster line stale beyond the point the renderer had reached.  The
-    // word now comes as one two-word burst (below), and this client is idle.
-    assign c_addr[1]  = '0;
-    assign c_req[1]   = 1'b0;
-    assign c_we[1]    = 1'b0;
-    assign c_wdata[1] = 16'd0;
-    assign c_be[1]    = 2'b11;
+    // ------------------------------------------------------ the bus request
+    // m_req rises and the request is taken once; m_done ends it, and m_req
+    // must fall before the next is taken (ngvm_xbus.sv drops it the clock
+    // after m_done).
+    logic        m_busy, m_seen;
+    wire         m_new  = m_req && !m_busy && !m_seen;
+    wire         m_cram = m_addr >= BUS_DRIVE;
+    logic        sd_req;                // the CPU's request wants the burst port
+    logic        c_busy;                // ... or is CRAM's, halfword c_n next
 
-    assign c_addr[2]  = PROG_W | {6'd0, mrom_addr};
-    assign c_req[2]   = mrom_req && !mrom_ack;
-    assign c_we[2]    = 1'b0;
-    assign c_wdata[2] = 16'd0;
-    assign c_be[2]    = 2'b11;
-    always_ff @(posedge clk) begin
-        mrom_ack <= c_ack[2];
-        if (c_ack[2]) mrom_q <= rdata;
-    end
-
-    // the Z80 reads bytes; the SDRAM holds them two to a word, high byte first
-    assign c_addr[3]  = SND_W | {9'd0, srom_addr[15:1]};
-    assign c_req[3]   = srom_req && !srom_ack;
-    assign c_we[3]    = 1'b0;
-    assign c_wdata[3] = 16'd0;
-    assign c_be[3]    = 2'b11;
-    logic srom_lo;
-    always_ff @(posedge clk) begin
-        srom_ack <= c_ack[3];
-        if (c_req[3]) srom_lo <= srom_addr[0];
-        if (c_ack[3]) srom_q <= srom_lo ? rdata[7:0] : rdata[15:8];
-    end
-
-    // ------------------------------------------------------ the burst port
-    // Two users, never busy together by design -- the sprite engine paints in
-    // vblank, the line renderer draws the visible lines -- but arbitrated all
-    // the same: the sprite engine's 64-word tile (32 image words) goes first
-    // if both ask, and whoever has the port keeps it to the end of the burst.
-    // The controller wants b_req low for a clock between bursts (B_GAP).
-    typedef enum logic [1:0] { B_IDLE, B_SPR, B_LINE, B_GAP } bown_t;
+    // --------------------------------------------------------- burst port
+    typedef enum logic [1:0] { B_IDLE, B_LCD, B_CPU, B_GAP } bown_t;
     bown_t       bown;
-    logic [15:0] gs_hi, gl_hi;
-    logic        b_wr, b_done;
-    logic  [9:0] b_idx;
-    logic [15:0] b_data;
+    logic        last_lcd;              // whose turn it was last
+    logic        b_wr, b_done, b_we, b_req;
+    logic  [9:0] b_idx, b_widx, b_len;
+    logic [15:0] b_data, b_wdata;
+    logic  [1:0] b_be;
+    logic [25:1] b_addr;
 
-    wire line_want = gfxl_req && !gfxl_ack;
-
+    wire lcd_want = l_req && !l_done;
     always_ff @(posedge clk) begin
-        if (init) bown <= B_IDLE;
+        if (init) begin bown <= B_IDLE; last_lcd <= 1'b0; end
         else case (bown)
-            B_IDLE: if (gfxs_req) bown <= B_SPR; else if (line_want) bown <= B_LINE;
-            B_SPR:  if (!gfxs_req) bown <= B_GAP;
-            B_LINE: if (b_done)    bown <= B_GAP;
-            default:               bown <= B_IDLE;
+            B_IDLE: if (lcd_want && (!sd_req || !last_lcd)) begin bown <= B_LCD; last_lcd <= 1'b1; end
+                    else if (sd_req) begin bown <= B_CPU; last_lcd <= 1'b0; end
+            B_LCD, B_CPU: if (b_done) bown <= B_GAP;
+            default: bown <= B_IDLE;     // the controller wants b_req low for a clock
         endcase
     end
 
-    wire        b_req_m  = (bown == B_SPR) ? gfxs_req : (bown == B_LINE);
-    wire [24:1] b_addr_m = GFX_W | {5'd0, ((bown == B_LINE) ? gfxl_addr : gfxs_addr), 1'b0};
-    wire  [9:0] b_len_m  = (bown == B_LINE) ? 10'd2 : 10'd64;
+    assign b_req  = bown == B_LCD || bown == B_CPU;
+    assign b_we   = bown == B_CPU && m_cmd == BC_WRLINE;
+    assign b_addr = bown == B_LCD ? l_addr : m_addr[25:1];
+    assign b_len  = bown == B_LCD ? 10'(l_len) : m_cmd == BC_RDWORD ? 10'd2 : 10'd16;
 
+    // a write burst's halfword b_widx, settled before the controller takes it
+    // (sdram_ctrl.sv: a WRITE every two clocks at the fastest)
     always_ff @(posedge clk) begin
-        gfxs_ack <= 1'b0;
-        gfxl_ack <= 1'b0;
-        if (b_wr && bown == B_SPR) begin
-            if (!b_idx[0]) gs_hi <= b_data;
-            else begin gfxs_q <= {gs_hi, b_data}; gfxs_ack <= 1'b1; end
+        b_wdata <= m_wdata[16*int'(b_widx[3:0]) +: 16];
+        b_be    <= m_be[2*int'(b_widx[3:0]) +: 2];
+    end
+
+    assign l_wr   = b_wr && bown == B_LCD;
+    assign l_idx  = b_idx[4:0];
+    assign l_data = b_data;
+    assign l_done = b_done && bown == B_LCD;
+
+    // ------------------------------------------------------------- CRAM
+    logic        cr_take, cr_ack, cr_dl, c_pend;
+    logic [15:0] cr_q;
+    logic  [3:0] c_n;
+    wire         c_word = m_cmd == BC_RDWORD;
+    wire   [3:0] c_last = c_word ? 4'd1 : 4'd15;
+    wire   [1:0] c_bee  = m_be[2*int'(c_n) +: 2];
+    // a line write's halfword with no byte to write is passed over
+    wire         c_skip = m_cmd == BC_WRLINE && c_bee == 2'b00;
+    // drive halfword h: h[23] the chip, h[22] its half (cram_ctrl.sv)
+    wire  [23:0] c_ha   = c_word ? {m_addr[24:2], c_n[0]} : {m_addr[24:5], c_n};
+
+    // The download's halfwords first (the CPU is held in reset while there
+    // are any), then the CPU's, one at a time.  The download's are taken
+    // back to back, straight from the FIFO, so the CRAM keeps ahead of the
+    // loader (cram_ctrl.sv).
+    wire         cr_dlreq  = !cq_empty;
+    wire         cr_cpureq = c_busy && !c_pend && !c_skip;
+    wire         cr_req    = cr_dlreq || cr_cpureq;
+    wire         cr_we     = cr_dlreq || m_cmd == BC_WRLINE;
+    wire  [23:0] cr_addr   = cr_dlreq ? cq_head[39:16] : c_ha;
+    wire  [15:0] cr_wdata  = cr_dlreq ? cq_head[15:0]  : m_wdata[16*int'(c_n) +: 16];
+    wire   [1:0] cr_be     = cr_dlreq ? cq_head[43:42] : c_bee;
+    assign       cq_pop    = cr_take && cr_dlreq;
+
+    // ------------------------------------------------------------- sequencing
+    always_ff @(posedge clk) begin
+        m_done <= 1'b0;
+        if (!m_req) m_seen <= 1'b0;
+        if (m_new) begin
+            m_busy <= 1'b1;
+            if (m_cram) begin c_busy <= 1'b1; c_n <= 4'd0; end
+            else sd_req <= 1'b1;
         end
-        if (b_wr && bown == B_LINE) begin
-            if (!b_idx[0]) gl_hi <= b_data;
-            else begin gfxl_q <= {gl_hi, b_data}; gfxl_ack <= 1'b1; end
+
+        // SDRAM: the burst brings each halfword in (or takes it out)
+        if (bown == B_CPU && b_wr) m_rdata[16*int'(b_idx[3:0]) +: 16] <= b_data;
+        if (bown == B_CPU && b_done) begin
+            sd_req <= 1'b0; m_busy <= 1'b0; m_seen <= 1'b1; m_done <= 1'b1;
+        end
+
+        // CRAM: whose access is in flight, and the CPU's halfwords as each
+        // is done or passed over
+        if (cr_take) begin cr_dl <= cr_dlreq; if (!cr_dlreq) c_pend <= 1'b1; end
+        if (c_busy && ((c_pend && cr_ack && !cr_dl) || (!c_pend && c_skip))) begin
+            if (c_pend) m_rdata[16*int'(c_n) +: 16] <= cr_q;
+            c_pend <= 1'b0;
+            c_n <= c_n + 4'd1;
+            if (c_n == c_last) begin
+                c_busy <= 1'b0; m_busy <= 1'b0; m_seen <= 1'b1; m_done <= 1'b1;
+            end
+        end
+
+        if (init) begin
+            m_busy <= 1'b0; m_seen <= 1'b0; sd_req <= 1'b0; c_busy <= 1'b0; c_pend <= 1'b0;
         end
     end
 
@@ -235,10 +287,27 @@ module ngage_mem (
         .SDRAM_CKE(SDRAM_CKE), .SDRAM_CLK(SDRAM_CLK),
         .c_addr(c_addr), .c_req(c_req), .c_we(c_we), .c_wdata(c_wdata),
         .c_be(c_be), .c_ack(c_ack), .rdata(rdata),
-        .b_addr(b_addr_m), .b_len(b_len_m),
-        .b_req(b_req_m), .b_abort(1'b0),
+        .b_addr(b_addr), .b_len(b_len),
+        .b_req(b_req), .b_abort(1'b0),
         .b_wr(b_wr), .b_idx(b_idx), .b_data(b_data), .b_done(b_done),
-        .b_we(1'b0), .b_wdata(16'd0), .b_be(2'b00), .b_widx()
+        .b_we(b_we), .b_wdata(b_wdata), .b_be(b_be), .b_widx(b_widx)
+    );
+
+    // ------------------------------------------------------------- CRAM
+    cram_ctrl u_cram (
+        .clk(clk), .rst(init),
+        .req(cr_req), .we(cr_we), .addr(cr_addr), .wdata(cr_wdata), .be(cr_be),
+        .take(cr_take), .ack(cr_ack), .q(cr_q),
+        .cram0_a(cram0_a), .cram0_dq(cram0_dq), .cram0_clk(cram0_clk),
+        .cram0_adv_n(cram0_adv_n), .cram0_cre(cram0_cre),
+        .cram0_ce0_n(cram0_ce0_n), .cram0_ce1_n(cram0_ce1_n),
+        .cram0_oe_n(cram0_oe_n), .cram0_we_n(cram0_we_n),
+        .cram0_ub_n(cram0_ub_n), .cram0_lb_n(cram0_lb_n),
+        .cram1_a(cram1_a), .cram1_dq(cram1_dq), .cram1_clk(cram1_clk),
+        .cram1_adv_n(cram1_adv_n), .cram1_cre(cram1_cre),
+        .cram1_ce0_n(cram1_ce0_n), .cram1_ce1_n(cram1_ce1_n),
+        .cram1_oe_n(cram1_oe_n), .cram1_we_n(cram1_we_n),
+        .cram1_ub_n(cram1_ub_n), .cram1_lb_n(cram1_lb_n)
     );
 
     // -------------------------------------------------------------- SRAM
@@ -251,7 +320,7 @@ module ngage_mem (
         .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n)
     );
 
-    wire _unused = &{1'b0, c_ack[1], 1'b0};
+    wire _unused = &{1'b0, rdata, b_widx[9:4], b_idx[9:5], m_addr[26], q_word[40], 1'b0};
 endmodule
 
 `default_nettype wire

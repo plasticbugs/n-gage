@@ -33,8 +33,8 @@ module sdram_model #(parameter PHASE_LAG = 1, parameter AW = 22) (
     logic        dq_oe;
     assign dq = dq_oe ? dq_out : 16'hzzzz;
 
-    // word index = {bank, row, col}: matches sdram_ctrl's a[24:23], a[22:10], a[9:1]
-    wire [24:0] widx_full = {ba, row_open[ba], a[8:0]};
+    // word index = {bank, row, col}: matches sdram_ctrl's a[25:24], a[23:11], a[10:1]
+    wire [24:0] widx_full = {ba, row_open[ba], a[9:0]};
     wire [AW-1:0] widx = widx_full[AW-1:0];
 
     initial begin

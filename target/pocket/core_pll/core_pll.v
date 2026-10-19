@@ -13,6 +13,7 @@ module core_pll (
 		output wire  outclk_2, // outclk2.clk
 		output wire  outclk_3, // outclk3.clk
 		output wire  outclk_4, // outclk4.clk
+		output wire  outclk_5, // outclk5.clk
 		output wire  locked    //  locked.export
 	);
 
@@ -24,6 +25,7 @@ module core_pll (
 		.outclk_2 (outclk_2), // outclk2.clk
 		.outclk_3 (outclk_3), // outclk3.clk
 		.outclk_4 (outclk_4), // outclk4.clk
+		.outclk_5 (outclk_5), // outclk5.clk
 		.locked   (locked)    //  locked.export
 	);
 

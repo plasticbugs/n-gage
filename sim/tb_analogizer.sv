@@ -33,13 +33,13 @@
 module tb_analogizer;
     // ------------------------------------------- the core's raster: SET THESE
     // to the core's (its video module, and core_top's pocket_analogizer
-    // parameters).  The template: rtl/ngage_core.sv, 6.857 MHz dots from 96 MHz.
+    // parameters).  NGVM's LCD: rtl/ngvm_lcd.sv, 6.857 MHz dots from 96 MHz.
     localparam int DIV    = 14;           // system clocks a dot
     localparam int HTOTAL = 452, VTOTAL = 253;
-    localparam int X0 = 0,   X1 = 319;    // visible dots, inclusive
-    localparam int Y0 = 16,  Y1 = 239;    // visible lines, inclusive
-    localparam int HS0 = 344, HS1 = 376;  // hsync [HS0, HS1)
-    localparam int VS0 = 242, VS1 = 245;  // vsync [VS0, VS1)
+    localparam int X0 = 0,   X1 = 175;    // visible dots, inclusive
+    localparam int Y0 = 24,  Y1 = 231;    // visible lines, inclusive
+    localparam int HS0 = 300, HS1 = 332;  // hsync [HS0, HS1)
+    localparam int VS0 = 235, VS1 = 238;  // vsync [VS0, VS1)
     localparam int CLK_HZ = 48_000_000;   // the Analogizer's clock: clk_sys / 2
     localparam int W = X1 - X0 + 1, H = Y1 - Y0 + 1;
     localparam int APD = DIV / 2;         // Analogizer clocks a dot

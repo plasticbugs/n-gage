@@ -34,6 +34,14 @@ reset:
     msr cpsr_c, #0xD3               @ SVC
     ldr sp, =__svc_stack_top
 
+    ldr r0, =__data_load            @ .data from its copy (kernel.ld)
+    ldr r1, =__data_start
+    ldr r2, =__data_end
+1:  cmp r1, r2
+    ldrlo r3, [r0], #4
+    strlo r3, [r1], #4
+    blo 1b
+
     ldr r0, =__bss_start
     ldr r1, =__bss_end
     mov r2, #0

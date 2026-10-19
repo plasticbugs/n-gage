@@ -18,10 +18,11 @@ set_global_assignment -name TOP_LEVEL_ENTITY apf_top
 # Compiler Assignments
 # ==============================================================================
 set_global_assignment -name NUM_PARALLEL_PROCESSORS 1
-# Area-first: the enable-stepped cores have generous multicycle budgets (see
-# the .sdc), so trading peak Fmax for logic density is the right side of the
-# curve -- the SPEED/HIGH-PERFORMANCE setting overflowed the device by 59 ALMs.
-set_global_assignment -name OPTIMIZATION_MODE "AGGRESSIVE AREA"
+# Speed-first: NGVM's CPU runs at a full 80 MHz with no multicycle budget,
+# and its Fmax was measured with this setting (docs/core-design.md 5.4).
+# The template's cores were area-first (one overflowed the device by 59 ALMs
+# with this); this one synthesises to about 14,000 registers.
+set_global_assignment -name OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"
 set_global_assignment -name SAVE_DISK_SPACE OFF
 set_global_assignment -name SMART_RECOMPILE OFF
 
