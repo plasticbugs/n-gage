@@ -218,127 +218,203 @@ the 3D games.
 
 ### 5.3 Pipeline
 
-Six stages:
+Eight stages. Each starts from registers.
 
 | stage | work |
 |---|---|
-| F1 | next PC → I-cache block RAM address |
-| F2 | I-cache data and tag; hit |
-| D | Thumb → ARM expansion, decode, register read, hazards, B/BL target |
-| E | forwarding → shifter → ALU, flags, condition, branch resolve, address |
-| M | D-cache data and tag; hit; load align and extend |
-| W | register write |
+| F1 | next PC → instruction memory address |
+| F2 | instruction word back (or not: the fetch is replayed); into a 4-entry buffer |
+| D1 | from the buffer's head: Thumb → ARM expansion; predecode (B/BL, Thumb BL prefix, LDM/STM, SWP, long multiply; the first LDM/STM register and the list's length) |
+| D2 | decode; register read by the instruction's fields; IRQ injection; redirect for B, BL and a Thumb BL pair |
+| S | forwarding from M's and W's registered results, selected by match tags; barrel shifter |
+| A | late forwarding of unshifted operands; ALU, multiply, flags, CPSR/SPSR, addresses; conditional B, BX, exceptions, MSR redirect |
+| M | data memory; load align and extend; redirect for ALU writes to PC and a Thumb BL suffix D2 did not catch |
+| W | register write; redirect for loads to PC; retirement |
 
-- **Thumb:** decoded by expansion to the equivalent ARM operation in D,
-  so E, M and W know only ARM.
-- **Branches:**
-  - unconditional B/BL redirect from D, costing 2 cycles;
-  - other branches resolve in E, costing 3 cycles if taken;
-  - a branch target buffer read in F1 is the planned optimisation, sized
-    from the profile in section 5.5.
-- **Loads:** one cycle of load-use delay, forwarding from W.
-- **Multiplies:** DSP blocks, a fixed 2–3 cycles; the long forms take an
+- **Thumb:** expanded in D1 to the equivalent ARM operation, so the rest
+  knows only ARM. The BL pair is two instructions. D2 remembers the
+  LR the prefix computes and redirects on the suffix.
+- **Fetch:** F1 fetches only while the buffer can take everything in
+  flight, so the front end reads only registered state.
+- **Register read:** five ports, one each for Rn, Rm, Rs, Rd and the
+  LDM/STM register. They are indexed straight from D2's instruction
+  register, so the read runs in parallel with the decode. The decoder
+  only picks which port each operand takes.
+- **Operands S cannot see:** the result of the uop in A.
+  - An operand only A needs (unshifted register, base, store data, an
+    accumulator) is marked and picked up in A from M or W.
+  - If the uop that was in A turns out not to execute, A falls back to
+    the load that was in M, if there was one, or else to what S had.
+  - An operand S itself needs (one to shift, a shift amount, a
+    multiplier input) waits in S until it is registered.
+  - A load's value is registered only at W.
+- **Match tags:** each operand reaches S with six flags saying whether
+  the uop in A, M or W writes its register, through either write port.
+  They are worked out a cycle ahead, as the uop enters S or while it
+  waits there, from where the uops will be next cycle. So forwarding
+  and the stall start from flops, not from 5-bit compares. The Verilator
+  build checks them against the compares on every cycle.
+- **Shift by a register:** one extra cycle in S. The amount settles
+  into S's own copy of Rs, so the shifter's amount does not come
+  through the forwarding mux. Measured cost: under 0.001 CPI.
+- **Shifter:** one right rotator for every type. LSL n is a rotate by
+  32 − n with the low bits cleared; LSR and ASR fill the top. The mask,
+  fill and carry select come from the registered type and amount.
+- **Costs, in cycles:**
+  - redirect from D2: 3; from A: 5; from M: 6; from W: 7;
+  - load-use: 1 for an unshifted use, 2 for a shifted one;
+  - a shift by a register: 1.
+  - A branch target buffer read in F1 is next (section 5.5).
+- **Kills** clear valid bits only; data registers load whenever the next
+  stage has room.
+- **Multiplies:** DSP blocks, 2 cycles in A; the long forms take an
   extra cycle for the high word.
-- **LDM/STM:** a sequencer in D issues one register per cycle.
-- **Register-specified shifts:** one extra cycle, as on ARM7.
+- **LDM/STM:** D2 issues one register per cycle.
 - **Exceptions:**
-  - entered in E for SWI and undefined, and in M for aborts;
+  - entered in A for SWI, undefined and IRQ, and in M for data aborts;
   - by flushing the younger stages, then switching mode, banking LR and
     SPSR, and jumping to the vector.
-  - IRQ is taken between instructions in D.
+  - IRQ is injected in D2 between instructions, never between the
+    halves of a Thumb BL.
 - **Coprocessors and FIQ:** no coprocessor; MCR, MRC, CDP, LDC and STC
   take the undefined-instruction trap. FIQ is not wired.
-- **Unaligned LDR:** rotates as ARMv4 does. Unicorn does not, so the bench
-  allows this one difference (section 6).
+- **Unaligned LDR:** rotates as ARMv4 does. Unaligned STR stores the
+  aligned word. Unicorn does neither, so the random tests avoid
+  unaligned word accesses (section 6).
 
-### 5.4 Timing risk
+### 5.4 Timing, measured
 
-The two long paths at 96 MHz (10.4 ns) are:
+The CPU is synthesised on its own, as ZAP was, before it joins the core:
 
-- E's forward → shift → add → flags;
-- the hit → stall fan-out from M.
+- Quartus 18.1, 5CEBA4F23C8;
+- every port registered, constrained to 10.417 ns (96 MHz);
+- `OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"`.
 
-If either fails:
+The figures are the slow 85 °C corner, the worst of the four.
 
-- **E:** splits into E1 (shift) and E2 (ALU), at the cost of a second
-  cycle of load-use and branch delay.
-- **Stall:** a miss becomes a replay. M flushes, and the instruction
-  re-issues after the fill, so no stall signal is computed from a tag
-  compare in the same cycle.
-
-The CPU is synthesised on its own with registered edges, as ZAP was,
-before it joins the core. Its Fmax goes in the table in section 8.
-
-**Measured: the six-stage pipeline makes 61 MHz, not 96.** Quartus 18.1,
-5CEBA4F23C8, the CPU alone with registered ports, constrained to
-10.417 ns:
-
-- 4,258 ALMs (23%), 4,380 registers after the fitter's duplication,
-  3 DSP blocks;
-- worst setup slack −5.92 ns at slow 85 °C, so Fmax 61.2 MHz.
-
-The clock reaches the registers at about 4.3 ns, leaving 15.4 ns paths
-of data, and both stages carry one:
+**Six stages: 61.2 MHz.** 4,258 ALMs, worst setup slack −5.92 ns. The clock
+reaches the registers at about 4.3 ns, leaving 15.4 ns paths of data, and
+both long stages carried one:
 
 - **E** (9 levels plus the carry chain): forwarding mux, 2.1 ns →
   barrel shifter, 3.3 → offset/operand mux, 3.3 → 32-bit add, 2.5 →
-  result mux → `f1_pc`, `m_ra` or the CPSR.
-- **D** (13 levels): Thumb expansion, 4 → LDM/STM register-list decode
-  (`rem_next`, last), 5 → `d_take` → the D word mux, 4.5.
+  result mux.
+- **D** (13 levels): Thumb expansion, 4 → LDM/STM register-list decode,
+  5 → `d_take` → the D word mux, 4.5.
 
-Each is about one and a half stages of logic. Trimming does not close
-that gap on the slowest speed grade, so the pipeline is restructured
-(section 5.6). This version stays as the functional baseline: it passes
-the lockstep runs in section 6.
+Each was about one and a half stages of logic, so the pipeline became
+the eight stages of section 5.3. The six-stage version passed the same
+lockstep runs (section 6).
+
+**Eight stages, step by step.** Each row is one fit, with Quartus's
+default seed, of the RTL with that change. It names the paths that led
+to the next change:
+
+| change | Fmax | worst slack | ALMs | the worst paths after it |
+|---|---|---|---|---|
+| eight stages | 90.38 MHz | −0.647 ns | 4,534 | decode → register-read mux; kill → data enables |
+| registers read by field; kills only on valid bits | 85.79 MHz | −1.239 ns | 4,920 | S: forward → shift amount → shifter; D2: the decoder re-deriving the LDM register |
+| D2 takes D1's LDM register; a shift by register waits a cycle | 89.67 MHz | −0.735 ns | 5,147 | S: 5-bit operand compares → stall → hold mux |
+| match tags (section 5.3) | 91.12 MHz | −0.558 ns | 5,346 | S: forward → shifter → op2; D2: the LDM offset's three adders |
+| list length counted in D1, offsets in 8 bits | 90.01 MHz | −0.693 ns | 5,140 | S: forward → shifter, 5 levels of it |
+| one rotator for every shift | 96.0 MHz | 0.000 ns | 5,094 | met with this seed; see below |
+| register indices, mode and LDM's last step from D1 | being fitted | | | |
+
+**One seed is not a measurement.** The rotator's RTL with three other
+seeds:
+
+| seed | Fmax | worst slack | worst paths |
+|---|---|---|---|
+| 1 (default) | 96.0 MHz | 0.000 ns | D2: the LDM register → its bank → read port → S |
+| 2 | 90.27 MHz | −0.661 ns | D2: field → register index → read mux → S; D2: LDM `rem − 1` → last step → D2's enables |
+| 3 | 87.78 MHz | −0.975 ns | A: CPSR's mode → next CPSR → D2's register indices |
+| 4 | 89.33 MHz | −0.778 ns | |
+
+- **Spread:** about 8 MHz from seed to seed, so a difference between
+  two single fits in the table above means little. Only the large
+  moves can be read as real: six to eight stages, the match tags, and
+  the rotator.
+- **Over-constraining does not help:** the same RTL fitted against
+  105 MHz reached only 91.8 MHz.
+- **The next change** removes the paths that seeds 1–3 named:
+  - the five register-file indices are computed in D1, in the mode of
+    that moment, and D2 decodes in a registered copy of that mode;
+  - "another LDM/STM step follows" is a flop, set from the list's
+    nibbles without an adder.
+
+  Every change of mode (MSR to the control field, an exception, a
+  return from one) redirects and so kills D2, so no uop that survives
+  sees a stale mode.
+- **A fit takes about 7 CPU-hours** under the container's amd64
+  emulation, so a four-seed sweep is an evening.
+
+**The core's project is set for area.** It uses
+`OPTIMIZATION_MODE "AGGRESSIVE AREA"`, `OPTIMIZATION_TECHNIQUE AREA` and a
+standard fit, with physical-synthesis register duplication off. These
+fits used high-performance effort, and their retiming and duplication
+are visible in the netlists. When the CPU joins the core, the project or
+the CPU's partition needs the same settings, and the timing gets
+measured again there. If it misses, the CPU moves to its own PLL output
+(section 2).
 
 ### 5.5 Where the cycles go, measured
 
 `sim/run_cpu.sh` (sections 6 and 8) tallies each cycle by what the
-pipeline is doing. The figures below are for the first 15 virtual seconds
-from power-on of each game, which covers boot, loading and the menus.
-They use ideal memories: every access answers in one cycle.
+pipeline is doing:
 
-| per instruction | Virtua Cop | Bomberman | Sonic N |
+- the first 15 virtual seconds from power-on of each game (Bomberman: 30),
+  which covers boot, loading and the menus;
+- ideal memories: every access answers in one cycle.
+
+**Eight stages**, the RTL of section 5.3, per instruction:
+
+| per instruction | Virtua Cop | Bomberman (30 s) | Sonic N |
 |---|---|---|---|
-| CPI | 1.857 | 1.856 | 1.769 |
-| extra LDM/STM/SWP/long-multiply uops | 0.221 | 0.224 | 0.189 |
-| load-use waits | 0.105 | 0.111 | 0.122 |
-| multiplier waits | 0.001 | 0.010 | — |
-| cycles lost to branches | 0.502 | 0.483 | 0.383 |
+| CPI | 2.205 | 2.213 | 2.121 |
+| MIPS at 96 MHz | 43.5 | 43.4 | 45.3 |
+| extra LDM/STM/SWP/long-multiply uops | 0.232 | 0.245 | 0.196 |
+| S waits on an operand | 0.128 | 0.163 | 0.226 |
+| multiplier waits | 0.001 | 0.009 | 0.054 |
+| redirects from D2 (× 3 cycles) | 0.045 | 0.050 | 0.035 |
+| redirects from A (× 5): conditional B, BX, SWI, MSR | 0.133 | 0.122 | 0.101 |
+| redirects from M (× 6) and W (× 7) | 0.012 | 0.010 | 0.009 |
 
-The branch figure is the sum of three costs:
+The rows overlap a little, because a redirect can land during a wait, so
+they add up to slightly more than the CPI.
 
-- D redirects × 2;
-- E redirects × 3: conditional B, BX, ALU to PC, SWI;
-- M redirects × 4: loads to PC.
+**Six stages**, for comparison: CPI 1.857, 1.856 and 1.769, with 0.502,
+0.483 and 0.383 of it lost to branches, but only 61 MHz, so 32.8 MIPS on
+Virtua Cop. The eight stages pay 0.35 CPI more, mostly in longer
+redirects, for 57% more clock.
 
-The bench also replays each retired branch through models of the
-predictors it could have (`sim/cpu/bpred.h`). Its "now" column
-reproduces the profile to within 0.04, the SWIs and other redirects it
-does not model. Cycles lost to branches per instruction:
-
-| scheme | Virtua Cop | Bomberman | Sonic N |
-|---|---|---|---|
-| now | 0.502 | 0.483 | 0.383 |
-| backward conditional branches taken in D | 0.436 | 0.441 | 0.335 |
-| BTB 64 entries, hit costs 0 | 0.194 | 0.206 | 0.147 |
-| BTB 256 entries, hit costs 0 | 0.129 | 0.137 | 0.099 |
-| BTB 256 entries, hit costs 1 | 0.266 | 0.268 | 0.204 |
-
-The BTB model:
+**Branch prediction.** The bench also replays each retired branch through
+models of the predictors it could have (`sim/cpu/bpred.h`). The model:
 
 - direct-mapped and indexed by PC;
 - 2-bit counters;
 - an 8-deep return stack for BX lr, POP {pc}, LDM with pc, and
   MOV pc, lr.
 
+Cycles lost to branches per instruction, eight stages:
+
+| scheme | Virtua Cop | Bomberman (30 s) | Sonic N |
+|---|---|---|---|
+| none (the model; the profile adds SWI and MSR) | 0.829 | 0.788 | 0.633 |
+| BTB 64 entries, hit costs 0 | 0.309 | 0.311 | 0.233 |
+| BTB 256 entries, hit costs 0 | 0.201 | 0.195 | 0.154 |
+| BTB 256 entries, hit costs 1 | 0.339 | 0.327 | 0.259 |
+| BTB 1024 entries, hit costs 0 | 0.136 | 0.137 | 0.107 |
+
 **Readings.**
 
-- Static prediction is not worth the logic.
-- A 256-entry BTB whose prediction reaches F1 in the same cycle saves
-  about 0.35 CPI, taking the ideal-memory CPI to about 1.5.
-- The saving depends on that same-cycle loop: BTB read → compare → next
-  PC → BTB address. A BTB one cycle late keeps only about half of it.
+- **Without a BTB**, 96 MHz gives 43–45 MIPS with ideal memories, just
+  under the phone's 45–50 (section 5.2), before any cache miss. The BTB
+  is needed, not optional.
+- **A 256-entry BTB answering in F1's own cycle** takes the CPI to
+  about 1.58–1.64, which is 59–61 MIPS at 96 MHz.
+- **The same BTB one cycle late** gives 1.72–1.75, which is 55–56 MIPS.
+- **1,024 entries** save a further 0.05–0.07 CPI. That is M10K blocks
+  rather than logic, so it is cheap if the same-cycle loop still closes.
 
 ## 6. Verification
 
@@ -356,12 +432,12 @@ by instruction:
 - **Exceptions:** when the RTL takes an IRQ or abort before an
   instruction, the bench makes Unicorn enter the same exception at the
   same boundary, as `ngvm.py` already does for IRQ.
-- **Known differences:** Unicorn's unaligned LDR (section 5.3), and
-  nothing else. Every other mismatch is a bug in one of them, settled from
-  the ARM ARM.
+- **Known differences:** Unicorn's unaligned word accesses (section 5.3),
+  and nothing else. Every other mismatch is a bug in one of them, settled
+  from the ARM ARM.
 - **Run order:**
-  1. directed tests: each instruction class, ARM and Thumb, every
-     condition, every mode;
+  1. random programs (below), which take seconds and reach hazards the
+     firmware may not for minutes;
   2. the kernel's boot;
   3. the whole firmware boot to a game's title, which is a few hundred
      million instructions.
@@ -369,16 +445,65 @@ by instruction:
 Then `sim/run_system.sh`: the same CPU on the real memory glue, comparing
 LCD frames with `ngvm.py --frames-to`.
 
+**Random programs.** `sim/cpu/randprog.py SEED N OUT.bin` writes a random
+program, and `sim/run_cpu.sh --bin OUT.bin` runs it alone in lockstep, no
+firmware. Every instruction it writes has a defined result in ARMv4.
+
+- **ARM side:**
+  - data processing with every operand-2 form, condition and shift,
+    RRX included;
+  - multiplies and long multiplies, every load/store width, LDM/STM in
+    all four modes with and without write-back, SWP, MRS/MSR on the
+    flags.
+- **Redirects:** conditional branches, ALU writes to PC and loads to PC.
+- **Thumb blocks:** every format except SWI and SP adjustment.
+- **Subroutine calls**, ARM and Thumb, returning by BX lr, MOV pc, lr or
+  a pop of PC.
+- **Dependencies are dense:** most instructions read and write r0–r7.
+- **Avoided**, because QEMU differs from ARMv4 or rejects them:
+  - unaligned word accesses;
+  - encodings with nonzero "should be zero" fields (QEMU treats them as
+    undefined; the firmware never uses them).
+
 **Run so far**, with ideal memories and no caches:
 
 | run | instructions in lockstep | result |
 |---|---|---|
-| kernel and firmware, no game, to 4 virtual s | 401 M | identical |
-| Bomberman card, to 30 virtual s | 619 M | identical |
+| six stages: kernel and firmware, no game, to 4 virtual s | 401 M | identical |
+| six stages: Bomberman card, to 30 virtual s | 619 M | identical |
+| eight stages: Bomberman card, to 30 virtual s | 619 M | identical |
+| eight stages: Virtua Cop card, to 15 virtual s | 590 M | identical |
+| eight stages: Sonic N card, to 15 virtual s | 581 M | identical |
+| eight stages: 1,000 random programs, about 64% Thumb | 26.8 M | identical |
+| eight stages: 300 more after each timing change (section 5.4), 1,500 in all | | identical |
 
-The directed tests (step 1) are not written yet. Coverage so far is
-whatever the firmware and one game execute. Neither of these is
-exercised: data and prefetch aborts, and the undefined-instruction trap.
+The three game runs and the last 300 random programs (seeds 9001–9300)
+are on the RTL as committed. The random programs write only the flags
+with MSR, so mode changes, which D1's register indices depend on, are
+covered by the firmware in the game runs. The match tags' own check (section 5.3)
+held throughout.
+
+**The rotate-and-mask shifter** was also compared with the one it
+replaced. The comparison covered every type, every amount, both amount
+forms and both carry-ins, over 64 values: 147,456 cases, none different.
+
+**Found on the way:**
+
+- **Late-forward fallback (eight stages).** An operand marked for A to
+  pick up from the uop that had been in A took S's stale copy when that
+  uop did not execute, even if a load to the same register was in M.
+  Bomberman found it at 5.3 virtual s (`LDRNE r1; MOVEQ r1, r5;
+  MOVNE r5, r1`).
+- **SWP's result (both versions).** The decoder left the address's
+  immediate flag set on SWP's last uop, `MOV Rd, r31`, which then moved
+  #0. The firmware and Bomberman never read a SWP's result. The first
+  random program did.
+
+Still unexercised:
+
+- data and prefetch aborts, and the undefined trap;
+- MSR to the control field from random programs (the firmware does it);
+- FIQ (not wired).
 
 **Two QEMU behaviours the bench absorbs:**
 
@@ -404,8 +529,8 @@ CPU in reset until all slots are loaded.
 
 | stage | budget | ideal-memory bench | real-memory bench | hardware |
 |---|---|---|---|---|
-| CPU Fmax, alone | ≥ 96 MHz | 61.2 MHz (six stages; section 5.4) | | |
-| CPI, ideal memories, first 15 s of a game | as low as the clock allows | 1.77–1.86 (section 5.5) | | |
+| CPU Fmax, alone | ≥ 96 MHz | 87.8–96.0 MHz over four seeds, eight stages, high-performance fit (section 5.4) | | |
+| CPI, ideal memories, first 15 s of a game | as low as the clock allows | 2.12–2.21 without a BTB (section 5.5) | | |
 | MIPS delivered, Virtua Cop | ≥ the phone's (about 50); 70 a stretch | | | |
 | LCD line fetch | 176 words in one line (63.75 µs) | | | |
 | audio FIFO | never empty while playing | | | |

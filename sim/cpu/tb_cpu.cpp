@@ -113,17 +113,18 @@ struct Bench {
     Mem rtl, ucm;
     uc_engine *uc = nullptr;
     bool use_uc = true;
+    bool trace_mem = false;                           // --trace-mem: every data access the RTL makes
     uint32_t mips = 100;
     uint64_t insns = 0, cycles = 0, max_insns = 0;   // insns: virtual time, in instructions (idle skips included)
     uint64_t retired = 0, idle_cycles = 0;            // instructions executed; cycles spent on the idle loop
     uint32_t idle_pc = 0;
-    uint64_t idle_retired = 0;
+    uint64_t idle_retired = 0, thumb_retired = 0;
     BPred bp;
 
     // where the cycles go: tallied each cycle, charged to the busy or the
     // idle side when the next instruction retires
-    enum { P_RETIRE, P_UOP, P_EMPTY, P_LDWAIT, P_MUL, P_MHOLD,
-           P_DRED, P_ERED_BR, P_ERED_BX, P_ERED_ALU, P_ERED_EXC, P_ERED_OTHER, P_MRED, P_N };
+    enum { P_RETIRE, P_UOP, P_EMPTY, P_SWAIT, P_MUL, P_MHOLD,
+           P_DRED, P_ARED_BR, P_ARED_BX, P_ARED_EXC, P_ARED_OTHER, P_MRED, P_WRED, P_N };
     uint64_t prof_pend[P_N] = {}, prof_busy[P_N] = {};
     static uint32_t ebits(const VlWide<11> &w, int lsb, int n) {
         uint64_t v = w[lsb / 32] | (lsb / 32 + 1 < 11 ? (uint64_t)w[lsb / 32 + 1] << 32 : 0);
@@ -132,19 +133,19 @@ struct Bench {
     void profile() {
         auto *c = top->rootp->arm_cpu;
         if (top->rt_valid && !top->rt_irq) prof_pend[P_RETIRE]++;
-        if (c->d_issue && !c->d_last) prof_pend[P_UOP]++;
-        if (!c->e_valid) prof_pend[P_EMPTY]++;
-        if (c->e_ldwait) prof_pend[P_LDWAIT]++;
-        else if (c->e_busy) prof_pend[P_MUL]++;
+        if (c->d2_issue && !c->d2_last) prof_pend[P_UOP]++;
+        if (!c->a_valid) prof_pend[P_EMPTY]++;
+        if (c->s_valid && c->s_stall && c->a_free) prof_pend[P_SWAIT]++;
+        if (c->a_busy) prof_pend[P_MUL]++;
         if (c->m_hold) prof_pend[P_MHOLD]++;
-        if (c->m_redirect) prof_pend[P_MRED]++;
-        else if (c->e_redirect) {
-            switch (ebits(c->e_u, 267, 4)) {     // uop_t.kind
-            case 7:  prof_pend[P_ERED_BR]++; break;   // K_BRANCH
-            case 8:  prof_pend[P_ERED_BX]++; break;   // K_BX
-            case 1:  prof_pend[P_ERED_ALU]++; break;  // K_ALU
-            case 11: prof_pend[P_ERED_EXC]++; break;  // K_EXC
-            default: prof_pend[P_ERED_OTHER]++; break;
+        if (c->w_redirect) prof_pend[P_WRED]++;
+        else if (c->m_redirect) prof_pend[P_MRED]++;
+        else if (c->a_redirect) {
+            switch (ebits(c->a_u, 267, 4)) {     // uop_t.kind
+            case 7:  prof_pend[P_ARED_BR]++; break;   // K_BRANCH
+            case 8:  prof_pend[P_ARED_BX]++; break;   // K_BX
+            case 11: prof_pend[P_ARED_EXC]++; break;  // K_EXC
+            default: prof_pend[P_ARED_OTHER]++; break;
             }
         } else if (c->d_redirect) prof_pend[P_DRED]++;
     }
@@ -154,10 +155,11 @@ struct Bench {
     }
     void print_profile(uint64_t busy) {
         static const char *name[P_N] = {
-            "instructions retired", "extra uops (LDM/STM, SWP, long multiply)", "E empty",
-            "E waits on a load", "E waits on the multiplier", "M waits on memory",
-            "D redirects (B, BL)", "E redirects: conditional B", "E redirects: BX",
-            "E redirects: ALU to PC", "E redirects: exceptions", "E redirects: other", "M redirects (load to PC)" };
+            "instructions retired", "extra uops (LDM/STM, SWP, long multiply)", "A empty",
+            "S waits on an operand", "A waits on the multiplier", "M waits on memory",
+            "D2 redirects (B, BL, Thumb BL pair)", "A redirects: conditional B", "A redirects: BX",
+            "A redirects: exceptions", "A redirects: other (MSR)", "M redirects (ALU to PC, BL suffix)",
+            "W redirects (load to PC)" };
         printf("busy cycles %llu, by what each cycle saw (they overlap; redirects are events):\n",
                (unsigned long long)busy);
         for (int i = 0; i < P_N; i++)
@@ -407,6 +409,14 @@ struct Bench {
             uc_reg_read(uc, UC_ARM_REG_PC, &upc);
             fprintf(stderr, "cpsr  %08x  %08x%s\n", hist.back().cpsr, ucpsr, hist.back().cpsr != ucpsr ? "  <--" : "");
             fprintf(stderr, "next pc (Unicorn) %08x\n", upc);
+            // RAM that differs (the RTL's stores land at A, a few instructions
+            // ahead of retirement, so the newest one or two may show here)
+            int shown = 0;
+            for (size_t a = 0; a < rtl.ram.size() && shown < 8; a++)
+                if (rtl.ram[a] != ucm.ram[a]) {
+                    fprintf(stderr, "ram %08zx  RTL %02x  Unicorn %02x\n", a, rtl.ram[a], ucm.ram[a]);
+                    shown++;
+                }
         }
     }
 
@@ -414,7 +424,7 @@ struct Bench {
     bool retire(const Ret &r) {
         hist.push_back(r);
         if (hist.size() > 24) hist.pop_front();
-        if (!r.irq) { insns++; retired++; }
+        if (!r.irq) { insns++; retired++; thumb_retired += r.thumb; }
         bp.retire(r.pc, r.instr, r.thumb, r.irq);
         if (!use_uc) return true;
         if (have_next && r.pc != uc_next_pc) {
@@ -485,6 +495,9 @@ struct Bench {
 
         // data port: the request taken at this edge is answered next cycle
         if (top->dc_ok || !dc_pend) dc_pend = false;
+        if (dreq && trace_mem)
+            fprintf(stderr, "[mem] cycle %llu %s %08x be %x data %08x\n", (unsigned long long)cycles,
+                    dwe ? "W" : "R", daddr, dbe, dwdata);
         if (dreq) {
             dc_pend = true;
             dc_abt = false;
@@ -544,26 +557,34 @@ struct Bench {
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
-    const char *rom = nullptr, *kernel = "build/kernel/kernel.elf", *drive = nullptr;
+    const char *rom = nullptr, *kernel = "build/kernel/kernel.elf", *drive = nullptr, *bin = nullptr;
     Bench b;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         if (a == "--rom" && i + 1 < argc) rom = argv[++i];
         else if (a == "--kernel" && i + 1 < argc) kernel = argv[++i];
         else if (a == "--drive" && i + 1 < argc) drive = argv[++i];
+        else if (a == "--bin" && i + 1 < argc) bin = argv[++i];
         else if (a == "--insns" && i + 1 < argc) b.max_insns = strtoull(argv[++i], nullptr, 0);
         else if (a == "--mips" && i + 1 < argc) b.mips = (uint32_t)strtoul(argv[++i], nullptr, 0);
         else if (a == "--no-uc") b.use_uc = false;
+        else if (a == "--trace-mem") b.trace_mem = true;
         else if (a[0] != '+') { fprintf(stderr, "unknown argument %s\n", argv[i]); return 2; }
     }
-    if (!rom) { fprintf(stderr, "usage: %s --rom SYM.ROM [--kernel kernel.elf] [--drive img] [--insns N]\n", argv[0]); return 2; }
+    if (!rom && !bin) {
+        fprintf(stderr, "usage: %s --rom SYM.ROM [--kernel kernel.elf] [--drive img] [--insns N]\n"
+                        "       %s --bin program.bin [--insns N]   (a bare program at 0, no firmware)\n",
+                argv[0], argv[0]);
+        return 2;
+    }
 
     std::vector<Seg> segs;
     std::map<std::string, uint32_t> syms;
-    load_elf(kernel, segs, syms);
-    b.idle_pc = syms.count("idle_loop") ? syms["idle_loop"] : 0;
+    if (bin) segs.push_back({0, slurp(bin)});      // it ends by writing IO_DBG_EXIT
+    else load_elf(kernel, segs, syms);
+    b.idle_pc = syms.count("idle_loop") ? syms["idle_loop"] : 0xFFFFFFFFu;   // none: nothing is idle
     b.bp.idle_pc = b.idle_pc;
-    auto romd = slurp(rom);
+    auto romd = rom ? slurp(rom) : std::vector<uint8_t>(ROM_MAP_ALIGN, 0);
     b.rom_size = romd.size();
     for (Mem *m : {&b.rtl, &b.ucm}) {
         m->rom = romd;
@@ -607,6 +628,7 @@ int main(int argc, char **argv)
            (unsigned long long)b.cycles, (unsigned long long)busy,
            b.retired > b.idle_retired ? (double)busy / (b.retired - b.idle_retired) : 0.0, host,
            b.use_uc ? ", lockstep with Unicorn" : "");
+    printf("Thumb: %llu of the instructions executed\n", (unsigned long long)b.thumb_retired);
     b.print_profile(busy);
     b.bp.report();
     delete b.top;

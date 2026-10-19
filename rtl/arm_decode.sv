@@ -33,46 +33,26 @@ module arm_decode
     input  logic  [1:0] step,
     input  logic [15:0] rem,            // LDM/STM registers still to go (all of them at step 0)
     input  logic  [4:0] k,              // LDM/STM registers already gone
+    input  logic  [3:0] lreg,           // the register this step moves: the lowest in rem (from D1)
+    input  logic  [4:0] nregs,          // LDM/STM: registers in the list (from D1)
     output uop_t        u,
     output logic        ra_pc, rb_pc, rc_pc,
     output logic        more,           // another step follows this one
-    output logic [15:0] rem_next
+    output logic [15:0] rem_next,
+    output logic        sel_a_rd,       // a from the Rd port (else Rn)
+    output logic        sel_b_31,       // b is r31 (else the Rm port)
+    output logic  [2:0] sel_c           // c's port: SC_*
 );
-    function automatic logic [4:0] phys(input logic [3:0] r, input logic [4:0] m);
-        logic [4:0] p;
-        p = {1'b0, r};
-        if (r >= 4'd8 && r != 4'd15) begin
-            if (m == M_FIQ) p = 5'd16 + {1'b0, r} - 5'd8;
-            else if (r >= 4'd13) begin
-                case (m)
-                    M_SVC: p = (r == 4'd13) ? 5'd23 : 5'd24;
-                    M_ABT: p = (r == 4'd13) ? 5'd25 : 5'd26;
-                    M_IRQ: p = (r == 4'd13) ? 5'd27 : 5'd28;
-                    M_UND: p = (r == 4'd13) ? 5'd29 : 5'd30;
-                    default: ;
-                endcase
-            end
-        end
-        return p;
-    endfunction
-
     function automatic logic [31:0] ror32(input logic [31:0] x, input logic [4:0] n);
         logic [63:0] w;
         w = {x, x} >> n;
         return w[31:0];
     endfunction
 
-    function automatic logic [4:0] popcount16(input logic [15:0] x);
-        logic [4:0] n;
-        n = 5'd0;
-        for (int i = 0; i < 16; i++) n = n + {4'd0, x[i]};
-        return n;
-    endfunction
 
-    logic [3:0]  rn, rd, rs, rm, lreg;
+    logic [3:0]  rn, rd, rs, rm;
     logic [31:0] rot_imm, ilen, link;
-    logic [4:0]  nregs;
-    logic [31:0] lsm_start;
+    logic [7:0]  lsm_start, lsm_off;       // LDM/STM offsets are within +-64
     logic        lsm_user;
 
     always_comb begin
@@ -82,16 +62,14 @@ module arm_decode
         link = pc + ilen;
 
         // LDM/STM: the register this step moves, and the block's geometry
-        lreg = 4'd0;
-        for (int i = 15; i >= 0; i--) if (rem[i]) lreg = i[3:0];
         rem_next = rem & ~(16'd1 << lreg);
-        nregs = popcount16(instr[15:0]);
         case ({instr[24], instr[23]})                   // P U
-            2'b01:   lsm_start = 32'd0;                                  // IA
-            2'b11:   lsm_start = 32'd4;                                  // IB
-            2'b00:   lsm_start = 32'd4 - {25'd0, nregs, 2'b00};          // DA
-            default: lsm_start = 32'd0 - {25'd0, nregs, 2'b00};          // DB
+            2'b01:   lsm_start = 8'd0;                                   // IA
+            2'b11:   lsm_start = 8'd4;                                   // IB
+            2'b00:   lsm_start = 8'd4 - {1'b0, nregs, 2'b00};            // DA
+            default: lsm_start = 8'd0 - {1'b0, nregs, 2'b00};            // DB
         endcase
+        lsm_off = lsm_start + {1'b0, k[4:0], 2'b00};
         lsm_user = instr[22] && !(instr[20] && instr[15]);   // ^ without a PC load: user bank
 
         u = '0;
@@ -104,6 +82,7 @@ module arm_decode
         u.kind = K_NOP;
         ra_pc = 1'b0; rb_pc = 1'b0; rc_pc = 1'b0;
         more = 1'b0;
+        sel_a_rd = 1'b0; sel_b_31 = 1'b0; sel_c = SC_RS;
 
         if (pabt || t_und) begin
             // fetch abort, or an undefined Thumb encoding
@@ -116,7 +95,7 @@ module arm_decode
         end else if (bl_suffix) begin
             u.kind = K_BRANCH;
             u.cond = 4'hE;
-            u.ra = phys(4'd14, mode); u.ra_rd = 1'b1;
+            u.ra = phys(4'd14, mode); u.ra_rd = 1'b1;     // read through Rn (arm_thumb.sv)
             u.imm = imm_ovr;
             u.wa_en = 1'b1; u.wa = phys(4'd14, mode);
         end else if (instr[31:28] == 4'hF) begin
@@ -140,7 +119,7 @@ module arm_decode
                 if (instr[20]) begin
                     u.wa_en = 1'b1; u.wa = phys(rd, mode); u.wa_pc = rd == 4'd15;
                 end else begin
-                    u.rc = phys(rd, mode); u.rc_rd = 1'b1; rc_pc = rd == 4'd15;
+                    u.rc = phys(rd, mode); u.rc_rd = 1'b1; rc_pc = rd == 4'd15; sel_c = SC_RD;
                 end
                 if (!instr[24] || instr[21]) begin u.wb_en = 1'b1; u.wb = phys(rn, mode); end
             end
@@ -153,7 +132,7 @@ module arm_decode
                     u.rb = phys(rm, mode); u.rb_rd = 1'b1;
                     u.rc = phys(rs, mode); u.rc_rd = 1'b1;
                     u.mul_acc = instr[21];
-                    u.ra = phys(rd, mode); u.ra_rd = instr[21];             // Rn of MLA is bits 15:12
+                    u.ra = phys(rd, mode); u.ra_rd = instr[21]; sel_a_rd = 1'b1; // Rn of MLA is bits 15:12
                     u.wa_en = 1'b1; u.wa = phys(rn, mode);                  // Rd is bits 19:16
                     u.setflags = instr[20];
                     ra_pc = instr[21] && rd == 4'd15;
@@ -174,8 +153,8 @@ module arm_decode
                         end else more = 1'b1;
                     end else begin
                         u.kind = K_MULH;
-                        u.ra = phys(rd, mode); u.ra_rd = 1'b1;              // RdLo
-                        u.rc = phys(rn, mode); u.rc_rd = 1'b1;              // RdHi
+                        u.ra = phys(rd, mode); u.ra_rd = 1'b1; sel_a_rd = 1'b1;   // RdLo
+                        u.rc = phys(rn, mode); u.rc_rd = 1'b1; sel_c = SC_RN;     // RdHi
                         u.wa_en = 1'b1; u.wa = phys(rd, mode);
                         u.wb_en = 1'b1; u.wb = phys(rn, mode);
                         u.setflags = instr[20];
@@ -187,10 +166,11 @@ module arm_decode
                     u.pre = 1'b1; u.up = 1'b1; u.use_imm = 1'b1;
                     case (step)
                         2'd0: begin u.kind = K_LOAD; u.wa_en = 1'b1; u.wa = 5'd31; more = 1'b1; end
-                        2'd1: begin u.kind = K_STORE; u.rc = phys(rm, mode); u.rc_rd = 1'b1; more = 1'b1; end
-                        default: begin
+                        2'd1: begin u.kind = K_STORE; u.rc = phys(rm, mode); u.rc_rd = 1'b1; sel_c = SC_RM; more = 1'b1; end
+                        default: begin                  // Rd <- the loaded word, from r31
                             u.kind = K_ALU; u.alu_op = 4'hD;
-                            u.rb = 5'd31; u.rb_rd = 1'b1;
+                            u.use_imm = 1'b0; u.pre = 1'b0; u.up = 1'b0;
+                            u.rb = 5'd31; u.rb_rd = 1'b1; sel_b_31 = 1'b1;
                             u.wa_en = 1'b1; u.wa = phys(rd, mode);
                         end
                     endcase
@@ -232,7 +212,7 @@ module arm_decode
                     if (instr[20]) begin
                         u.wa_en = 1'b1; u.wa = phys(rd, mode); u.wa_pc = rd == 4'd15;
                     end else begin
-                        u.rc = phys(rd, mode); u.rc_rd = 1'b1; rc_pc = rd == 4'd15;
+                        u.rc = phys(rd, mode); u.rc_rd = 1'b1; rc_pc = rd == 4'd15; sel_c = SC_RD;
                     end
                     if (!instr[24] || instr[21]) begin u.wb_en = 1'b1; u.wb = phys(rn, mode); end
                 end
@@ -242,7 +222,7 @@ module arm_decode
                     u.msize = 2'd2; u.pre = 1'b1; u.up = 1'b1;
                     u.lsm = 1'b1;
                     u.lsm_latch = k == 5'd0;
-                    u.imm = lsm_start + {25'd0, k, 2'b00};
+                    u.imm = {{24{lsm_off[7]}}, lsm_off};
                     u.lsm_wb = instr[23] ? {25'd0, nregs, 2'b00} : 32'd0 - {25'd0, nregs, 2'b00};
                     u.ra = phys(rn, mode); u.ra_rd = k == 5'd0;
                     if (k == 5'd0 && instr[21]) begin u.wb_en = 1'b1; u.wb = phys(rn, mode); end
@@ -252,7 +232,7 @@ module arm_decode
                         u.wa_pc = lreg == 4'd15;
                         u.restore = lreg == 4'd15 && instr[22];
                     end else begin
-                        u.rc = phys(lreg, lsm_user ? M_USR : mode); u.rc_rd = 1'b1;
+                        u.rc = phys(lreg, lsm_user ? M_USR : mode); u.rc_rd = 1'b1; sel_c = SC_RL;
                         rc_pc = lreg == 4'd15;
                     end
                     more = rem_next != 16'd0;

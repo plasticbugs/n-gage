@@ -94,4 +94,26 @@ localparam logic [4:0] M_ABT = 5'h17;
 localparam logic [4:0] M_UND = 5'h1B;
 localparam logic [4:0] M_SYS = 5'h1F;
 
+// the physical register an ARM register number names in a mode
+function automatic logic [4:0] phys(input logic [3:0] r, input logic [4:0] m);
+    logic [4:0] p;
+    p = {1'b0, r};
+    if (r >= 4'd8 && r != 4'd15) begin
+        if (m == M_FIQ) p = 5'd16 + {1'b0, r} - 5'd8;
+        else if (r >= 4'd13) begin
+            case (m)
+                M_SVC: p = (r == 4'd13) ? 5'd23 : 5'd24;
+                M_ABT: p = (r == 4'd13) ? 5'd25 : 5'd26;
+                M_IRQ: p = (r == 4'd13) ? 5'd27 : 5'd28;
+                M_UND: p = (r == 4'd13) ? 5'd29 : 5'd30;
+                default: ;
+            endcase
+        end
+    end
+    return p;
+endfunction
+
+// which register-file port an operand is read from (arm_regs.sv)
+localparam logic [2:0] SC_RS = 3'd0, SC_RD = 3'd1, SC_RM = 3'd2, SC_RN = 3'd3, SC_RL = 3'd4;
+
 endpackage

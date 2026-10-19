@@ -127,6 +127,7 @@ module arm_thumb (
                     imm_ovr_en = 1'b1; imm_ovr = {{9{t[10]}}, t[10:0], 12'd0};
                 end
             5'b111_11: begin                                         // BL suffix
+                    arm = 32'hE1AE0000;                              // Rn = r14: LR's read port
                     bl_suffix = 1'b1;
                     imm_ovr_en = 1'b1; imm_ovr = {20'd0, t[10:0], 1'b0};
                 end

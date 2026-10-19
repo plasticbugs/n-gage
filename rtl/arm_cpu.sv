@@ -1,13 +1,23 @@
 //------------------------------------------------------------------------------
-// The NGVM CPU: an ARMv4T (ARM and Thumb), six stages (docs/core-design.md 5).
+// The NGVM CPU: an ARMv4T (ARM and Thumb), eight stages (docs/core-design.md 5).
 //
 //   F1  the fetch address goes to the instruction memory
-//   F2  the word comes back (or "not yet": the fetch is replayed)
-//   D   Thumb expansion, decode, register read, IRQ injection, B/BL redirect
-//   E   forwarding, shifter, ALU, multiply, flags, CPSR/SPSR, addresses,
-//       branch resolution, exception entry
-//   M   the data memory answers; loads aligned; loads to PC redirect
-//   W   register write; retirement
+//   F2  the word comes back (or "not yet": the fetch is replayed) and joins
+//       the instruction buffer
+//   D1  Thumb expansion and predecode, from the buffer's head
+//   D2  decode, register read, IRQ injection; redirects for B, BL and the
+//       Thumb BL pair, whose targets are known here
+//   S   forwarding from the registered results of M and W; the shifter
+//   A   late forwarding of unshifted operands; ALU, multiply, flags, CPSR
+//       and SPSR, addresses; conditional branches, BX, exceptions
+//   M   the data memory answers; loads aligned; ALU results to PC redirect
+//   W   register write; loads to PC redirect; retirement
+//
+// Each stage starts from registers.  S cannot see the result of the uop in
+// A, so an operand that only A needs (an unshifted register, the base,
+// store data) is marked in S and picked up in A from M or W; an operand S
+// itself needs (one to shift, a shift amount, a multiplier input) waits in S
+// until the value is registered.  A load's value is registered only at W.
 //
 // Memory ports.  The instruction port is a pipelined read: an address with
 // ic_req at a clock edge is answered in the next cycle by ic_ok (ic_data
@@ -17,7 +27,7 @@
 // (a load's dc_rdata is valid in that cycle).  ic_abort/dc_abort come with
 // ok and mark the access as faulted.
 //
-// Architectural state changes at E (CPSR, SPSR) and at W (registers), in
+// Architectural state changes at A (CPSR, SPSR) and at W (registers), in
 // program order; anything younger than a redirect is killed before it
 // reaches either.  The retire port gives the bench each instruction as it
 // leaves W, with the CPSR it left behind.
@@ -87,168 +97,323 @@ module arm_cpu
     endfunction
 
     // redirects, oldest first; each kills everything younger
-    logic        m_redirect, e_redirect, d_redirect;
-    logic [31:0] m_target, e_target, d_target;
-    logic        m_tthumb, e_tthumb;
+    logic        w_redirect, m_redirect, a_redirect, d_redirect;
+    logic [31:0] w_target, m_target, a_target, d_target;
+    logic        w_tthumb, m_tthumb, a_tthumb;
+    logic        kill_a, kill_s, kill_d2;       // the stage's uop is gone this cycle
+    logic        kill_f;                        // D1, the buffer and F2
+    assign kill_a  = m_redirect || w_redirect;
+    assign kill_s  = a_redirect || kill_a;
+    assign kill_d2 = kill_s;
+    assign kill_f  = d_redirect || kill_d2;
 
-    // ============================================================ F1, F2
-    logic        f1_valid, f1_thumb;
+    // ============================================================ F1, F2, buffer
+    localparam int IB = 4;                      // instruction buffer entries
+    typedef struct packed {
+        logic [31:0] word;
+        logic [31:0] pc;
+        logic        thumb;
+        logic        abt;
+    } ibe_t;
+
+    logic        f1_thumb;
     logic [31:0] f1_pc;
     logic        f2_valid, f2_thumb;
     logic [31:0] f2_pc;
-    logic        skid_valid, skid_abt;
-    logic [31:0] skid;
+    ibe_t        ib [0:IB-1];
+    logic  [2:0] ib_n;                          // entries held
+    logic        f2_push, f2_miss, f1_go;
 
-    assign ic_req  = f1_valid;
+    // fetch only what the buffer can always take: what it holds, what is in
+    // F2, and this one
+    assign f1_go   = {1'b0, ib_n} + {3'd0, f2_valid} < 4'(IB);
+    assign ic_req  = f1_go;
     assign ic_addr = {f1_pc[31:2], 2'b00};
+    assign f2_push = f2_valid && ic_ok;
+    assign f2_miss = f2_valid && !ic_ok;
 
-    logic        f2_has, f2_miss, f2_abt;
-    logic [31:0] f2_word;
-    assign f2_has  = f2_valid && (skid_valid || ic_ok);
-    assign f2_miss = f2_valid && !skid_valid && !ic_ok;
-    assign f2_word = skid_valid ? skid : ic_data;
-    assign f2_abt  = skid_valid ? skid_abt : ic_abort;
-
-    // ============================================================ D
-    logic        d_valid, d_thumb, d_abt;
-    logic [31:0] d_pc, d_word;
-    logic  [1:0] d_step;
-    logic  [4:0] d_k;
-    logic [15:0] d_rem;
-
-    logic [15:0] d_half;
-    logic [31:0] t_arm, t_imm, d_arm, pc_op;
+    // ============================================================ D1
+    logic [15:0] d1_half;
+    logic [31:0] t_arm, t_imm, d1_arm, d1_pc_op;
     logic        t_imm_en, t_align, t_bl, t_und;
-    assign d_half = d_pc[1] ? d_word[31:16] : d_word[15:0];
+    ibe_t        d1;
+    assign d1      = ib[0];
+    assign d1_half = d1.pc[1] ? d1.word[31:16] : d1.word[15:0];
     arm_thumb u_thumb (
-        .t(d_half), .arm(t_arm), .imm_ovr_en(t_imm_en), .imm_ovr(t_imm),
+        .t(d1_half), .arm(t_arm), .imm_ovr_en(t_imm_en), .imm_ovr(t_imm),
         .pc_align(t_align), .bl_suffix(t_bl), .und(t_und)
     );
-    assign d_arm = d_thumb ? t_arm : d_word;
-    assign pc_op = d_thumb ? ((d_pc + 32'd4) & (t_align ? 32'hFFFF_FFFC : 32'hFFFF_FFFF))
-                           : d_pc + 32'd8;
+    assign d1_arm   = d1.thumb ? t_arm : d1.word;
+    assign d1_pc_op = d1.thumb ? ((d1.pc + 32'd4) & (t_align ? 32'hFFFF_FFFC : 32'hFFFF_FFFF))
+                               : d1.pc + 32'd8;
 
-    logic        d_first;
-    assign d_first = d_step == 2'd0 && d_k == 5'd0;
+    // predecode: what D2 must know without waiting for the decoder
+    function automatic logic [4:0] popcount16(input logic [15:0] x);
+        logic [4:0] n;
+        n = 5'd0;
+        for (int i = 0; i < 16; i++) n = n + {4'd0, x[i]};
+        return n;
+    endfunction
+    function automatic logic two_or_more(input logic [15:0] x);  // no adder: by nibbles
+        logic [3:0] any, two;
+        for (int i = 0; i < 4; i++) begin
+            any[i] = x[4*i +: 4] != 4'd0;
+            two[i] = (x[4*i +: 4] & (x[4*i +: 4] - 4'd1)) != 4'd0;
+        end
+        return two != 4'd0 || (any & (any - 4'd1)) != 4'd0;
+    endfunction
+    function automatic logic [3:0] lowest(input logic [15:0] x);
+        logic [3:0] l;
+        l = 4'd0;
+        for (int i = 15; i >= 0; i--) if (x[i]) l = i[3:0];
+        return l;
+    endfunction
+
+    logic d1_plain, d1_ub, d1_blp, d1_lsm, d1_swp, d1_mlal;
+    logic [4:0] d1_lmode;
+    // LDM/STM ^ without PC in the list: the user bank
+    assign d1_lmode = (d1_arm[22] && !(d1_arm[20] && d1_arm[15])) ? M_USR : cpsr[4:0];
+    always_comb begin
+        d1_plain = !d1.abt && !(d1.thumb && (t_und || t_bl)) && d1_arm[31:28] != 4'hF;
+        d1_ub    = d1_plain && d1_arm[31:25] == 7'b1110_101;                 // B, BL always
+        d1_blp   = d1.thumb && d1_half[15:11] == 5'b11110;                    // Thumb BL prefix
+        d1_lsm   = d1_plain && d1_arm[27:25] == 3'b100;
+        d1_swp   = d1_plain && d1_arm[27:23] == 5'b00010 && d1_arm[21:20] == 2'b00
+                   && d1_arm[11:4] == 8'b0000_1001;
+        d1_mlal  = d1_plain && d1_arm[27:23] == 5'b00001 && d1_arm[7:4] == 4'b1001 && d1_arm[21];
+    end
+
+    // ============================================================ D2
+    logic        d2_valid, d2_thumb, d2_abt;
+    logic [31:0] d2_pc, d2_arm, d2_pc_op, d2_imm;
+    logic [15:0] d2_half;
+    logic        d2_imm_en, d2_bl, d2_und;
+    logic        d2_ub, d2_blp, d2_lsm, d2_swp, d2_mlal, d2_red_done;
+    logic  [3:0] d2_lreg;                       // the register this LDM/STM step moves
+    logic  [4:0] d2_nregs;                      // ... and how many the list holds
+    logic        d2_lmore;                      // ... and whether another step follows
+    logic  [4:0] d2_mode;                       // the mode D2 decodes in: CPSR's as the uop arrived
+    logic  [4:0] d2_lmode;                      // ... and the LDM/STM register's: user for ^ without PC
+    logic  [4:0] d2_ixn, d2_ixm, d2_ixs, d2_ixd, d2_ixl;   // register-file indices, from D1
+    logic  [1:0] d2_step;
+    logic  [4:0] d2_k;
+    logic [15:0] d2_rem;
+    logic        d2_after_blp;                  // the uop issued before this one was a BL prefix
+    logic [31:0] d2_blp_lr;                     // ... and this is the LR it computes
+
+    logic        d2_first;
+    assign d2_first = d2_step == 2'd0 && d2_k == 5'd0;
 
     uop_t        dec_u;
-    logic        ra_pc, rb_pc, rc_pc, d_more;
-    logic [15:0] d_rem_next;
+    logic        ra_pc, rb_pc, rc_pc, dec_more;
+    logic [15:0] dec_rem_next, d2_rem_cur;
+    logic        sel_a_rd, sel_b_31;
+    logic  [2:0] sel_c;
+    assign d2_rem_cur = d2_first ? d2_arm[15:0] : d2_rem;
     arm_decode u_dec (
-        .instr(d_arm), .thumb(d_thumb), .thumb_raw(d_half),
-        .imm_ovr_en(d_thumb && t_imm_en), .imm_ovr(t_imm),
-        .bl_suffix(d_thumb && t_bl), .t_und(d_thumb && t_und), .pabt(d_abt),
-        .pc(d_pc), .pc_op(pc_op), .mode(cpsr[4:0]),
-        .step(d_step), .rem(d_first ? d_arm[15:0] : d_rem), .k(d_k),
+        .instr(d2_arm), .thumb(d2_thumb), .thumb_raw(d2_half),
+        .imm_ovr_en(d2_imm_en), .imm_ovr(d2_imm),
+        .bl_suffix(d2_bl), .t_und(d2_und), .pabt(d2_abt),
+        .pc(d2_pc), .pc_op(d2_pc_op), .mode(d2_mode),
+        .step(d2_step), .rem(d2_rem_cur), .k(d2_k), .lreg(d2_lreg), .nregs(d2_nregs),
         .u(dec_u), .ra_pc(ra_pc), .rb_pc(rb_pc), .rc_pc(rc_pc),
-        .more(d_more), .rem_next(d_rem_next)
+        .more(dec_more), .rem_next(dec_rem_next),
+        .sel_a_rd(sel_a_rd), .sel_b_31(sel_b_31), .sel_c(sel_c)
     );
 
-    // register file: read in D, written at W
-    logic [31:0] qa, qb, qc;
+    // the last step, from registers rather than through the decoder
+    logic d2_more;
+    always_comb begin
+        if (d2_lsm)       d2_more = d2_lmore;
+        else if (d2_swp)  d2_more = d2_step != 2'd2;
+        else if (d2_mlal) d2_more = d2_step == 2'd0;
+        else              d2_more = 1'b0;
+    end
+`ifdef VERILATOR
+    always_ff @(posedge clk)
+        if (!rst && d2_valid && d2_more != dec_more)
+            $error("arm_cpu: D2's last step disagrees with the decoder at %08x", d2_pc);
+`endif
+
+    // register file: read in D2 by the instruction's fields, written at W
+    logic [31:0] qa, qb, qc, qn, qm, qs, qd, ql, q31;
+    logic  [4:0] ix_n, ix_m, ix_s, ix_d, ix_l;
     logic        rf_wa_en, rf_wb_en;
     logic  [4:0] rf_wa, rf_wb;
     logic [31:0] rf_da, rf_db;
-    logic [31:0] unused_dbg;
+    // The indices are worked out in D1, in the mode of that moment.  Every
+    // change of mode (MSR to the control field, an exception, a return from
+    // one) redirects and so kills D2, so no uop that survives sees a stale one.
+    assign ix_n = d2_ixn;
+    assign ix_m = d2_ixm;
+    assign ix_s = d2_ixs;
+    assign ix_d = d2_ixd;
+    assign ix_l = d2_ixl;
     arm_regs u_regs (
         .clk(clk),
-        .ra(dec_u.ra), .rb(dec_u.rb), .rc(dec_u.rc),
-        .qa(qa), .qb(qb), .qc(qc),
+        .rn(ix_n), .rm(ix_m), .rs(ix_s), .rd(ix_d), .rl(ix_l),
+        .qn(qn), .qm(qm), .qs(qs), .qd(qd), .ql(ql), .q31(q31),
         .wa_en(rf_wa_en), .wa(rf_wa), .da(rf_da),
-        .wb_en(rf_wb_en), .wb(rf_wb), .db(rf_db),
-        .dbg_r(5'd0), .dbg_q(unused_dbg)
+        .wb_en(rf_wb_en), .wb(rf_wb), .db(rf_db)
     );
-
-    // the uop D offers: the decoded step, or an IRQ in place of a new instruction
-    uop_t d_u;
-    logic d_inject;
-    // never between the halves of a Thumb BL (QEMU, and so the bench, runs
-    // the pair as one instruction; ARM allows either)
-    logic d_after_blp;
     always_comb begin
-        d_inject = d_valid && d_first && irq && !cpsr[7] && !d_after_blp;
-        d_u = dec_u;
-        d_u.a = ra_pc ? pc_op : qa;
-        d_u.b = rb_pc ? pc_op : qb;
-        d_u.c = rc_pc ? pc_op : qc;
-        if (ra_pc) d_u.ra_rd = 1'b0;
-        if (rb_pc) d_u.rb_rd = 1'b0;
-        if (rc_pc) d_u.rc_rd = 1'b0;
-        if (d_inject) begin
-            d_u = '0;
-            d_u.valid = 1'b1;
-            d_u.pc = d_pc; d_u.thumb = d_thumb;
-            d_u.first = 1'b1; d_u.last = 1'b1;
-            d_u.cond = 4'hE;
-            d_u.kind = K_EXC;
-            d_u.exc_vec = 3'd6; d_u.exc_mode = M_IRQ;
-            d_u.exc_lr = d_pc + 32'd4; d_u.exc_lr_reg = 5'd28;
-            d_u.irq = 1'b1;
+        qa = sel_a_rd ? qd : qn;
+        qb = sel_b_31 ? q31 : qm;
+        case (sel_c)
+            SC_RD:   qc = qd;
+            SC_RM:   qc = qm;
+            SC_RN:   qc = qn;
+            SC_RL:   qc = ql;
+            default: qc = qs;
+        endcase
+    end
+`ifdef VERILATOR
+    // each port read the register the decoder named
+    always_ff @(posedge clk)
+        if (!rst && d2_valid && !d2_inject) begin
+            if (dec_u.ra_rd && !ra_pc && dec_u.ra != (sel_a_rd ? ix_d : ix_n))
+                $error("arm_cpu: operand a read the wrong port at %08x", d2_pc);
+            if (dec_u.rb_rd && !rb_pc && dec_u.rb != (sel_b_31 ? 5'd31 : ix_m))
+                $error("arm_cpu: operand b read the wrong port at %08x", d2_pc);
+            if (dec_u.rc_rd && !rc_pc && dec_u.rc != (sel_c == SC_RD ? ix_d : sel_c == SC_RM ? ix_m :
+                                                      sel_c == SC_RN ? ix_n : sel_c == SC_RL ? ix_l : ix_s))
+                $error("arm_cpu: operand c read the wrong port at %08x", d2_pc);
+        end
+`endif
+
+    // the uop D2 offers: the decoded step, or an IRQ in place of a new instruction
+    uop_t d2_u;
+    // *_nk: the same handshakes without the kills.  Data registers load on
+    // those; a kill only clears valid bits, so it reaches a few flops rather
+    // than every enable in D1, D2, S and A.
+    logic d2_inject, d2_last, d2_issue, d2_free, d1_take;
+    logic d2_issue_nk, d2_free_nk, d1_take_nk;
+    logic s_free, s_free_nk;
+    always_comb begin
+        // never between the halves of a Thumb BL (QEMU, and so the bench, runs
+        // the pair as one instruction; ARM allows either)
+        d2_inject = d2_valid && d2_first && irq && !cpsr[7] && !d2_after_blp;
+        d2_u = dec_u;
+        d2_u.a = ra_pc ? d2_pc_op : qa;
+        d2_u.b = rb_pc ? d2_pc_op : qb;
+        d2_u.c = rc_pc ? d2_pc_op : qc;
+        if (ra_pc) d2_u.ra_rd = 1'b0;
+        if (rb_pc) d2_u.rb_rd = 1'b0;
+        if (rc_pc) d2_u.rc_rd = 1'b0;
+        if (d2_inject) begin
+            d2_u = '0;
+            d2_u.valid = 1'b1;
+            d2_u.pc = d2_pc; d2_u.thumb = d2_thumb;
+            d2_u.first = 1'b1; d2_u.last = 1'b1;
+            d2_u.cond = 4'hE;
+            d2_u.kind = K_EXC;
+            d2_u.exc_vec = 3'd6; d2_u.exc_mode = M_IRQ;
+            d2_u.exc_lr = d2_pc + 32'd4; d2_u.exc_lr_reg = 5'd28;
+            d2_u.irq = 1'b1;
+        end
+    end
+    assign d2_last     = d2_inject || !d2_more;
+    assign d2_issue_nk = d2_valid && s_free_nk;
+    assign d2_free_nk  = !d2_valid || (d2_issue_nk && d2_last);
+    assign d1_take_nk  = ib_n != 3'd0 && d2_free_nk;
+    assign d2_issue    = d2_issue_nk && !kill_d2;
+    assign d2_free     = !d2_valid || (d2_issue && d2_last);
+    assign d1_take     = ib_n != 3'd0 && d2_free && !kill_f;
+
+    // B and BL redirect from here; so does a Thumb BL suffix straight after
+    // its prefix, whose LR D2 computed as the prefix went by
+    logic d2_bls;
+    assign d2_bls     = d2_bl && d2_after_blp;
+    assign d_redirect = d2_valid && !d2_red_done && (d2_ub || d2_bls) && !kill_d2;
+    assign d_target   = d2_bls ? ((d2_blp_lr + d2_imm) & 32'hFFFF_FFFE) : dec_u.imm;
+
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            d2_valid <= 1'b0; d2_red_done <= 1'b0;
+            d2_step <= 2'd0; d2_k <= 5'd0; d2_rem <= 16'd0;
+            d2_after_blp <= 1'b0; d2_blp_lr <= 32'd0;
+        end else begin
+            if (kill_d2) d2_after_blp <= 1'b0;
+            else if (d2_issue) begin
+                d2_after_blp <= !d2_inject && d2_blp;
+                d2_blp_lr    <= d2_pc_op + d2_imm;     // the prefix's LR
+            end
+            if (kill_d2)                         d2_valid <= 1'b0;
+            else if (d2_issue && !d2_last)       ;
+            else if (d1_take)                    d2_valid <= 1'b1;
+            else if (d2_issue)                   d2_valid <= 1'b0;      // last step gone, nothing to take
+            // the steps of the one in D2, or a fresh start (a killed one's
+            // steps are never looked at: valid is clear)
+            if (d_redirect) d2_red_done <= 1'b1;
+            if (d1_take_nk) begin
+                d2_red_done <= 1'b0; d2_step <= 2'd0; d2_k <= 5'd0;
+            end else if (d2_issue_nk && !d2_last) begin
+                if (d2_lsm) begin
+                    d2_k <= d2_k + 5'd1; d2_rem <= dec_rem_next; d2_lreg <= lowest(dec_rem_next);
+                    d2_ixl <= phys(lowest(dec_rem_next), d2_lmode);
+                    d2_lmore <= two_or_more(dec_rem_next);
+                end else d2_step <= d2_step + 2'd1;
+            end
+        end
+        if (d1_take_nk) begin
+            d2_lreg <= lowest(d1_arm[15:0]);
+            d2_nregs <= popcount16(d1_arm[15:0]);
+            d2_lmore <= two_or_more(d1_arm[15:0]);
+            d2_mode <= cpsr[4:0];
+            d2_lmode <= d1_lmode;
+            d2_ixn <= phys(d1_arm[19:16], cpsr[4:0]);
+            d2_ixm <= phys(d1_arm[3:0], cpsr[4:0]);
+            d2_ixs <= phys(d1_arm[11:8], cpsr[4:0]);
+            d2_ixd <= phys(d1_arm[15:12], cpsr[4:0]);
+            d2_ixl <= phys(lowest(d1_arm[15:0]), d1_lmode);
+            d2_pc <= d1.pc; d2_thumb <= d1.thumb; d2_abt <= d1.abt;
+            d2_arm <= d1_arm; d2_half <= d1_half; d2_pc_op <= d1_pc_op;
+            d2_imm_en <= d1.thumb && t_imm_en; d2_imm <= t_imm;
+            d2_bl <= d1.thumb && t_bl; d2_und <= d1.thumb && t_und;
+            d2_ub <= d1_ub; d2_blp <= d1_blp;
+            d2_lsm <= d1_lsm; d2_swp <= d1_swp; d2_mlal <= d1_mlal;
         end
     end
 
-    // ============================================================ E (declared here, used by D)
-    logic        e_valid, e_dred;
-    uop_t        e_u;
-    logic        e_adv, e_busy, e_ldwait;
-    logic        m_hold, m_dabt_take;
-
-    logic e_free, d_issue, d_last, d_take;
-    assign e_free  = !e_valid || e_adv;
-    assign d_last  = d_inject || dec_u.last;
-    assign d_issue = d_valid && e_free && !e_redirect && !m_redirect;
-    assign d_redirect = d_issue && !d_inject && dec_u.kind == K_BRANCH && !dec_u.ra_rd
-                        && dec_u.cond == 4'hE;
-    assign d_target = dec_u.imm;
-    assign d_take = f2_has && (!d_valid || (d_issue && d_last))
-                    && !d_redirect && !e_redirect && !m_redirect;
-
-    // ============================================================ F/D sequencing
+    // ============================================================ F/buffer sequencing
     always_ff @(posedge clk) begin
         if (rst) begin
-            f1_valid <= 1'b1; f1_pc <= 32'd0; f1_thumb <= 1'b0;
+            f1_pc <= 32'd0; f1_thumb <= 1'b0;
             f2_valid <= 1'b0; f2_pc <= 32'd0; f2_thumb <= 1'b0;
-            skid_valid <= 1'b0; skid <= 32'd0; skid_abt <= 1'b0;
-            d_valid <= 1'b0; d_pc <= 32'd0; d_thumb <= 1'b0; d_word <= 32'd0; d_abt <= 1'b0;
-            d_step <= 2'd0; d_k <= 5'd0; d_rem <= 16'd0; d_after_blp <= 1'b0;
+            ib_n <= 3'd0;
         end else begin
-            if (e_redirect || m_redirect) d_after_blp <= 1'b0;
-            else if (d_issue) d_after_blp <= !d_inject && d_thumb && d_half[15:11] == 5'b11110;
-            // ---- D
-            if (e_redirect || m_redirect) begin
-                d_valid <= 1'b0; d_step <= 2'd0; d_k <= 5'd0;
-            end else if (d_issue && !d_last) begin
-                if (dec_u.lsm) begin d_k <= d_k + 5'd1; d_rem <= d_rem_next; end
-                else d_step <= d_step + 2'd1;
-            end else if (d_take) begin
-                d_valid <= 1'b1; d_pc <= f2_pc; d_thumb <= f2_thumb;
-                d_word <= f2_word; d_abt <= f2_abt;
-                d_step <= 2'd0; d_k <= 5'd0;
-            end else if (d_issue) begin                 // last step gone, nothing to take
-                d_valid <= 1'b0; d_step <= 2'd0; d_k <= 5'd0;
-            end
-
-            // ---- F1, F2
-            if (m_redirect || e_redirect || d_redirect) begin
-                f1_valid <= 1'b1;
-                f1_pc    <= m_redirect ? m_target : e_redirect ? e_target : d_target;
-                f1_thumb <= m_redirect ? m_tthumb : e_redirect ? e_tthumb : d_thumb;
-                f2_valid <= 1'b0; skid_valid <= 1'b0;
+            if (w_redirect || m_redirect || a_redirect || d_redirect) begin
+                f1_pc    <= w_redirect ? w_target : m_redirect ? m_target : a_redirect ? a_target : d_target;
+                f1_thumb <= w_redirect ? w_tthumb : m_redirect ? m_tthumb : a_redirect ? a_tthumb : d2_thumb;
+                f2_valid <= 1'b0;
             end else if (f2_miss) begin                 // ask again for the one that missed
                 f1_pc <= f2_pc; f1_thumb <= f2_thumb;
                 f2_valid <= 1'b0;
-            end else if (!f2_valid || d_take) begin     // F1 moves on
-                f2_valid <= f1_valid; f2_pc <= f1_pc; f2_thumb <= f1_thumb;
-                f1_pc <= f1_pc + (f1_thumb ? 32'd2 : 32'd4);
-                skid_valid <= 1'b0;
-            end else if (!skid_valid) begin             // D is busy: keep what came back
-                skid_valid <= 1'b1; skid <= ic_data; skid_abt <= ic_abort;
+            end else begin
+                f2_valid <= f1_go;
+                if (f1_go) begin
+                    f2_pc <= f1_pc; f2_thumb <= f1_thumb;
+                    f1_pc <= f1_pc + (f1_thumb ? 32'd2 : 32'd4);
+                end
             end
+            if (kill_f) ib_n <= 3'd0;
+            else ib_n <= ib_n + {2'd0, f2_push} - {2'd0, d1_take};
+        end
+        // the buffer shifts towards its head; F2 lands behind what stays
+        for (int e = 0; e < IB; e++) begin
+            if (f2_push && 3'(e) == ib_n - {2'd0, d1_take_nk})
+                ib[e] <= '{word: ic_data, pc: f2_pc, thumb: f2_thumb, abt: ic_abort};
+            else if (d1_take_nk && e < IB - 1)
+                ib[e] <= ib[e + 1];
         end
     end
 
-    // ============================================================ E
-    // forwarding: the newest older value of each operand
+    // ============================================================ S
+    logic        s_valid, s_dred;
+    logic        s_amt_ok;                      // a register shift amount has settled in s_u.c
+    uop_t        s_u;
+    logic        a_valid, a_dred;
+    uop_t        a_u;
     logic        m_valid, m_exec, m_mem;
     uop_t        m_u;
     logic [31:0] m_ra, m_rb;
@@ -256,238 +421,420 @@ module arm_cpu
     uop_t        w_u;
     logic [31:0] w_ra, w_rb;
 
-    function automatic logic [31:0] fwd(input logic [4:0] r, input logic en, input logic [31:0] v);
+    // forwarding from registered results: M's (but not a load's, which is
+    // not back yet) and W's
+    // Each S operand carries its matches against the destinations of the
+    // uops in A, M and W, worked out a cycle early (s_tag_next), so that
+    // forwarding and the stall start from flops rather than from 5-bit
+    // compares.  Valid and exec bits are applied here, where they are
+    // registered too.
+    typedef struct packed { logic a_wa, a_wb, m_wa, m_wb, w_wa, w_wb; } tag_t;
+    tag_t s_ta, s_tb, s_tc;
+
+    function automatic logic [31:0] sfwd(input tag_t t, input logic en, input logic [31:0] v);
         if (!en) return v;
-        if (m_valid && m_exec && m_u.wa_en && !m_u.wa_pc && m_u.wa == r && m_u.kind != K_LOAD) return m_ra;
-        if (m_valid && m_exec && m_u.wb_en && m_u.wb == r) return m_rb;
-        if (w_valid && w_exec && w_u.wa_en && !w_u.wa_pc && w_u.wa == r) return w_ra;
-        if (w_valid && w_exec && w_u.wb_en && w_u.wb == r) return w_rb;
+        if (m_valid && m_exec && t.m_wa && m_u.kind != K_LOAD) return m_ra;
+        if (m_valid && m_exec && t.m_wb) return m_rb;
+        if (w_valid && w_exec && t.w_wa) return w_ra;
+        if (w_valid && w_exec && t.w_wb) return w_rb;
         return v;
     endfunction
 
-    logic [31:0] ea, eb, ec;
-    always_comb begin
-        ea = fwd(e_u.ra, e_u.ra_rd, e_u.a);
-        eb = fwd(e_u.rb, e_u.rb_rd, e_u.b);
-        ec = fwd(e_u.rc, e_u.rc_rd, e_u.c);
-    end
-
-    // a load in M that this uop needs: wait for it to reach W
-    function automatic logic needs(input logic [4:0] r);
-        return (e_u.ra_rd && e_u.ra == r) || (e_u.rb_rd && e_u.rb == r) || (e_u.rc_rd && e_u.rc == r);
+    // producers S cannot see yet
+    function automatic logic in_a(input tag_t t);                  // anything A writes
+        return a_valid && (t.a_wa || t.a_wb);
     endfunction
-    assign e_ldwait = e_valid && m_valid && m_exec && m_u.kind == K_LOAD && m_u.wa_en
-                      && !m_u.wa_pc && needs(m_u.wa);
+    function automatic logic load_in_a(input tag_t t);
+        return a_valid && a_u.kind == K_LOAD && t.a_wa;
+    endfunction
+    function automatic logic load_in_m(input tag_t t);
+        return m_valid && m_exec && m_u.kind == K_LOAD && t.m_wa;
+    endfunction
 
-    // shifter and ALU
-    logic [31:0] sh_res, op2;
-    logic        sh_c, op2_c;
+    // where A finds an operand S could not
+    typedef enum logic [1:0] { L_NONE, L_MRA, L_MRB, L_WRA } late_t;
+    function automatic late_t late_of(input tag_t t, input logic en);
+        if (!en) return L_NONE;
+        if (a_valid && t.a_wa && a_u.kind != K_LOAD) return L_MRA;
+        if (a_valid && t.a_wb) return L_MRB;
+        if (load_in_m(t)) return L_WRA;
+        return L_NONE;
+    endfunction
+
+    logic [31:0] sa, sb, sc;
+    logic        s_blate, s_clate, s_rrx, s_cpass, s_stall, s_adv;
+    logic        a_free, a_wflags;
+    always_comb begin
+        sa = sfwd(s_ta, s_u.ra_rd, s_u.a);
+        sb = sfwd(s_tb, s_u.rb_rd, s_u.b);
+        sc = sfwd(s_tc, s_u.rc_rd, s_u.c);
+        // operands A may pick up late: unshifted, not a shift amount, not
+        // a multiplier input (those go to the DSP block from here)
+        s_blate = !s_u.use_imm && !s_u.sh_reg && s_u.sh_typ == 2'd0 && s_u.sh_amt == 5'd0
+                  && s_u.kind != K_MUL && s_u.kind != K_MULL;
+        s_clate = !s_u.sh_reg && s_u.kind != K_MUL && s_u.kind != K_MULL;
+        s_rrx   = !s_u.use_imm && !s_u.sh_reg && s_u.sh_typ == 2'd3 && s_u.sh_amt == 5'd0;
+        // the shifter's carry out is CPSR.C, which A reads itself
+        s_cpass = s_u.use_imm ? !s_u.imm_rot
+                              : (s_u.sh_reg ? s_u.c[7:0] == 8'd0 : (s_u.sh_typ == 2'd0 && s_u.sh_amt == 5'd0));
+        s_stall = s_valid && (
+              (s_u.ra_rd && load_in_a(s_ta))
+           || (s_u.rb_rd && (s_blate ? load_in_a(s_tb) : (in_a(s_tb) || load_in_m(s_tb))))
+           || (s_u.rc_rd && (s_clate ? load_in_a(s_tc) : (in_a(s_tc) || load_in_m(s_tc))))
+           || (s_rrx && a_wflags)
+           || (s_u.sh_reg && !s_amt_ok));
+    end
+    assign s_adv     = s_valid && !s_stall && a_free && !kill_s;
+    assign s_free    = !s_valid || s_adv;
+    assign s_free_nk = !s_valid || (!s_stall && a_free);
+
+    logic [31:0] sh_res, s_op2;
+    logic        sh_c, s_op2_c;
     arm_shift u_shift (
-        .val(eb), .typ(e_u.sh_typ), .amt(e_u.sh_reg ? ec[7:0] : {3'd0, e_u.sh_amt}),
-        .imm_form(!e_u.sh_reg), .cin(cpsr[29]), .res(sh_res), .cout(sh_c)
+        .val(sb), .typ(s_u.sh_typ), .amt(s_u.sh_reg ? s_u.c[7:0] : {3'd0, s_u.sh_amt}),
+        .imm_form(!s_u.sh_reg), .cin(cpsr[29]), .res(sh_res), .cout(sh_c)
     );
     always_comb begin
-        op2   = e_u.use_imm ? e_u.imm : sh_res;
-        op2_c = e_u.use_imm ? (e_u.imm_rot ? e_u.imm[31] : cpsr[29]) : sh_c;
+        s_op2   = s_u.use_imm ? s_u.imm : sh_res;
+        s_op2_c = s_u.use_imm ? s_u.imm[31] : sh_c;
     end
+
+    // ============================================================ A
+    logic [31:0] a_op2;
+    logic        a_op2_c, a_cpass, a_blate;
+    late_t       a_la, a_lb, a_lc;
+
+    logic        a_wa_fb, a_wb_fb, a_wc_fb;
+
+    // A's view of an operand S marked late.  When the uop that was in A
+    // turns out not to have executed, the value is the next older one: the
+    // load that was in M (wfb), or what S had.
+    function automatic logic [31:0] afwd(input late_t l, input logic wfb, input logic [31:0] v);
+        case (l)
+            L_MRA:   return m_exec ? m_ra : (wfb ? w_ra : v);
+            L_MRB:   return m_exec ? m_rb : (wfb ? w_ra : v);
+            L_WRA:   return w_ra;
+            default: return v;
+        endcase
+    endfunction
+
+    logic [31:0] ea, eb, ec, op2;
+    logic        op2_c;
+    always_comb begin
+        ea = afwd(a_la, a_wa_fb, a_u.a);
+        eb = afwd(a_lb, a_wb_fb, a_u.b);
+        ec = afwd(a_lc, a_wc_fb, a_u.c);
+        op2   = a_blate ? eb : a_op2;
+        op2_c = (a_blate || a_cpass) ? cpsr[29] : a_op2_c;
+    end
+
     logic [31:0] alu_res;
     logic  [3:0] alu_nzcv;
     arm_alu u_alu (
-        .op(e_u.alu_op), .a(ea), .b(op2), .cin(cpsr[29]), .shc(op2_c), .vin(cpsr[28]),
+        .op(a_u.alu_op), .a(ea), .b(op2), .cin(cpsr[29]), .shc(op2_c), .vin(cpsr[28]),
         .res(alu_res), .nzcv(alu_nzcv)
     );
 
-    // multiplier: two pipeline stages in the DSP blocks, E holds meanwhile
+    // flags A may write: what an RRX in S has to wait for
+    assign a_wflags = a_valid && (a_u.setflags || a_u.restore || a_u.kind == K_MSR);
+
+    // multiplier: two pipeline stages in the DSP blocks, A holds meanwhile
+    logic        a_adv, a_busy, a_commit, a_pass;
     logic  [1:0] mcnt;
     logic [65:0] mp1, mp2;
     logic [63:0] mprod;                     // the product register (K_MULL -> K_MULH)
-    logic        e_is_mul;
-    assign e_is_mul = e_valid && (e_u.kind == K_MUL || e_u.kind == K_MULL);
-    assign e_busy   = e_is_mul && mcnt != 2'd2;
+    logic        a_is_mul;
+    assign a_is_mul = a_valid && (a_u.kind == K_MUL || a_u.kind == K_MULL);
+    assign a_busy   = a_is_mul && mcnt != 2'd2;
     always_ff @(posedge clk) begin
-        mp1 <= $signed({e_u.mul_signed && eb[31], eb}) * $signed({e_u.mul_signed && ec[31], ec});
+        mp1 <= $signed({a_u.mul_signed && a_u.b[31], a_u.b}) * $signed({a_u.mul_signed && a_u.c[31], a_u.c});
         mp2 <= mp1;
-        if (rst || !e_valid || e_adv) mcnt <= 2'd0;
-        else if (e_busy && !e_ldwait) mcnt <= mcnt + 2'd1;
+        if (rst || !a_valid || a_adv) mcnt <= 2'd0;
+        else if (a_busy) mcnt <= mcnt + 2'd1;
     end
 
     // LDM/STM base, latched by the first element
     logic [31:0] lsm_base;
 
     // what this uop does, if its condition passes
-    logic        e_pass, e_commit;
-    logic [31:0] e_cpsr_n, e_ra, e_rb, e_addr, e_base, e_off, e_ea, e_wdata, e_spsr_cur;
-    logic  [3:0] e_be;
-    logic        e_wa_en, e_wb_en, e_mem;
-    logic  [4:0] e_wa;
-    logic [63:0] e_long;
-    logic        e_spsr_we;
-    logic [31:0] e_spsr_n;
-    logic  [4:0] e_spsr_mode;
+    logic [31:0] a_cpsr_n, a_ra, a_rb, a_addr, a_base, a_ea, a_wdata, a_spsr_cur;
+    logic  [3:0] a_be;
+    logic        a_wa_en, a_wb_en, a_mem;
+    logic  [4:0] a_wa;
+    logic [63:0] a_long;
+    logic        a_spsr_we;
+    logic [31:0] a_spsr_n;
+    logic  [4:0] a_spsr_mode;
     logic [31:0] msr_mask, msr_v;
+    logic        a_mred;                    // redirect from M next cycle: ALU to PC, BL suffix
+    logic [31:0] a_mtarget;
+    logic        a_mthumb;
 
     always_comb begin
-        e_spsr_cur = spsr_of(cpsr[4:0]);
-        e_pass   = cond_ok(e_u.cond, cpsr);
-        e_cpsr_n = cpsr;
-        e_ra = alu_res; e_rb = 32'd0;
-        e_wa_en = e_u.wa_en; e_wa = e_u.wa; e_wb_en = e_u.wb_en;
-        e_redirect = 1'b0; e_target = 32'd0; e_tthumb = cpsr[5];
-        e_spsr_we = 1'b0; e_spsr_n = cpsr; e_spsr_mode = cpsr[4:0];
-        e_long = 64'd0;
-        msr_v = e_u.use_imm ? e_u.imm : eb;
-        msr_mask = {{8{e_u.msr_mask[3]}}, {8{e_u.msr_mask[2]}}, {8{e_u.msr_mask[1]}}, {8{e_u.msr_mask[0]}}}
+        a_spsr_cur = spsr_of(cpsr[4:0]);
+        a_pass   = cond_ok(a_u.cond, cpsr);
+        a_cpsr_n = cpsr;
+        a_ra = alu_res; a_rb = 32'd0;
+        a_wa_en = a_u.wa_en; a_wa = a_u.wa; a_wb_en = a_u.wb_en;
+        a_redirect = 1'b0; a_target = 32'd0; a_tthumb = cpsr[5];
+        a_mred = 1'b0; a_mtarget = 32'd0; a_mthumb = cpsr[5];
+        a_spsr_we = 1'b0; a_spsr_n = cpsr; a_spsr_mode = cpsr[4:0];
+        a_long = 64'd0;
+        msr_v = a_u.use_imm ? a_u.imm : eb;
+        msr_mask = {{8{a_u.msr_mask[3]}}, {8{a_u.msr_mask[2]}}, {8{a_u.msr_mask[1]}}, {8{a_u.msr_mask[0]}}}
                    & 32'hF000_00FF;     // v4: only NZCV and the control byte exist
 
         // addresses
-        e_off  = e_u.use_imm ? e_u.imm : sh_res;
-        e_base = e_u.lsm ? (e_u.lsm_latch ? ea : lsm_base) : ea;
-        e_ea   = e_u.lsm ? e_base + e_u.imm : (e_u.up ? e_base + e_off : e_base - e_off);
-        e_addr = (e_u.lsm || e_u.pre) ? e_ea : e_base;
-        e_mem  = e_u.kind == K_LOAD || e_u.kind == K_STORE;
-        case (e_u.msize)
-            2'd0:    begin e_wdata = {4{ec[7:0]}};  e_be = 4'b0001 << e_addr[1:0]; end
-            2'd1:    begin e_wdata = {2{ec[15:0]}}; e_be = e_addr[1] ? 4'b1100 : 4'b0011; end
-            default: begin e_wdata = ec;            e_be = 4'b1111; end
+        a_base = a_u.lsm ? (a_u.lsm_latch ? ea : lsm_base) : ea;
+        a_ea   = a_u.lsm ? a_base + a_u.imm : (a_u.up ? a_base + op2 : a_base - op2);
+        a_addr = (a_u.lsm || a_u.pre) ? a_ea : a_base;
+        a_mem  = a_u.kind == K_LOAD || a_u.kind == K_STORE;
+        case (a_u.msize)
+            2'd0:    begin a_wdata = {4{ec[7:0]}};  a_be = 4'b0001 << a_addr[1:0]; end
+            2'd1:    begin a_wdata = {2{ec[15:0]}}; a_be = a_addr[1] ? 4'b1100 : 4'b0011; end
+            default: begin a_wdata = ec;            a_be = 4'b1111; end
         endcase
 
-        case (e_u.kind)
+        case (a_u.kind)
             K_ALU: begin
-                if (e_u.setflags) e_cpsr_n[31:28] = alu_nzcv;
-                if (e_u.wa_pc) begin
-                    e_redirect = 1'b1;
-                    if (e_u.restore) begin
-                        e_cpsr_n = e_spsr_cur;
-                        e_tthumb = e_spsr_cur[5];
+                if (a_u.setflags) a_cpsr_n[31:28] = alu_nzcv;
+                if (a_u.wa_pc) begin
+                    a_mred = 1'b1;
+                    if (a_u.restore) begin
+                        a_cpsr_n = a_spsr_cur;
+                        a_mthumb = a_spsr_cur[5];
                     end
-                    e_target = alu_res & (e_tthumb ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
-                    e_wa_en = 1'b0;
+                    a_mtarget = alu_res & (a_mthumb ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
+                    a_wa_en = 1'b0;
                 end
             end
             K_MUL: begin
-                e_ra = mp2[31:0] + (e_u.mul_acc ? ea : 32'd0);
-                if (e_u.setflags) e_cpsr_n[31:30] = {e_ra[31], e_ra == 32'd0};
+                a_ra = mp2[31:0] + (a_u.mul_acc ? ea : 32'd0);
+                if (a_u.setflags) a_cpsr_n[31:30] = {a_ra[31], a_ra == 32'd0};
             end
             K_MULL: begin
-                e_long = mp2[63:0];
-                e_ra = e_long[31:0]; e_rb = e_long[63:32];
-                if (e_u.setflags) e_cpsr_n[31:30] = {e_long[63], e_long == 64'd0};
+                a_long = mp2[63:0];
+                a_ra = a_long[31:0]; a_rb = a_long[63:32];
+                if (a_u.setflags) a_cpsr_n[31:30] = {a_long[63], a_long == 64'd0};
             end
             K_MULH: begin
-                e_long = mprod + {ec, ea};
-                e_ra = e_long[31:0]; e_rb = e_long[63:32];
-                if (e_u.setflags) e_cpsr_n[31:30] = {e_long[63], e_long == 64'd0};
+                a_long = mprod + {ec, ea};
+                a_ra = a_long[31:0]; a_rb = a_long[63:32];
+                if (a_u.setflags) a_cpsr_n[31:30] = {a_long[63], a_long == 64'd0};
             end
             K_LOAD, K_STORE: begin
-                e_rb = e_u.lsm ? e_base + e_u.lsm_wb : e_ea;
-                if (e_u.kind == K_LOAD && e_u.restore) e_cpsr_n = e_spsr_cur;   // LDM^ with PC
+                a_rb = a_u.lsm ? a_base + a_u.lsm_wb : a_ea;
+                if (a_u.kind == K_LOAD && a_u.restore) a_cpsr_n = a_spsr_cur;   // LDM^ with PC
             end
             K_BRANCH: begin
-                e_target = (e_u.ra_rd ? ea : 32'd0) + e_u.imm;
-                e_target = e_target & (cpsr[5] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
-                e_redirect = !e_dred;
-                e_ra = e_u.pc + (e_u.thumb ? 32'd2 : 32'd4) + {31'd0, e_u.thumb};
+                a_ra = a_u.pc + (a_u.thumb ? 32'd2 : 32'd4) + {31'd0, a_u.thumb};
+                if (a_u.ra_rd) begin                    // Thumb BL suffix: LR + offset
+                    a_mred = !a_dred;
+                    a_mtarget = (ea + a_u.imm) & 32'hFFFF_FFFE;
+                end else begin
+                    a_redirect = !a_dred;
+                    a_target = a_u.imm & (cpsr[5] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
+                end
             end
             K_BX: begin
-                e_redirect = 1'b1;
-                e_tthumb = eb[0];
-                e_target = eb & (eb[0] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
-                e_cpsr_n[5] = eb[0];
+                a_redirect = 1'b1;
+                a_tthumb = eb[0];
+                a_target = eb & (eb[0] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
+                a_cpsr_n[5] = eb[0];
             end
-            K_MRS: e_ra = e_u.psr_spsr ? e_spsr_cur : cpsr;
+            K_MRS: a_ra = a_u.psr_spsr ? a_spsr_cur : cpsr;
             K_MSR: begin
                 // fields: f 31:24, s 23:16, x 15:8, c 7:0; T is never written; in
                 // user mode only the flags are
-                if (e_u.psr_spsr) begin
-                    e_spsr_we = cpsr[4:0] != M_USR && cpsr[4:0] != M_SYS;
-                    e_spsr_n = (e_spsr_cur & ~msr_mask) | (msr_v & msr_mask);
+                if (a_u.psr_spsr) begin
+                    a_spsr_we = cpsr[4:0] != M_USR && cpsr[4:0] != M_SYS;
+                    a_spsr_n = (a_spsr_cur & ~msr_mask) | (msr_v & msr_mask);
                 end else begin
                     if (cpsr[4:0] == M_USR) msr_mask = msr_mask & 32'hFF00_0000;
                     msr_mask = msr_mask & ~32'h0000_0020;
-                    e_cpsr_n = (cpsr & ~msr_mask) | (msr_v & msr_mask);
+                    a_cpsr_n = (cpsr & ~msr_mask) | (msr_v & msr_mask);
                     if (msr_mask[7:0] != 8'd0) begin   // mode may have changed: refetch
-                        e_redirect = 1'b1;
-                        e_target = e_u.pc + (e_u.thumb ? 32'd2 : 32'd4);
+                        a_redirect = 1'b1;
+                        a_target = a_u.pc + (a_u.thumb ? 32'd2 : 32'd4);
                     end
                 end
             end
             K_EXC: begin
-                if (e_u.irq && cpsr[7]) begin           // masked since D: just refetch
-                    e_redirect = 1'b1;
-                    e_target = e_u.pc; e_tthumb = e_u.thumb;
-                    e_wa_en = 1'b0;
+                if (a_u.irq && cpsr[7]) begin           // masked since D2: just refetch
+                    a_redirect = 1'b1;
+                    a_target = a_u.pc; a_tthumb = a_u.thumb;
+                    a_wa_en = 1'b0;
                 end else begin
-                    e_spsr_we = 1'b1; e_spsr_mode = e_u.exc_mode; e_spsr_n = cpsr;
-                    e_cpsr_n = {cpsr[31:8], 1'b1, cpsr[6], 1'b0, e_u.exc_mode};
-                    e_redirect = 1'b1;
-                    e_target = {27'd0, e_u.exc_vec, 2'b00};
-                    e_tthumb = 1'b0;
-                    e_wa_en = 1'b1; e_wa = e_u.exc_lr_reg; e_ra = e_u.exc_lr;
+                    a_spsr_we = 1'b1; a_spsr_mode = a_u.exc_mode; a_spsr_n = cpsr;
+                    a_cpsr_n = {cpsr[31:8], 1'b1, cpsr[6], 1'b0, a_u.exc_mode};
+                    a_redirect = 1'b1;
+                    a_target = {27'd0, a_u.exc_vec, 2'b00};
+                    a_tthumb = 1'b0;
+                    a_wa_en = 1'b1; a_wa = a_u.exc_lr_reg; a_ra = a_u.exc_lr;
                 end
             end
             default: ;
         endcase
 
-        if (!e_pass) begin
-            e_cpsr_n = cpsr; e_redirect = 1'b0; e_spsr_we = 1'b0;
-            e_wa_en = 1'b0; e_wb_en = 1'b0; e_mem = 1'b0;
+        if (!a_pass) begin
+            a_cpsr_n = cpsr; a_redirect = 1'b0; a_mred = 1'b0; a_spsr_we = 1'b0;
+            a_wa_en = 1'b0; a_wb_en = 1'b0; a_mem = 1'b0;
         end
-        e_redirect = e_redirect && e_commit;
+        a_redirect = a_redirect && a_commit;
     end
 
-    assign e_adv    = e_valid && !m_hold && !e_busy && !e_ldwait;
-    assign e_commit = e_adv && !m_redirect;
+    // a load to PC in M redirects from W next cycle; nothing behind it commits
+    logic m_pcload;
+    assign m_pcload = m_valid && m_exec && m_u.kind == K_LOAD && m_u.wa_pc;
 
-    assign dc_req   = e_valid && e_mem && e_commit;
-    assign dc_we    = e_u.kind == K_STORE;
-    assign dc_addr  = e_addr;
-    assign dc_wdata = e_wdata;
-    assign dc_be    = e_be;
-    assign dc_size  = e_u.msize;
+    logic m_hold, m_dabt_take;
+    assign a_adv    = a_valid && !m_hold && !a_busy;
+    assign a_commit = a_adv && !kill_a && !m_pcload;
+    // free only while M moves too: a uop entering A may be told to find a
+    // load's value in W next cycle, so the load must get there
+    assign a_free   = !m_hold && (!a_valid || !a_busy);
+
+    // S's tags for next cycle.  Then A holds S's uop if A is free now, else
+    // its own; M holds A's unless M is held; W holds M's.  (A clears a
+    // destination that does not execute, but m_exec says so too; an
+    // exception, a redirect from M or W, or a data abort kills S, so the
+    // tags do not matter then.)
+    function automatic logic dst_a(input logic [4:0] r, input uop_t u);
+        return u.wa_en && !u.wa_pc && u.wa == r;
+    endfunction
+    function automatic logic dst_b(input logic [4:0] r, input uop_t u);
+        return u.wb_en && u.wb == r;
+    endfunction
+    function automatic tag_t s_tag_next(input logic [4:0] r);
+        tag_t t;
+        t.a_wa = a_free ? dst_a(r, s_u) : dst_a(r, a_u);
+        t.a_wb = a_free ? dst_b(r, s_u) : dst_b(r, a_u);
+        t.m_wa = m_hold ? dst_a(r, m_u) : dst_a(r, a_u);
+        t.m_wb = m_hold ? dst_b(r, m_u) : dst_b(r, a_u);
+        t.w_wa = dst_a(r, m_u);
+        t.w_wb = dst_b(r, m_u);
+        return t;
+    endfunction
+    tag_t d2_ta, d2_tb, d2_tc;
+    always_comb begin
+        d2_ta = sel_a_rd ? s_tag_next(ix_d) : s_tag_next(ix_n);
+        d2_tb = sel_b_31 ? s_tag_next(5'd31) : s_tag_next(ix_m);
+        case (sel_c)
+            SC_RD:   d2_tc = s_tag_next(ix_d);
+            SC_RM:   d2_tc = s_tag_next(ix_m);
+            SC_RN:   d2_tc = s_tag_next(ix_n);
+            SC_RL:   d2_tc = s_tag_next(ix_l);
+            default: d2_tc = s_tag_next(ix_s);
+        endcase
+    end
+
+`ifdef VERILATOR
+    // the tags are the compares they replace, wherever a use can see them:
+    // valid stages, and in M and W only uops that executed
+    function automatic tag_t tag_vis(input tag_t t);
+        tag_t v;
+        v.a_wa = t.a_wa && a_valid;            v.a_wb = t.a_wb && a_valid;
+        v.m_wa = t.m_wa && m_valid && m_exec;  v.m_wb = t.m_wb && m_valid && m_exec;
+        v.w_wa = t.w_wa && w_valid && w_exec;  v.w_wb = t.w_wb && w_valid && w_exec;
+        return v;
+    endfunction
+    function automatic tag_t tag_now(input logic [4:0] r);
+        tag_t t;
+        t.a_wa = dst_a(r, a_u); t.a_wb = dst_b(r, a_u);
+        t.m_wa = dst_a(r, m_u); t.m_wb = dst_b(r, m_u);
+        t.w_wa = dst_a(r, w_u); t.w_wb = dst_b(r, w_u);
+        return tag_vis(t);
+    endfunction
+    always_ff @(posedge clk)
+        if (!rst && s_valid) begin
+            if (s_u.ra_rd && tag_vis(s_ta) != tag_now(s_u.ra)) $error("arm_cpu: S tag a wrong at %08x", s_u.pc);
+            if (s_u.rb_rd && tag_vis(s_tb) != tag_now(s_u.rb)) $error("arm_cpu: S tag b wrong at %08x", s_u.pc);
+            if (s_u.rc_rd && tag_vis(s_tc) != tag_now(s_u.rc)) $error("arm_cpu: S tag c wrong at %08x", s_u.pc);
+        end
+`endif
+
+    assign dc_req   = a_valid && a_mem && a_commit;
+    assign dc_we    = a_u.kind == K_STORE;
+    assign dc_addr  = a_addr;
+    assign dc_wdata = a_wdata;
+    assign dc_be    = a_be;
+    assign dc_size  = a_u.msize;
 
     always_ff @(posedge clk) begin
         if (rst) begin
             cpsr <= 32'h0000_00D3;
             spsr_fiq <= 32'd0; spsr_svc <= 32'd0; spsr_abt <= 32'd0; spsr_irq <= 32'd0; spsr_und <= 32'd0;
-            e_valid <= 1'b0; e_dred <= 1'b0; e_u <= '0;
+            s_valid <= 1'b0; s_dred <= 1'b0; s_amt_ok <= 1'b0; s_u <= '0;
+            s_ta <= '0; s_tb <= '0; s_tc <= '0;
+            a_valid <= 1'b0; a_dred <= 1'b0; a_u <= '0;
+            a_op2 <= 32'd0; a_op2_c <= 1'b0; a_cpass <= 1'b0; a_blate <= 1'b0;
+            a_la <= L_NONE; a_lb <= L_NONE; a_lc <= L_NONE;
+            a_wa_fb <= 1'b0; a_wb_fb <= 1'b0; a_wc_fb <= 1'b0;
             lsm_base <= 32'd0; mprod <= 64'd0;
         end else begin
-            // ---- E commits: CPSR, SPSR, the product and base registers
-            if (e_commit) begin
-                cpsr <= e_cpsr_n;
-                if (e_spsr_we)
-                    case (e_spsr_mode)
-                        M_FIQ: spsr_fiq <= e_spsr_n;
-                        M_SVC: spsr_svc <= e_spsr_n;
-                        M_ABT: spsr_abt <= e_spsr_n;
-                        M_IRQ: spsr_irq <= e_spsr_n;
-                        M_UND: spsr_und <= e_spsr_n;
+            // ---- A commits: CPSR, SPSR, the product and base registers
+            if (a_commit) begin
+                cpsr <= a_cpsr_n;
+                if (a_spsr_we)
+                    case (a_spsr_mode)
+                        M_FIQ: spsr_fiq <= a_spsr_n;
+                        M_SVC: spsr_svc <= a_spsr_n;
+                        M_ABT: spsr_abt <= a_spsr_n;
+                        M_IRQ: spsr_irq <= a_spsr_n;
+                        M_UND: spsr_und <= a_spsr_n;
                         default: ;
                     endcase
-                if (e_u.kind == K_MULL) mprod <= mp2[63:0];
-                if (e_u.lsm && e_u.lsm_latch) lsm_base <= ea;
+                if (a_u.kind == K_MULL) mprod <= mp2[63:0];
+                if (a_u.lsm && a_u.lsm_latch) lsm_base <= ea;
             end
             if (m_dabt_take) begin                      // a data abort, from M
                 cpsr <= {cpsr[31:8], 1'b1, cpsr[6], 1'b0, M_ABT};
                 spsr_abt <= cpsr;
             end
 
-            // ---- D -> E
-            if (e_redirect || m_redirect || m_dabt_take) begin
-                e_valid <= 1'b0;
-            end else if (e_free) begin
-                e_valid <= d_issue;
-                e_u <= d_u;
-                e_dred <= d_redirect;
+            // ---- S -> A; behind a load to PC that W is about to follow,
+            // nothing stays in A
+            if (kill_s || m_pcload) a_valid <= 1'b0;
+            else if (a_free)        a_valid <= s_adv;
+            if (a_free) begin
+                a_u <= s_u;
+                a_u.a <= sa; a_u.b <= sb; a_u.c <= sc;
+                a_dred <= s_dred;
+                a_op2 <= s_op2; a_op2_c <= s_op2_c; a_cpass <= s_cpass; a_blate <= s_blate;
+                a_la <= late_of(s_ta, s_u.ra_rd);
+                a_lb <= late_of(s_tb, s_u.rb_rd);
+                a_lc <= late_of(s_tc, s_u.rc_rd);
+                a_wa_fb <= s_u.ra_rd && load_in_m(s_ta);
+                a_wb_fb <= s_u.rb_rd && load_in_m(s_tb);
+                a_wc_fb <= s_u.rc_rd && load_in_m(s_tc);
             end else begin
-                // held: keep the operands current as older results retire
-                e_u.a <= ea; e_u.b <= eb; e_u.c <= ec;
+                // held: settle the late operands while their producers are in view
+                a_u.a <= ea; a_u.b <= eb; a_u.c <= ec;
+                a_la <= L_NONE; a_lb <= L_NONE; a_lc <= L_NONE;
+            end
+
+            // ---- D2 -> S
+            if (kill_s)        s_valid <= 1'b0;
+            else if (s_free)   s_valid <= d2_issue;
+            if (s_free_nk) begin
+                s_u <= d2_u;
+                s_dred <= !d2_inject && (d2_ub || d2_bls);
+                s_amt_ok <= 1'b0;
+                s_ta <= d2_ta; s_tb <= d2_tb; s_tc <= d2_tc;
+            end else begin
+                // held: keep the operands current as older results retire.
+                // A shift by a register takes this extra cycle so that the
+                // shifter's amount comes from s_u.c, not the forwarding mux
+                s_u.a <= sa; s_u.b <= sb; s_u.c <= sc;
+                s_amt_ok <= !(s_u.rc_rd && (in_a(s_tc) || load_in_m(s_tc)));
+                s_ta <= s_tag_next(s_u.ra); s_tb <= s_tag_next(s_u.rb); s_tc <= s_tag_next(s_u.rc);
             end
         end
     end
 
     // ============================================================ M
-    logic [31:0] m_addr, m_cpsr, m_ld;
+    logic [31:0] m_addr, m_cpsr, m_ld, m_tgt;
+    logic        m_red, m_tth;
     always_comb begin
         m_hold = m_valid && m_mem && !dc_ok;
         // load alignment
@@ -503,25 +850,30 @@ module arm_cpu
             default: m_ld = (dc_rdata >> {m_addr[1:0], 3'b000}) | (dc_rdata << (6'd32 - {1'b0, m_addr[1:0], 3'b000}));
         endcase
         if (m_addr[1:0] == 2'd0 && m_u.msize == 2'd2) m_ld = dc_rdata;
-        m_dabt_take = m_valid && m_mem && dc_ok && dc_abort;
-        m_redirect = (m_valid && m_mem && dc_ok && m_exec && m_u.kind == K_LOAD && m_u.wa_pc) || m_dabt_take;
-        m_tthumb = m_dabt_take ? 1'b0 : cpsr[5];
-        m_target = m_dabt_take ? 32'h0000_0010 : (m_ld & (cpsr[5] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC));
+        m_dabt_take = m_valid && m_mem && dc_ok && dc_abort && !w_redirect;
+        m_redirect  = !w_redirect && ((m_valid && m_red) || m_dabt_take);
+        m_tthumb    = m_dabt_take ? 1'b0 : m_tth;
+        m_target    = m_dabt_take ? 32'h0000_0010 : m_tgt;
     end
 
     always_ff @(posedge clk) begin
         if (rst) begin
             m_valid <= 1'b0; m_exec <= 1'b0; m_mem <= 1'b0; m_u <= '0;
             m_ra <= 32'd0; m_rb <= 32'd0; m_addr <= 32'd0; m_cpsr <= 32'd0;
+            m_red <= 1'b0; m_tgt <= 32'd0; m_tth <= 1'b0;
+        end else if (w_redirect) begin
+            m_valid <= 1'b0; m_red <= 1'b0;
         end else if (!m_hold) begin
-            m_valid <= e_commit;
-            m_u <= e_u;
-            m_u.wa_en <= e_wa_en; m_u.wa <= e_wa; m_u.wb_en <= e_wb_en;
-            m_exec <= e_pass;
-            m_mem <= e_mem;
-            m_ra <= e_ra; m_rb <= e_rb;
-            m_addr <= e_addr;
-            m_cpsr <= e_cpsr_n;
+            m_valid <= a_commit;
+            m_u <= a_u;
+            m_u.wa_en <= a_wa_en; m_u.wa <= a_wa; m_u.wb_en <= a_wb_en;
+            m_exec <= a_pass;
+            m_mem <= a_mem;
+            m_ra <= a_ra; m_rb <= a_rb;
+            m_addr <= a_addr;
+            m_cpsr <= a_cpsr_n;
+            m_red <= a_commit && a_mred;
+            m_tgt <= a_mtarget; m_tth <= a_mthumb;
         end
     end
 
@@ -531,7 +883,7 @@ module arm_cpu
         if (rst) begin
             w_valid <= 1'b0; w_exec <= 1'b0; w_u <= '0; w_ra <= 32'd0; w_rb <= 32'd0; w_cpsr <= 32'd0;
         end else begin
-            w_valid <= m_valid && !m_hold;
+            w_valid <= m_valid && !m_hold && !w_redirect;
             w_u <= m_u;
             w_exec <= m_exec;
             w_ra <= (m_u.kind == K_LOAD) ? m_ld : m_ra;
@@ -544,6 +896,11 @@ module arm_cpu
             end
         end
     end
+
+    // loads to PC: ARMv4T does not interwork on a load, so T stays as it is
+    assign w_redirect = w_valid && w_exec && w_u.kind == K_LOAD && w_u.wa_pc;
+    assign w_tthumb   = cpsr[5];
+    assign w_target   = w_ra & (cpsr[5] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
 
     assign rf_wa_en = w_valid && w_exec && w_u.wa_en && !w_u.wa_pc;
     assign rf_wa    = w_u.wa;
