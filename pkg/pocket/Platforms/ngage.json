@@ -1,8 +1,8 @@
 {
     "platform": {
-        "category": "Arcade",
+        "category": "Handheld",
         "name": "N-Gage",
-        "year": 1980,
-        "manufacturer": "MANUFACTURER"
+        "year": 2003,
+        "manufacturer": "Nokia"
     }
 }

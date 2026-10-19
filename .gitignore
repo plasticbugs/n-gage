@@ -5,6 +5,7 @@
 /ngage/
 *.zip
 *.rom
+*.img
 *.bin
 !pkg/**/*.bin
 # Build products

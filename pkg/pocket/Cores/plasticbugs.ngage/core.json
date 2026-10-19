@@ -6,7 +6,7 @@
         "ngage"
       ],
       "shortname": "ngage",
-      "description": "N-Gage (MANUFACTURER, YEAR) arcade core",
+      "description": "Nokia N-Gage (2003): an ARMv4T running the phone firmware above a small kernel",
       "author": "plasticbugs",
       "url": "https://github.com/plasticbugs/analogue-pocket-ngage",
       "version": "0.0.1",

@@ -20,7 +20,7 @@
         "defaultval": 0,
         "mask": "0xFFFFFFF9",
         "options": [
-          {"name": "Arcade 4:3", "value": "0x00000000"},
+          {"name": "Square pixels", "value": "0x00000000"},
           {"name": "Fill screen", "value": "0x00000002"}
         ]
       },
@@ -57,17 +57,6 @@
         ]
       },
       {
-        "name": "Service Switch",
-        "id": 40,
-        "type": "check",
-        "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "mask": "0xFFFFFEFF",
-        "value": "0x00000100"
-      },
-      {
         "name": "Bring-up: panel",
         "id": 90,
         "type": "check",
@@ -99,28 +88,6 @@
         "defaultval": 0,
         "value": "0x00000020",
         "mask": "0xFFFFFFDF"
-      },
-      {
-        "name": "SRAM read late",
-        "id": 93,
-        "type": "check",
-        "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "value": "0x00000080",
-        "mask": "0xFFFFFF7F"
-      },
-      {
-        "name": "SRAM long writes",
-        "id": 94,
-        "type": "check",
-        "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "value": "0x00008000",
-        "mask": "0xFFFF7FFF"
       },
       {
         "name": "Analogizer",

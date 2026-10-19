@@ -5,43 +5,86 @@ someone decodes squares off a screen.
 
 ## Before flashing
 
-- `sim/lint.sh` clean; `sim/run_mem.sh` passes at `-gap 8 -hold 4`.
-- The whole-machine bench on the real memory glue boots.
+- `sim/lint.sh` clean, and the same in CI's `verilator/verilator:v5.020`.
+- `sim/run_mem.sh`: every byte the loader sends reads back through the bus,
+  with the LCD fetching alongside, and masked line writes land in both
+  memories.
+- `sim/run_sys.sh` (the CPU side against Unicorn) agrees for the games' first
+  seconds.
+- `sim/run_system.sh` (the whole machine on the real memory glue) loads
+  every byte in place and boots to the phone's start-up screens with no
+  memory protocol error.
 - **`tools/check_frames.py` passes on three CONSECUTIVE frames of a STILL
-  picture** — snapshot the boot screen at, say, 2500, 2520 and 2540 ms and run
-  it on the three. If neighbours differ while frames two apart are identical,
-  the core is emitting alternating fields. The Pocket's panel is OLED and
-  holds the difference between the two images — as retention that fades, and
-  with enough hours as wear that does not. A core shipped this way and left a
-  ghost on a user's screen; nothing else on this list touches their hardware.
-  Do not flash until it passes (METHODOLOGY 5.23).
-- `tools/check_json.py pkg/pocket --active <W>x<H>` clean — the firmware
-  refuses a bad `interact.json` with nothing but "General Error", and a
-  `video.json` that disagrees with the core comes out as three separate-looking
-  picture faults.
+  picture** from `sim/run_system.sh` (`--snap N,N+1,N+2` on the Nokia logo).
+  If neighbours differ while frames two apart are identical, the core is
+  emitting alternating fields. The Pocket's panel is OLED and holds the
+  difference between the two images — as retention that fades, and with
+  enough hours as wear that does not. Do not flash until it passes
+  (METHODOLOGY 5.23).
+- `tools/check_json.py pkg/pocket --active 176x208` clean.
 - `./build-local.sh compile`: no negative slack in any corner
   (`projects/output_files/*.sta.summary`), no ignored constraints.
-- The ROM image's md5 matches the MRA's.
+
+The first flash's build passed all of these at 64 MHz, the bitstream's md5
+`346512887beedbb39c6aa82c3d304ba3`.
+
+**One exception: the ignored constraints.** Two of the template's
+multicycles matched nothing. With one random-access client, the pointer
+they relax is optimised away, so the paths were timed in one cycle and met.
+The next build takes the two lines out.
 
 ## On the card
 
-`release/pocket/` onto the card root, with `cp -X` from macOS. The ROM image
-goes in `Assets/ngage/common/ngage.rom`. Verify the bitstream's md5 on the
-card.
+`python3 package-pocket.py`, then `Cores/`, `Platforms/` and `Assets/` from
+`release/pocket/` onto the card root with `cp -X` from macOS (not the
+package's own `README.md`, which would replace the card's), and remove the
+`._*` files it leaves. Then, from the
+user's own files, into `Assets/ngage/common/`:
 
-## The skeleton, before there is a game
+| file | what |
+|---|---|
+| `ngvm.bin` | the core's kernel — already there from the package |
+| `sym.rom` | the phone's firmware dump, 18,612,224 bytes for the one this was built on |
+| `vcop.img`, ... | each game's card, `python3 mkdrive.py --from <game.zip> --out <name>.img` |
 
-A white crosshatch every 16 pixels with red, green and blue bars across the
-middle, dark above bright. A cyan square moves with the d-pad, turns yellow on
-button 1 (A or Y) and magenta on button 2 (B or X); button 1 also beeps. Every
-grid cell the same size and every line unbroken means the raster, the video
-hand-over, the scaler settings, the controls and the audio path all work.
+The game list (`Assets/ngage/plasticbugs.ngage/*.json`) names the `.img`
+files. Verify the bitstream's md5 on the card.
+
+## What should happen
+
+Loading takes a while: about 35 MB go through the loader (the firmware and
+a 16–18 MB card), and the screen stays black until the last byte is in.
+Then, as `sim/run_system.sh` ran Virtua Cop with the CPU at 64 MHz, as
+the first flash has it (machine time from the end of the load; the frames
+are in `artifacts/system/vcop64/`, and every one from 10 to 25 s is
+pixel-identical to the reference emulator's):
+
+| time | screen | sound |
+|---|---|---|
+| 0–5 s | black: the LCD is still off | none |
+| 10 s | the Nokia logo, on white (still there at 15 s) | none |
+| 20 s | the N-Gage logo, on black | none |
+| 25 s | the same, with Nokia's copyright under it | none |
+| 30 s | SEGA | none |
+| 35 s | X-Forge | the music starts at 35.9 s |
+| 40 s | Virtua Cop's title, "press any key" | music |
+
+The music the bench recorded is sample-for-sample the reference's
+(`artifacts/system/vcop64/music_from_35.9s_16k.wav`). The bench stops at the
+FIFO's output, though: the hand-over to the Pocket's audio clock is not in
+it.
+
+The reference emulator reaches the title at 30 s at 100 MIPS. On the
+Pocket's memories the RTL delivers about 17–21 MIPS while the firmware
+boots, most of it waiting on first-time cache misses. A stopwatch reading
+of when the title appears on hardware is worth writing down. If it is far
+from 40 s, the memories are slower or faster than the bench's models.
 
 ## The panel
 
-Menu → **Bring-up: panel**. Four rows of 32 squares along the bottom edge of
-the picture (the *right* edge if the picture is rotated 270, read bottom to
-top). Green is 1. Read each row from the end where row 0 shows `1010 1010`.
+Menu → **Bring-up: panel**. Four rows of 32 squares along the bottom of
+the picture. Green is 1. Read each row from the end where row 0 shows
+`1010 1010`. The squares are 5 pixels wide (the picture is 176).
 
 | row | squares | meaning | healthy |
 |---|---|---|---|
@@ -53,52 +96,62 @@ top). Green is 1. Read each row from the end where row 0 shows `1010 1010`.
 | 0 | 20 | all slots complete | 1 |
 | 0 | 21 | loaded | 1 |
 | 0 | 22 | core in reset | 0 |
-| 0 | 23 | CPU halted | 0 |
-| 0 | 24 | watchdog has fired | 0 (expected 1 after the menu has been open a while) |
-| 0 | 25–32 | system inputs, active low | `1111 1111` with nothing pressed |
-| 1 | 1–8, 9–32 | first fault: vector, then the code address before it | all 0 |
-| 2 | 1–16, 17–24, 25–32 | first program ROM word, first sound ROM byte, first graphics byte | *fill in from the image* |
-| 3 | 1–16, 17–32 | SRAM self-test | `1010 0101 0101 1010`, `0101 1010 1010 0101` |
+| 0 | 23 | the kernel panicked (`IO_DBG_EXIT`) | 0 |
+| 0 | 24 | the LCD is on (`IO_LCD_CTRL`) | 1 once the firmware draws |
+| 0 | 25–32 | keys: Y X B A right left down up | 1 while held |
+| 1 | 1–32 | an address the CPU executed lately (it changes about 15 times a second) | changing; see below |
+| 2 | 1–32 | the last four characters the kernel printed, ASCII, oldest first | changing during boot |
+| 3 | 1–16 | KB loaded at the firmware's address | `0100 0111 0000 0000` (18,176 KB) for an 18,612,224-byte `sym.rom` |
+| 3 | 17–32 | KB loaded at the card's address | `0100 0000 0000 0000` (16,384) for a 16 MB card; Bomberman's is `0100 0100 0000 0000` |
 
-Row 2 proves the path, not the image; `sim/run_mem.sh` proves the image.
+Row 1:
+
+- **Below `0x0010_0000`.** The kernel.
+- **`0x5xxx_xxxx`.** The firmware, running from ROM.
+- **`0x4xxx_xxxx` or `0x004x_xxxx`.** User code in RAM.
+- **One value that never changes.** The CPU is stuck there; write it down.
 
 ## If it is wrong
 
 | symptom | look at |
 |---|---|
-| black, counter running, row 2 right, watchdog 1 | the image in SDRAM — rerun `sim/run_mem.sh`; section 5.16 |
-| row 3 not the pattern | **Bring-up: SRAM** switches; then the SRAM port |
-| row 2 wrong | **Bring-up: SDRAM** switches; then the PLL phase (SDC, section 5.20) |
-| garbled picture | ask for the service-mode test pattern first; section 5.18 |
-| glitches only while playing, gone in the menu | something the CPU shares with the video; section 5.17 |
-| menu restarts the game | `pause` has reached a reset; section 5.5 |
+| row 0 square 21 stays 0 | the loader never finished: are all three files where the list says? |
+| row 3 not the file sizes | the download path; `sim/run_system.sh --full` sends every byte the loader's way |
+| black, rows 1 and 2 changing, square 24 0 | the firmware has not turned the LCD on yet: wait, then report row 2 |
+| black, square 24 1 | the LCD's fetch: `IO_LCD_BASE` and the burst port (`rtl/ngvm_lcd.sv`) |
+| row 1 frozen | the CPU stopped: report the address; then the clock crossing (`rtl/ngvm_xbus.sv`) |
+| row 0 square 23 is 1 | the kernel panicked: row 2 holds the end of its message |
+| picture wrong in a pattern | the SDRAM switches below, then the PLL phase (SDC, METHODOLOGY 5.20) |
+| menu restarts the game | `pause` has reached a reset; METHODOLOGY 5.5 |
+
+**Bring-up: SDRAM read late** and **SDRAM slow bursts** change how the SDRAM
+is read. Try each alone if the picture or the boot looks corrupt, and report
+which changed anything.
+
+The game runs on while the menu is open: that is expected (NGVM does not
+pause yet).
 
 ## With an Analogizer
 
 Only once the core itself is healthy on the Pocket's screen, and in this
-order -- each step's reading tells the next where to look
+order — each step's reading tells the next where to look
 (docs/analogizer.md):
 
-1. **Menu "Analogizer: Off"** (the default).  The core must play exactly as
-   without the adapter.  If it does not, the cart port is not idle: stop.
+1. **Menu "Analogizer: Off"** (the default). The core must play exactly as
+   without the adapter. If it does not, the cart port is not idle: stop.
 2. **Menu: Analogizer On, Video RGBS, SNAC Adapter None.**
-   The same picture on the Pocket and the CRT, at the board's line and frame
-   rate (a PVM's info screen shows them).  The bring-up panel shows on the
-   CRT too.  No picture: say whether the CRT reports a signal (sync but no
-   colour points at the DAC clock; nothing at all points at sync).
+   The same picture on the Pocket and the CRT, at 15.17 kHz and 59.96 Hz.
+   The picture is 176 dots of a 452-dot line, so it is narrow on a CRT.
+   The bring-up panel shows on the CRT too. No picture: say whether the CRT
+   reports a signal (sync but no colour points at the DAC clock; nothing at
+   all points at sync).
 3. **Each other video mode in turn** (RGsB and YPbPr need the SOG switch on).
-4. **SNAC**: one pad, assignment "SNAC P1 -> P1"; the Pocket's own
-   controls are then player 2.
+4. **SNAC**: one pad, assignment "SNAC P1 -> P1".
 5. **The menu's memory**: change Video, quit the core and load it again.
-   The setting, and Analogizer On, should still be there.  Then change one
-   entry and check the others did not move (the bench's read-back check,
-   on the real firmware).
+   The setting, and Analogizer On, should still be there.
 6. **Position**: "Analogizer V Position" + should move the picture down
    by that many lines, + on "H Position" to the right, and both should be
-   kept across a reload.  The slider showing a value other than the one
-   set means the firmware is not reading 0xF7000004/8 back as written.  A
-   picture that rolls or tears at either end of a slider means the range
-   is too wide for that set (say which end, and which mode).
+   kept across a reload.
 
 ## Log
 

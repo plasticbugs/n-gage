@@ -26,25 +26,30 @@ reversed_rbf = bytes(REV[b] for b in open(RBF, "rb").read())
 if os.path.exists(OUT):
     shutil.rmtree(OUT)
 # ROMs may sit in pkg/pocket/Assets locally (gitignored); never package them.
-shutil.copytree(PKG, OUT, ignore=shutil.ignore_patterns('.DS_Store', '*.rom', '*.zip'))
+shutil.copytree(PKG, OUT, ignore=shutil.ignore_patterns('.DS_Store', '*.rom', '*.zip', '*.img'))
 
 core_dir = os.path.join(OUT, "Cores", CORE_ID)
 with open(os.path.join(core_dir, "bitstream.rbf_r"), "wb") as f:
     f.write(reversed_rbf)
 
-# Ship the ROM recipe and its builder alongside the core, so a downloaded
-# release contains everything needed to produce ngage.rom.
-for extra in ("ngage.mra", "README.md", os.path.join("tools", "mra_build.py")):
+# The kernel is the core's own software and ships in its slot's folder;
+# the drive builder ships beside the core, so a downloaded release has
+# everything but the user's firmware and games.
+KERNEL = os.path.join(ROOT, "build", "kernel", "kernel.bin")
+if not os.path.exists(KERNEL):
+    sys.exit(f"missing {KERNEL} - run make -C sw/kernel first")
+shutil.copy(KERNEL, os.path.join(OUT, "Assets", "ngage", "common", "ngvm.bin"))
+for extra in ("README.md", os.path.join("tools", "mkdrive.py")):
     src = os.path.join(ROOT, extra)
     if os.path.exists(src):
         shutil.copy(src, os.path.join(OUT, os.path.basename(extra)))
 
 # Backstop: a gitignored test ROM in the package tree must never reach a release.
 strays = [os.path.join(dp, f) for dp, _, fs in os.walk(OUT) for f in fs
-          if f.lower().endswith(('.rom', '.zip'))]
+          if f.lower().endswith(('.rom', '.zip', '.img'))]
 if strays:
     sys.exit("refusing to package, ROM files present:\n  " + "\n  ".join(strays))
 
 print(f"packaged -> {OUT}")
 print("copy Cores/, Platforms/ and Assets/ from that folder onto the SD card root")
-print("build the ROM with:  python3 mra_build.py ngage.mra ngage.zip")
+print("then add sym.rom and the games' .img files: Assets/ngage/common/README.txt")

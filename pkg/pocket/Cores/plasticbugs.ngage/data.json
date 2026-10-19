@@ -3,15 +3,45 @@
         "magic": "APF_VER_1",
         "data_slots": [
             {
-                "name": "ROM Set",
+                "name": "Game",
                 "id": 0,
                 "required": true,
-                "parameters": "0x8",
-                "filename": "ngage.rom",
+                "parameters": "0x113",
+                "extensions": [
+                    "json"
+                ]
+            },
+            {
+                "name": "NGVM kernel",
+                "id": 1,
+                "required": true,
+                "parameters": "0x108",
+                "filename": "ngvm.bin",
+                "extensions": [
+                    "bin"
+                ],
+                "address": "0x00000000"
+            },
+            {
+                "name": "Phone firmware",
+                "id": 2,
+                "required": true,
+                "parameters": "0x108",
+                "filename": "sym.rom",
                 "extensions": [
                     "rom"
                 ],
-                "address": "0x00000000"
+                "address": "0x02000000"
+            },
+            {
+                "name": "Game drive",
+                "id": 3,
+                "required": true,
+                "parameters": "0x108",
+                "extensions": [
+                    "img"
+                ],
+                "address": "0x04000000"
             }
         ]
     }

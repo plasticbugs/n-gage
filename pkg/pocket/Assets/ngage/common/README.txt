@@ -1,14 +1,13 @@
-Put ngage.rom here.
+Put three things here; none of them comes with the core.
 
-Build it from your own MAME `ngage` romset with the builder in the release
-zip, which needs nothing but Python 3:
+  ngvm.bin   the core's kernel.  It is in the release zip: copy it here.
+  sym.rom    your N-Gage's own firmware, dumped from your phone (about
+             18 MB).  The core runs it; it is not included and cannot be.
+  <game>.img a game's memory card, one file per game, built from the
+             game's files with the builder in the release zip:
 
-    python3 mra_build.py ngage.mra ngage.zip
+                 python3 mkdrive.py --from vcop.zip --out vcop.img
 
-It reads the zip (or a directory of loose files) directly, checks every ROM's
-CRC32, and verifies the finished image against a known md5, so
-a wrong or damaged romset is reported rather than quietly built into
-something that half works.
-
-Already using pupdate or the standard `mra` tool? Point it at ngage.mra;
-it is an ordinary MRA file.
+             It needs nothing but Python 3.  The names the game list
+             expects are in Assets/ngage/plasticbugs.ngage/*.json; add a
+             JSON there, naming its .img, for any other game.

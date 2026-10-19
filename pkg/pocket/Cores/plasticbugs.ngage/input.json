@@ -7,32 +7,42 @@
                 "mappings": [
                     {
                         "id": 100,
-                        "name": "Button 2",
-                        "key": "pad_btn_b"
-                    },
-                    {
-                        "id": 101,
-                        "name": "Button 1",
+                        "name": "Game key 5",
                         "key": "pad_btn_a"
                     },
                     {
+                        "id": 101,
+                        "name": "Game key 7",
+                        "key": "pad_btn_b"
+                    },
+                    {
                         "id": 102,
-                        "name": "Button 2 (alt)",
+                        "name": "OK",
                         "key": "pad_btn_x"
                     },
                     {
                         "id": 103,
-                        "name": "Button 1 (alt)",
+                        "name": "Key 9",
                         "key": "pad_btn_y"
                     },
                     {
                         "id": 104,
-                        "name": "Coin",
-                        "key": "pad_btn_select"
+                        "name": "Left soft key",
+                        "key": "pad_trig_l"
                     },
                     {
                         "id": 105,
-                        "name": "Start",
+                        "name": "Right soft key",
+                        "key": "pad_trig_r"
+                    },
+                    {
+                        "id": 106,
+                        "name": "#",
+                        "key": "pad_btn_select"
+                    },
+                    {
+                        "id": 107,
+                        "name": "OK",
                         "key": "pad_btn_start"
                     }
                 ]

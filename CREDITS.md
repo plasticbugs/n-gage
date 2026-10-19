@@ -60,6 +60,18 @@ readers he credits to **@MikeSimonson**, the **MiST** project, **@RandyS**,
 **jotego**, **Scott Larson** (the PS/2 receiver) and **@tomasz**. Name him in
 the core's README when it ships with the adapter enabled.
 
+## This core
+
+- **[Unicorn Engine](https://www.unicorn-engine.org/)** (Nguyen Anh Quynh,
+  Dang Hoang Vu and contributors; GPL-2.0), and **[QEMU](https://www.qemu.org/)**
+  beneath it. Unicorn runs the reference machine, `tools/ngvm/ngvm.py`, and
+  every lockstep bench links it to check the CPU instruction by instruction.
+  It is a tool here, not part of the gateware or the package.
+- **Symbian OS and the N-Gage firmware** are Nokia's and Symbian's. The core
+  runs the owner's own copy and contains none of it; `sw/kernel` is written
+  from the public SDKs' interfaces and from watching the firmware run
+  (`docs/eka1_exec.md`).
+
 ## When you add to this
 
 Vendored CPU and sound cores (`modules/`) are recorded in `modules/VENDOR.md`

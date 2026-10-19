@@ -1,19 +1,18 @@
-N-Gage
-MANUFACTURER, YEAR
+Nokia N-Gage
 
-One paragraph on what the game is and
-what is in the gateware. Plain
-characters only, 32 lines at most,
-* for bullets.
+The phone's own firmware (Symbian OS 6.1)
+runs on a soft ARMv4T in the FPGA, above
+a small kernel in place of the phone's,
+with the game's memory card as drive E:.
 
-ROMs are not included. Build the image
-from your own MAME ngage romset with
-mra_build.py and ngage.mra, and copy
-it to Assets/ngage/common/ngage.rom
+Needs your own firmware dump and game
+cards: see Assets/ngage/common/README.txt
 
-* A / Y  button 1
-* B / X  button 2
-* Select coin, Start start
+* d-pad    the phone's arrows
+* A / B    game keys 5 / 7
+* X        OK, Y key 9
+* L / R    the soft keys
+* Select   #, Start OK
 
 Analogizer: CRT video and SNAC pads,
 set in this core's menu (Analogizer:
