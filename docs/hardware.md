@@ -73,7 +73,7 @@ Reaching the kernel:
 | `0x20000000` | 32 MB | all of RAM, flat, for the kernel's own use | kernel |
 | `0x40000000` | 256 MB of addresses | chunk space: every heap, stack, DLL data and loaded image, paged in 16 KB pages | user, through the table |
 | `0x50000000` | ≤ 20 MB | `SYM.ROM`, as linked; read-only | everyone |
-| `0x60000000` | ≤ 24 MB | the game's drive image (FAT16, section 7) | kernel (the drive LDD) |
+| `0x60000000` | ≤ 32 MB | the game's drive image (FAT16, section 7) | kernel (the drive LDD) |
 | `0x80000000` | 4 MB | fixed processes' static data (EFile `0x80100000`, EwSrv `0x80200000`) | user |
 | `0xF0000000` | 4 KB | devices | kernel |
 

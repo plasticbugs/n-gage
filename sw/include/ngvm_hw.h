@@ -24,7 +24,7 @@
 #define NGVM_ROM_BASE     0x50000000u   /* SYM.ROM, read-only, as linked        */
 #define NGVM_ROM_MAX      0x01400000u   /* 20 MB                                */
 #define NGVM_DRIVE_BASE   0x60000000u   /* the game's drive image (see below)   */
-#define NGVM_DRIVE_MAX    0x01800000u   /* 24 MB                                */
+#define NGVM_DRIVE_MAX    0x02000000u   /* 32 MB: all of the Pocket's CRAM      */
 #define NGVM_IO_BASE      0xF0000000u
 
 /* Chunk space: where every heap, stack and loaded image lives.  Paged in

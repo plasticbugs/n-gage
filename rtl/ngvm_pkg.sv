@@ -12,7 +12,7 @@
 //   0x0000000  RAM, 32 MB                     SDRAM
 //   0x2000000  ROM (SYM.ROM), up to 20 MB     SDRAM
 //   0x3400000  KSEC, 4 MB                     SDRAM
-//   0x4000000  the drive image, up to 24 MB   CRAM
+//   0x4000000  the drive image, up to 32 MB   CRAM
 // The loader writes the Pocket's data slots to the same addresses.
 //------------------------------------------------------------------------------
 `default_nettype none
@@ -26,7 +26,7 @@ typedef enum logic [3:0] {
     RG_PHYS,            // 0x20000000, 32 MB: all of RAM, flat, uncached
     RG_CHUNK,           // 0x40000000, 256 MB: paged, cached
     RG_ROM,             // 0x50000000, 20 MB: read-only, cached
-    RG_DRIVE,           // 0x60000000, 24 MB: CRAM, uncached
+    RG_DRIVE,           // 0x60000000, 32 MB: CRAM, uncached
     RG_KSEC,            // 0x80000000, 4 MB: flat, cached
     RG_IO               // 0xF0000000, 4 KB: the devices
 } region_t;
@@ -37,7 +37,7 @@ function automatic region_t region_of(input logic [31:0] va);
     if (va[31:25] == 7'h10)                     return RG_PHYS;
     if (va[31:28] == 4'h4)                      return RG_CHUNK;
     if (va[31:28] == 4'h5 && va[27:20] < 8'h14) return RG_ROM;
-    if (va[31:28] == 4'h6 && va[27:20] < 8'h18) return RG_DRIVE;
+    if (va[31:28] == 4'h6 && va[27:25] == 3'd0) return RG_DRIVE;
     if (va[31:22] == 10'h200)                   return RG_KSEC;
     if (va[31:12] == 20'hF0000)                 return RG_IO;
     return RG_NONE;

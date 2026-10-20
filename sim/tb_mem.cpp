@@ -196,6 +196,7 @@ int main(int argc, char **argv)
         {BUS_DRIVE + 0x07FF000, 0x2000, "drive, across CRAM0's halves"},
         {BUS_DRIVE + 0x0FFF000, 0x2000, "drive, across the chips"},
         {BUS_DRIVE + 0x17FF000, 0x1801, "drive, across CRAM1's halves, odd length"},
+        {BUS_DRIVE + 0x1FFE000, 0x1FFF, "drive, CRAM1's last 8 KB, odd length"},
     };
     uint32_t want_rom = 0, want_drive = 0;
     for (const Piece &p : pieces) {

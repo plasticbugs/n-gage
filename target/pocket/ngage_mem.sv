@@ -4,7 +4,7 @@
 //   bus 0x0000000  RAM, 32 MB           SDRAM  word 0x0000000
 //       0x2000000  ROM, up to 20 MB     SDRAM  word 0x1000000
 //       0x3400000  KSEC, 4 MB           SDRAM  word 0x1A00000
-//       0x4000000  the drive, 24 MB     CRAM0 then CRAM1, 16 bits a halfword
+//       0x4000000  the drive, 32 MB     CRAM0 then CRAM1, 16 bits a halfword
 //
 // SDRAM word addresses are bus byte addresses over two, so the bus maps onto
 // the chip with no adder.  The loader's three slots (data.json) write the

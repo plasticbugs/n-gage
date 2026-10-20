@@ -220,11 +220,17 @@ def load_tree(src):
     return root
 
 
+# the largest drive the core loads: all of the Pocket's CRAM (NGVM_DRIVE_MAX,
+# sw/include/ngvm_hw.h)
+MAX_MB = 32
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--from', dest='src', required=True)
     ap.add_argument('--out', required=True)
-    ap.add_argument('--size-mb', type=int, default=0, help='default: the content plus 2 MB, at least 16')
+    ap.add_argument('--size-mb', type=int, default=0,
+                    help='default: the content plus 2 MB, at least 16 and at most %d' % MAX_MB)
     ap.add_argument('--label', default='NGAGE')
     ap.add_argument('--app', help='the .app to launch (E:\\...); default: from the card')
     a = ap.parse_args()
@@ -237,7 +243,9 @@ def main():
             content += len(c.data)
             walk(c)
     walk(tree)
-    size = a.size_mb or max(16, (content + 2 * 1024 * 1024 + 1048575) // 1048576 + 1)
+    size = a.size_mb or min(MAX_MB, max(16, (content + 2 * 1024 * 1024 + 1048575) // 1048576 + 1))
+    if size > MAX_MB:
+        sys.exit('the core loads a drive of at most %d MB (NGVM_DRIVE_MAX)' % MAX_MB)
     app = a.app or find_app(tree)
     img, used = build(tree, size, a.label, app)
     open(a.out, 'wb').write(img)

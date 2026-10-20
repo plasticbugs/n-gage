@@ -64,7 +64,7 @@ bench need no converter:
 | ROM, `0x50000000` | ≤ 20 MB (`SYM.ROM` is 18.6) | SDRAM `0x2000000` | line bursts, read-only |
 | KSEC, `0x80000000` | 4 MB | SDRAM `0x3400000` | line bursts |
 | *(unused)* | 8 MB | SDRAM `0x3800000` | |
-| drive, `0x60000000` | ≤ 24 MB | CRAM0 (16 MB) + CRAM1 (8 MB) | uncached 16-bit words |
+| drive, `0x60000000` | ≤ 32 MB | CRAM0 (16 MB) + CRAM1 (16 MB) | uncached 16-bit words |
 | page table | 16,640 × 16 bits | block RAM | one read a miss |
 | I-cache, D-cache | 16 KB each *(section 4)* | block RAM | every cycle |
 | audio FIFO | 1,024 × 32 bits | block RAM | 32–64 ms of sound at 16 kHz |
@@ -75,9 +75,12 @@ drive is the one region only the kernel's drive LDD reads, through
 `memcpy` into a buffer, so it goes to CRAM, where uncached word access
 costs least.
 
-The drive images in `scratchpad/games` are 16–17.8 MB files, with the last
-data byte between 1.7 MB (Snakes) and 14.9 MB (Bomberman). With 24 MB of
-CRAM, `tools/mkdrive.py` keeps its default size.
+The seven games first tested unpack to 1.9–14.9 MB. Up to the fourth build
+the drive stopped at 24 MB, which 20 of the 51 retail games read from a
+phone did not fit: most unpack to 23.8–30.1 MB. The drive now takes all
+32 MB of CRAM, which every one of them but two fits (Glimmerati, 53.7 MB,
+and Pathway to Glory, 56.8 MB). `tools/mkdrive.py` makes the content plus
+2 MB, at least 16 and at most 32.
 
 The Pocket's 256 KB SRAM is unused. It is the first place to look if the
 kernel's hot data needs a faster home than SDRAM.
