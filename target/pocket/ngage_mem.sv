@@ -13,11 +13,23 @@
 //
 // The bus port is ngvm_sys's, crossed into this clock (ngvm_xbus.sv): one
 // request at a time, held until m_done.  A line read is one 16-halfword
-// SDRAM burst, a line write the same burst writing, with DQM masking the
-// halfwords and bytes the mask leaves out, and a word read a 2-halfword
-// burst.  The drive is uncached, so CRAM sees word reads and masked line
-// writes (the D-cache's combining buffer): those go a halfword at a time,
-// and a line write skips the halfwords with nothing to write.
+// SDRAM burst that starts at the word m_addr[4:2] names and wraps, a line
+// write the same burst writing, with DQM masking the halfwords and bytes the
+// mask leaves out, and a word read a 2-halfword burst.  The drive is
+// uncached, so CRAM sees word reads and masked line writes (the D-cache's
+// combining buffer): those go a halfword at a time, and a line write skips
+// the halfwords with nothing to write.
+//
+// A line read's words reach m_rdata one at a time, and m_cnt, a Gray count
+// of the line words read in since power-on, rises a clock after each, so
+// the CPU side can use the line while the rest of it comes (ngvm_xbus.sv).
+//
+// BC_RDWR is a fill that evicts a dirty line: the line at m_addr is read,
+// m_done answers it, and only then is m_wdata written to m_waddr's line,
+// while the CPU goes on.  m_free stays low until that write is done, so the
+// next request waits for it, and so does the LCD: its copy, which follows a
+// D-cache clean, must not read a line that is still on its way out.  If the
+// two lines are the same, the write goes first.
 //
 // The LCD's line fetch shares the burst port.  Neither user can be cut off
 // mid-burst, so the two take turns when both are waiting: a burst of the
@@ -49,10 +61,13 @@ module ngage_mem (
     input  logic         m_req,
     input  logic   [1:0] m_cmd,
     input  logic  [26:0] m_addr,
+    input  logic  [26:5] m_waddr,       // BC_RDWR: the line to write back
     input  logic  [31:0] m_be,
     input  logic [255:0] m_wdata,
     output logic         m_done,
     output logic [255:0] m_rdata,       // held from m_done to the next request
+    output logic         m_free,        // a new request may be taken
+    output logic   [3:0] m_cnt,         // Gray: words read in, a clock after each
 
     // the LCD's line fetch: up to 32 halfwords of SDRAM, held until l_done
     input  logic         l_req,
@@ -94,7 +109,7 @@ module ngage_mem (
     inout  wire   [15:0] sram_dq,
     output logic         sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n
 );
-    localparam logic [1:0] BC_RDLINE = 2'd0, BC_WRLINE = 2'd1, BC_RDWORD = 2'd2;
+    localparam logic [1:0] BC_RDLINE = 2'd0, BC_WRLINE = 2'd1, BC_RDWORD = 2'd2, BC_RDWR = 2'd3;
     localparam logic [26:0] BUS_ROM = 27'h2000000, BUS_DRIVE = 27'h4000000;
 
     // ------------------------------------------------------------ download
@@ -179,13 +194,18 @@ module ngage_mem (
     wire         m_new  = m_req && !m_busy && !m_seen;
     wire         m_cram = m_addr >= BUS_DRIVE;
     logic        sd_req;                // the CPU's request wants the burst port
+    logic        sd_wr;                 // ... for a write: BC_WRLINE, or BC_RDWR's write-back
+    logic        sd_two;                // BC_RDWR's second burst is next
+    logic        sd_post;               // BC_RDWR answered; its write-back still to go
     logic        c_busy;                // ... or is CRAM's, halfword c_n next
+    assign       m_free = !m_busy;
 
     // --------------------------------------------------------- burst port
     typedef enum logic [1:0] { B_IDLE, B_LCD, B_CPU, B_GAP } bown_t;
     bown_t       bown;
     logic        last_lcd;              // whose turn it was last
     logic        b_wr, b_done, b_we, b_req;
+    logic        b_wrap;
     logic  [9:0] b_idx, b_widx, b_len;
     logic [15:0] b_data, b_wdata;
     logic  [1:0] b_be;
@@ -195,7 +215,7 @@ module ngage_mem (
     always_ff @(posedge clk) begin
         if (init) begin bown <= B_IDLE; last_lcd <= 1'b0; end
         else case (bown)
-            B_IDLE: if (lcd_want && (!sd_req || !last_lcd)) begin bown <= B_LCD; last_lcd <= 1'b1; end
+            B_IDLE: if (lcd_want && !sd_post && (!sd_req || !last_lcd)) begin bown <= B_LCD; last_lcd <= 1'b1; end
                     else if (sd_req) begin bown <= B_CPU; last_lcd <= 1'b0; end
             B_LCD, B_CPU: if (b_done) bown <= B_GAP;
             default: bown <= B_IDLE;     // the controller wants b_req low for a clock
@@ -203,9 +223,10 @@ module ngage_mem (
     end
 
     assign b_req  = bown == B_LCD || bown == B_CPU;
-    assign b_we   = bown == B_CPU && m_cmd == BC_WRLINE;
-    assign b_addr = bown == B_LCD ? l_addr : m_addr[25:1];
+    assign b_we   = bown == B_CPU && sd_wr;
+    assign b_addr = bown == B_LCD ? l_addr : sd_wr && m_cmd == BC_RDWR ? {m_waddr[25:5], 4'd0} : m_addr[25:1];
     assign b_len  = bown == B_LCD ? 10'(l_len) : m_cmd == BC_RDWORD ? 10'd2 : 10'd16;
+    assign b_wrap = bown == B_CPU && !sd_wr && m_cmd != BC_RDWORD;
 
     // a write burst's halfword b_widx, settled before the controller takes it
     // (sdram_ctrl.sv: a WRITE every two clocks at the fastest)
@@ -245,19 +266,35 @@ module ngage_mem (
     assign       cq_pop    = cr_take && cr_dlreq;
 
     // ------------------------------------------------------------- sequencing
+    logic  [3:0] m_wn;                  // m_cnt in binary; never reset, like the
+                                        // CPU side's copy (ngvm_xbus.sv)
     always_ff @(posedge clk) begin
         m_done <= 1'b0;
         if (!m_req) m_seen <= 1'b0;
         if (m_new) begin
             m_busy <= 1'b1;
             if (m_cram) begin c_busy <= 1'b1; c_n <= 4'd0; end
-            else sd_req <= 1'b1;
+            else begin
+                sd_req <= 1'b1;
+                sd_wr  <= m_cmd == BC_WRLINE || (m_cmd == BC_RDWR && m_waddr == m_addr[26:5]);
+                sd_two <= m_cmd == BC_RDWR;
+            end
         end
 
-        // SDRAM: the burst brings each halfword in (or takes it out)
+        // SDRAM: the burst brings each halfword in (or takes it out); the
+        // second of a line's word counts it
         if (bown == B_CPU && b_wr) m_rdata[16*int'(b_idx[3:0]) +: 16] <= b_data;
+        if (bown == B_CPU && b_wr && b_idx[0] && m_cmd != BC_RDWORD) m_wn <= m_wn + 4'd1;
+        m_cnt <= m_wn ^ (m_wn >> 1);
         if (bown == B_CPU && b_done) begin
-            sd_req <= 1'b0; m_busy <= 1'b0; m_seen <= 1'b1; m_done <= 1'b1;
+            if (sd_two) begin
+                // BC_RDWR's first burst: the other goes next; a read is answered now
+                sd_two <= 1'b0; sd_wr <= !sd_wr;
+                if (!sd_wr) begin sd_post <= 1'b1; m_seen <= 1'b1; m_done <= 1'b1; end
+            end else begin
+                sd_req <= 1'b0; m_busy <= 1'b0; sd_post <= 1'b0;
+                if (!sd_post) begin m_seen <= 1'b1; m_done <= 1'b1; end
+            end
         end
 
         // CRAM: whose access is in flight, and the CPU's halfwords as each
@@ -274,6 +311,7 @@ module ngage_mem (
 
         if (init) begin
             m_busy <= 1'b0; m_seen <= 1'b0; sd_req <= 1'b0; c_busy <= 1'b0; c_pend <= 1'b0;
+            sd_two <= 1'b0; sd_post <= 1'b0;
         end
     end
 
@@ -289,7 +327,7 @@ module ngage_mem (
         .c_addr(c_addr), .c_req(c_req), .c_we(c_we), .c_wdata(c_wdata),
         .c_be(c_be), .c_ack(c_ack), .rdata(rdata),
         .b_addr(b_addr), .b_len(b_len),
-        .b_req(b_req), .b_abort(1'b0),
+        .b_req(b_req), .b_wrap(b_wrap), .b_abort(1'b0),
         .b_wr(b_wr), .b_idx(b_idx), .b_data(b_data), .b_done(b_done),
         .b_we(b_we), .b_wdata(b_wdata), .b_be(b_be), .b_widx(b_widx)
     );

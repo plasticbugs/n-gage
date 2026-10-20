@@ -24,6 +24,10 @@
 // `rd_fast` = 1 issues the READs one a clock, which NBA Jam's hardware found
 // unsound at its capture phase (METHODOLOGY 5.28): a menu choice until the
 // Pocket has settled it).  Burst WRITEs stay at one every 2 clocks.
+//
+// A burst taken with b_wrap stays inside its aligned 16 words: it starts at
+// b_addr and wraps, so a cache line comes critical word first, and b_idx is
+// each word's place in the line (b_addr[4:1] first), not its order.
 //------------------------------------------------------------------------------
 `default_nettype none
 
@@ -60,6 +64,7 @@ module sdram_ctrl #(
     input  logic [25:1] b_addr,       // first word
     input  logic  [9:0] b_len,        // number of words, 1..512
     input  logic        b_req,        // level; hold until b_done
+    input  logic        b_wrap,       // with b_req: wrap within the aligned 16 words (b_len 16)
     input  logic        b_abort,      // level: end the burst as soon as possible; b_done then
                                       // follows, the words delivered so far being all there are
     output logic        b_wr,         // one word delivered
@@ -138,6 +143,7 @@ module sdram_ctrl #(
     logic        b_accepted;     // b_req latched; cleared when it drops
     logic        b_aborted;      // this burst was cut short (b_done even if nothing was issued)
     logic        b_is_we;        // this burst is a write
+    logic        b_is_wrap;      // ... wraps within its 16 words
     logic  [2:0] b_gap;
     assign b_widx = b_issued;
 
@@ -324,15 +330,16 @@ module sdram_ctrl #(
                         dq_oe   <= 1'b1;
                     end else begin
                         command <= CMD_READ;
-                        cap[rd_late ? 4 : 3] <= {1'b1, 1'b1, 3'd0, b_issued};
+                        cap[rd_late ? 4 : 3] <= {1'b1, 1'b1, 3'd0, b_is_wrap ? {6'd0, b_next[4:1]} : b_issued};
                     end
-                    b_next   <= b_next + 25'd1;
+                    b_next   <= b_is_wrap ? {b_next[25:5], b_next[4:1] + 4'd1} : b_next + 25'd1;
                     b_issued <= b_issued + 10'd1;
                     b_remain <= b_remain - 10'd1;
                     b_chunk  <= b_chunk + 6'd1;
                     b_gap    <= burst_slow ? 3'd4 : rd_fast && !b_is_we ? 3'd0 : 3'd1;
-                    // stop at: end of burst, end of chunk, end of SDRAM row
-                    if (b_remain == 10'd1 || b_chunk == 6'(BURST_CHUNK - 10'd1) || b_next[10:1] == 10'h3ff) begin
+                    // stop at: end of burst, end of chunk, end of SDRAM row (a
+                    // wrapping burst never leaves its row)
+                    if (b_remain == 10'd1 || b_chunk == 6'(BURST_CHUNK - 10'd1) || (!b_is_wrap && b_next[10:1] == 10'h3ff)) begin
                         state  <= S_BEND;
                         wait_n <= 3'd1;
                     end
@@ -360,6 +367,7 @@ module sdram_ctrl #(
         if (b_req && !b_active && !b_done && !b_accepted) begin
             b_active <= 1'b1; b_accepted <= 1'b1;
             b_is_we  <= b_we;
+            b_is_wrap <= b_wrap;
             b_next   <= b_addr;
             b_remain <= b_len;
             b_issued <= '0;

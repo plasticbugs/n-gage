@@ -86,7 +86,8 @@ kernel's hot data needs a faster home than SDRAM.
 
 | bus request | SDRAM | CRAM |
 |---|---|---|
-| line read (32 B) | one 16-halfword burst | 16 halfword reads; never asked for (the drive is uncached) |
+| line read (32 B) | one 16-halfword burst, from the word asked for, round the line | 16 halfword reads; never asked for (the drive is uncached) |
+| line read with a write-back (`BC_RDWR`) | the read's burst, answered, then the write's burst | never asked for |
 | line write, masked | one 16-halfword burst, DQM masking each byte | a write per halfword with a byte in the mask |
 | word read | a 2-halfword burst | 2 halfword reads |
 
@@ -103,6 +104,19 @@ kernel's hot data needs a faster home than SDRAM.
   core's it is not either: with the switch on, the games crash (second
   build, docs/bringup.md log). Reads stay at one every two clocks; the
   switch stays, off, for a test of other capture timings.
+- **Which clock catches a word.** The menu's default takes each word four
+  clocks after its READ; the timing analysis checks the capture three
+  clocks after. The SDC pairs the chip clock edge that launches a word with
+  the core clock edge 14.18 ns later, and in CL2 a READ's data is launched
+  by the edge after the one that took it. At four clocks a word is caught
+  after the chip has let go of it, which works at one READ every two clocks
+  because nothing else drives the bus until the next word. With a READ
+  every clock, the next word is already there: every word would be off by
+  one, and the games crash at once, as they did. "SDRAM read late" on is
+  the three-clock capture (the bit is inverted in `core_top.sv`), and
+  `sim/sdram_model.sv` puts the data a clock later than the chip does,
+  which is why the bench passed fast reads at four. Not yet tried on the
+  Pocket: docs/bringup.md, log.
 - **CRAM.** `target/pocket/cram_ctrl.sv`:
   - asynchronous, with the address multiplexed on DQ;
   - 12 clocks a halfword read and 10 a write, back to back, each with
@@ -166,10 +180,13 @@ kernel's hot data needs a faster home than SDRAM.
 **Decision.**
 
 - I: 16 KB, 2-way, 32-byte lines.
-- D: 16 KB, 2-way, 32-byte lines, write-back, with a one-line write-back
-  buffer, so an eviction does not wait in front of the fill.
-- 64-byte lines with early restart are the next step if the measured CPI
-  needs it.
+- D: 16 KB, 2-way, 32-byte lines, write-back. The plan was a one-line
+  write-back buffer, so an eviction would not wait in front of the fill.
+  The first builds wrote the victim back and then fetched the line. The
+  third sends the victim with the fill, to be written after it (section
+  4.4).
+- Early restart is built (section 4.4). 64-byte lines are the next step if
+  the measured CPI needs it.
 
 **Cost.** A miss is about 20–24 cycles at 96 MHz:
 
@@ -248,6 +265,56 @@ with the latency. Even memory that answered at once would give at most
   The rest of the line still arrives behind it, so the effective L is
   more like 25–30: +12–17%.
 - Together they might reach L about 15–20: +25–35%.
+
+### 4.4 Critical word first, early restart, the write-back behind the fill
+
+The third build changes how a miss is served, not what it costs the
+memory.
+
+- **The line comes from the word missed on.** The miss handler sends the
+  word's address with the line read. With BL=1, a burst is a run of single
+  READs, so `sdram_ctrl` simply starts at that column and wraps within the
+  16 halfwords (`b_wrap`). `b_idx` then names each halfword's place in the
+  line.
+- **Words cross as they come.** `ngage_mem` counts each word a clock after
+  it lands in `m_rdata`, in Gray code, and `ngvm_xbus` brings the count
+  across on two flops. A word the count has passed stands until the next
+  request is taken, so the CPU side may read it. That is the same argument
+  that makes the held answer safe (`ngvm_xbus.sv`).
+- **The caches write each word as it arrives**, instead of copying the line
+  out after the answer, which took eight clocks.
+  - The I-cache answers a fetch from the incoming line once its word was
+    written before the edge that read the RAM, so the CPU runs down the
+    line as it comes.
+  - The D-cache compares a waiting load again every cycle while the line
+    comes in. A hit on another line, or the incoming line's word once it
+    is in, answers it.
+  - Stores, devices, uncached accesses and a second miss wait for the line.
+- **A dirty victim goes with its fill** (`BC_RDWR`). The memory reads the
+  new line, answers, then writes the victim. The next request, and the
+  LCD's copy, wait for that write (`m_free`). If the fill faults, the
+  victim goes out alone first.
+
+**Measured, the lockstep bench** (`sim/run_sys.sh --lat 43 --no-uc`, Sonic
+N's first 40 s, the same kernel as section 4.3):
+
+- Words arrive as the Pocket's do: the first at 2/5 of the latency, the
+  last at 9/10.
+- A write-back keeps the memory busy for 3/4 of the latency after the
+  answer.
+- Result: 926 M instructions of work, against 756 M before (+22.5%). That
+  is what the old design did at L = 22. The idle loop is unchanged.
+- 94% of line writes now go out behind a fill.
+
+**Measured, the whole machine** (`sim/run_system.sh`, the real memory glue
+and controller, Sonic N's first 40 s): 1,255 M instructions against
+1,083 M (+16%, idle loop included), and 493 frames shown against 337
+(+46%). No memory protocol errors.
+
+**Checked:** lockstep with Unicorn over Sonic N's first 20 s, Virtua Cop's
+first 15 s, Bomberman's and Super Monkey Ball's first 15 s; the memory gate
+(`sim/run_mem.sh`) with each word checked as it is counted and 2,000 fills
+with write-backs, at every read pace.
 
 
 ### 5.1 Why our own

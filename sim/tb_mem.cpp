@@ -1,10 +1,15 @@
 // Pocket memory gate: push an image through ngage_mem's download port at the
 // APF loader's rate, then read every byte back through NGVM's bus port and
-// compare.  Then masked line writes to both memories, read back.  All the
-// while an LCD agent fetches lines through the burst port the bus shares,
-// and checks every halfword it gets.  Then the SRAM.
+// compare.  Then masked line writes to both memories, read back, and fills
+// that write a line back behind them (BC_RDWR), read back.  All the while an
+// LCD agent fetches lines through the burst port the bus shares, and checks
+// every halfword it gets.  Then the SRAM.
 //
-//   obj_mem/Vtb_mem_top [-gap N] [-hold N] [-quick] [-fastrd]
+// An SDRAM line read starts at a random word, and each word is checked at
+// the clock m_cnt counts it, as well as at m_done: the CPU side uses a word
+// as soon as the count says it is in (ngvm_xbus.sv).
+//
+//   obj_mem/Vtb_mem_top [-gap N] [-hold N] [-quick] [-fastrd] [-slow]
 //
 // The image is pseudo-random, which is a harder test than a real one (no runs
 // of equal words to hide a dropped or merged write) and needs nothing the
@@ -24,6 +29,7 @@
 // -quick reads back every 61st line rather than every one.
 //
 // -fastrd sets the menu's "SDRAM fast reads": a burst READ every clock.
+// -slow   sets its "SDRAM slow bursts": a burst READ every 5 clocks.
 //
 // The bus layout must match target/pocket/ngage_mem.sv.
 #include "Vtb_mem_top.h"
@@ -37,7 +43,7 @@
 
 static Vtb_mem_top *dut;
 static const uint32_t BUS_ROM = 0x2000000, BUS_DRIVE = 0x4000000;
-static const int BC_RDLINE = 0, BC_WRLINE = 1, BC_RDWORD = 2;
+static const int BC_RDLINE = 0, BC_WRLINE = 1, BC_RDWORD = 2, BC_RDWR = 3;
 
 static std::unordered_map<uint32_t, uint8_t> mem;      // every byte the bench knows
 static uint32_t rng = 0x2545F491;
@@ -82,31 +88,54 @@ static void tick()
     lcd_edge();
 }
 
-// one bus request, held until m_done
-static void bus(int cmd, uint32_t addr, uint32_t be = 0, const uint8_t *wd = nullptr)
+// one bus request, held until m_done, taken only while m_free (as
+// ngvm_xbus.sv takes one).  A line read's words, each as m_cnt counts it,
+// go to snap[] in the order they come; narr says how many came.
+static uint32_t snap[8];
+static int narr;
+static unsigned gray2bin(unsigned g) { g ^= g >> 2; g ^= g >> 1; return g & 15; }
+static void bus(int cmd, uint32_t addr, uint32_t be = 0, const uint8_t *wd = nullptr, uint32_t waddr = 0)
 {
-    // the bus's contract (ngvm_sys.sv): lines at line addresses, words at word ones
-    if (addr & (cmd == BC_RDWORD ? 3 : 31)) { printf("BENCH ERROR  command %d at %07X\n", cmd, addr); exit(2); }
-    dut->m_cmd = cmd; dut->m_addr = addr; dut->m_be = be;
+    // the bus's contract (ngvm_sys.sv): line reads at word addresses, line
+    // writes at line ones, words at word ones
+    bool rd_line = cmd == BC_RDLINE || cmd == BC_RDWR;
+    if (addr & (cmd == BC_WRLINE ? 31 : 3)) { printf("BENCH ERROR  command %d at %07X\n", cmd, addr); exit(2); }
+    int g = 0;
+    while (!dut->m_free && ++g < 20000) tick();
+    if (!dut->m_free) { printf("FAIL  m_free never rose before command %d at %07X\n", cmd, addr); exit(1); }
+    dut->m_cmd = cmd; dut->m_addr = addr; dut->m_waddr = waddr >> 5; dut->m_be = be;
     for (int w = 0; w < 8; w++) {
         uint32_t x = 0;
         if (wd) for (int k = 0; k < 4; k++) x |= uint32_t(wd[4 * w + k]) << 8 * k;
         dut->m_wdata[w] = x;
     }
     dut->m_req = 1;
-    int g = 0;
-    do tick(); while (!dut->m_done && ++g < 20000);
+    narr = 0;
+    unsigned c = gray2bin(dut->m_cnt);
+    g = 0;
+    do {
+        tick();
+        for (unsigned now = gray2bin(dut->m_cnt); c != now; c = (c + 1) & 15) {
+            if (!rd_line || narr == 8) { printf("FAIL  m_cnt moved past a %d-word answer\n", rd_line ? 8 : 0); exit(1); }
+            int w = (addr >> 2) + narr & 7;
+            snap[w] = dut->m_rdata[w];
+            narr++;
+        }
+    } while (!dut->m_done && ++g < 20000);
     if (!dut->m_done) { printf("FAIL  no m_done for command %d at %07X\n", cmd, addr); exit(1); }
     dut->m_req = 0;
     tick();
 }
 static uint8_t rbyte(int i) { return dut->m_rdata[i / 4] >> 8 * (i % 4); }
 
-// read a line (or a word) back and compare the bytes the bench knows
-static void check(int cmd, uint32_t a, const char *what)
+// compare the answer to a line read at a (or a word) with the bytes the
+// bench knows; an SDRAM line's words as they were counted in, too
+static void compare(int cmd, uint32_t a, const char *what)
 {
-    bus(cmd, a);
     int n = cmd == BC_RDWORD ? 4 : 32;
+    if (n == 32) a &= ~31u;
+    bool sd = n == 32 && a < BUS_DRIVE;
+    if (sd && narr != 8) { fail("count", a, narr, 8); return; }
     for (int i = 0; i < n; i += 2) {
         if (!known(a + i) && !known(a + i + 1)) continue;
         unsigned got = rbyte(i) | rbyte(i + 1) << 8, want = 0, mask = 0;
@@ -114,26 +143,38 @@ static void check(int cmd, uint32_t a, const char *what)
         if (known(a + i + 1)) { want |= mem[a + i + 1] << 8; mask |= 0xFF00; }
         checked++;
         if ((got & mask) != want) fail(what, a + i, got & mask, want);
+        if (sd) {
+            unsigned early = (snap[i / 4] >> 8 * (i % 4)) & 0xFFFF;
+            if ((early & mask) != want) fail("early", a + i, early & mask, want);
+        }
     }
+}
+// read a line (from a random first word) or a word back, and compare
+static void check(int cmd, uint32_t a, const char *what)
+{
+    uint32_t ra = cmd == BC_RDLINE ? a + 4 * (rnd() % 8) : a;
+    bus(cmd, ra);
+    compare(cmd, ra, what);
 }
 
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
-    int gap = 7, hold = 4; bool quick = false, fastrd = false;
+    int gap = 7, hold = 4; bool quick = false, fastrd = false, slow = false;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         if (a == "-gap" && i + 1 < argc) gap = atoi(argv[++i]);
         else if (a == "-hold" && i + 1 < argc) hold = atoi(argv[++i]);
         else if (a == "-quick") quick = true;
         else if (a == "-fastrd") fastrd = true;
+        else if (a == "-slow") slow = true;
         else if (a[0] != '+') { fprintf(stderr, "unknown argument %s\n", a.c_str()); return 2; }
     }
     if (hold >= gap) hold = gap - 1;
     if (hold < 1) hold = 1;
 
     dut = new Vtb_mem_top;
-    dut->init = 1; dut->rd_late = 1; dut->burst_slow = 0; dut->rd_fast = fastrd;
+    dut->init = 1; dut->rd_late = 1; dut->burst_slow = slow; dut->rd_fast = fastrd;
     dut->dl_we = 0; dut->dl_active = 0; dut->m_req = 0; dut->l_req = 0; dut->vram_req = 0;
     for (int i = 0; i < 16; i++) tick();
     dut->init = 0;
@@ -218,6 +259,31 @@ int main(int argc, char **argv)
     }
     for (uint32_t a : targets) check(BC_RDLINE, a, a >= BUS_DRIVE ? "cram wr" : "sdram wr");
     printf("masked writes: 2000, then %zu lines read back, %ld wrong\n", targets.size(), bad - wbad);
+
+    // ---- fills that write a line back behind them: the read must see the
+    // memory before the write-back (or after it, when the two lines are one),
+    // and the write-back must have landed before anything that follows
+    long fbad = bad;
+    std::vector<uint32_t> sdl;
+    for (uint32_t a : targets) if (a < BUS_DRIVE) sdl.push_back(a);
+    for (int n = 0; n < 2000; n++) {
+        uint32_t ra = sdl[rnd() % sdl.size()] + 4 * (rnd() % 8);
+        uint32_t wa = rnd() % 16 == 0 ? ra & ~31u : sdl[rnd() % sdl.size()];
+        uint8_t wd[32];
+        for (int i = 0; i < 32; i++) wd[i] = rnd() >> 7;
+        bool same = wa == (ra & ~31u);
+        if (same) for (int i = 0; i < 32; i++) mem[wa + i] = wd[i];
+        bus(BC_RDWR, ra, 0xFFFFFFFF, wd, wa);
+        long b0 = bad;
+        compare(BC_RDLINE, ra, "rdwr rd");
+        if (!same) for (int i = 0; i < 32; i++) mem[wa + i] = wd[i];
+        // straight away: the next request waits for the write-back
+        if (rnd() & 1) check(BC_RDLINE, wa, "rdwr wb");
+        else check(BC_RDWORD, wa + 4 * (rnd() % 8), "rdwr wbw");
+        if (bad > b0 && b0 == fbad)
+            printf("  the first wrong: fill %d, %07X, writing back %07X\n", n, ra, wa);
+    }
+    printf("fills with write-backs: 2000, %ld wrong\n", bad - fbad);
     lcd_on = false;
     for (int i = 0; i < 400; i++) tick();
     printf("LCD agent: %ld fetches, %ld halfwords alongside the bus\n", l_fetches, l_words);

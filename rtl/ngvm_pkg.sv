@@ -84,9 +84,10 @@ function automatic logic [26:0] bus_paged(input logic [15:0] page, input logic [
 endfunction
 
 // bus commands (ngvm_sys's port, ngage_mem's)
-localparam logic [1:0] BC_RDLINE = 2'd0;    // 32 bytes, aligned
+localparam logic [1:0] BC_RDLINE = 2'd0;    // 32 bytes, from the word [4:2] names, round
 localparam logic [1:0] BC_WRLINE = 2'd1;    // ... the bytes a 32-bit mask marks
 localparam logic [1:0] BC_RDWORD = 2'd2;    // 4 bytes, aligned
+localparam logic [1:0] BC_RDWR   = 2'd3;    // a line read, then a full line written back
 
 // device registers (ngvm_hw.h IO_*), as word offsets [11:2]
 localparam logic [9:0] IO_DBG_PUTC    = 10'h000;

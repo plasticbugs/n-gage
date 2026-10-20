@@ -3,7 +3,11 @@
 //
 // The bench is the memory behind the bus port: SDRAM and CRAM as flat
 // arrays at their bus addresses, answering each request after a fixed
-// latency.  Unicorn runs the same kernel, firmware and game from its own
+// latency.  A line read's words come one at a time from the word asked for,
+// as the Pocket's do (ngage_mem.sv): the first at 2/5 of the latency, the
+// last at 9/10, each counted on bus_cnt.  A fill's write-back (BC_RDWR)
+// lands after the answer and keeps the memory busy for 3/4 of the latency
+// more, which the next request waits out.  Unicorn runs the same kernel, firmware and game from its own
 // copy of NGVM's memory.  Each time the RTL retires an instruction, Unicorn
 // executes one and the bench compares r0-r14 of the current mode, the CPSR
 // and the next PC.  A stale cache line, a lost write-back or a wrong
@@ -27,6 +31,7 @@
 #include <deque>
 #include <map>
 #include <chrono>
+#include <algorithm>
 #include <unicorn/unicorn.h>
 #include "Vngvm_sys.h"
 #include "Vngvm_sys___024root.h"
@@ -109,9 +114,16 @@ struct Bench {
 
     // the bus: one request, answered after a latency
     int lat_line = 40, lat_word = 20;
-    int bus_wait = -1;                              // cycles to the answer; -1 idle
+    int bus_t = -1;                                 // cycles into the request; -1 idle
+    int bus_lat = 0, bus_got = 0;                   // its latency; line words in so far
+    uint64_t mem_busy = 0;                          // a write-back until this cycle
     bool bus_hold = false;                          // answered; waiting for bus_req to drop
-    uint64_t nbus[4] = {};
+    uint8_t bus_cnt = 0;
+    uint64_t nbus[4] = {};                          // by BC_*; a BC_RDWR also counts as 0 and 1
+    int word_at(int i) const {                      // when a line's i-th word comes
+        int first = std::max(1, lat_line * 2 / 5), last = std::max(first, lat_line * 9 / 10);
+        return first + (last - first) * i / 7;
+    }
 
     // frames
     uint64_t frame_period = CPU_HZ / 60, next_frame = CPU_HZ / 60, frames = 0;
@@ -134,6 +146,11 @@ struct Bench {
     Bench() : sdram(0x4000000), cram(0x2000000) {}
 
     uint8_t *bus_at(uint32_t a) { return a & BUS_DRIVE ? &cram[a & 0x1FFFFFF] : &sdram[a & 0x3FFFFFF]; }
+    // BC_RDWR's whole line, to bus_waddr's line
+    void write_back() {
+        uint8_t *p = bus_at(top->bus_waddr << 5);
+        for (int i = 0; i < 32; i++) p[i] = (uint8_t)(top->bus_wdata[i / 4] >> (8 * (i % 4)));
+    }
 
     // ---------------------------------------------------- Unicorn
     static uint32_t pt_virt(uint32_t i) {
@@ -371,25 +388,43 @@ struct Bench {
         // the bus
         top->bus_done = 0;
         if (bus_hold) { if (!breq) bus_hold = false; }
-        else if (bus_wait < 0 && breq) {
-            bus_wait = (top->bus_cmd < 2 ? lat_line : lat_word) - 1;
-        } else if (bus_wait > 0) bus_wait--;
-        else if (bus_wait == 0) {
+        else if (bus_t < 0 && breq && cycles >= mem_busy) {
+            uint32_t cmd = top->bus_cmd;
+            bus_t = 0; bus_got = 0;
+            bus_lat = cmd == 1 || cmd == 2 ? (cmd == 1 ? lat_line : lat_word) : lat_line;
+            // a write-back to the line being read goes first
+            if (cmd == 3 && (top->bus_waddr << 5) == (top->bus_addr & ~31u)) write_back();
+        } else if (bus_t >= 0) {
+            bus_t++;
             uint32_t a = top->bus_addr, cmd = top->bus_cmd;
-            nbus[cmd]++;
-            uint8_t *p = bus_at(a);
-            switch (cmd) {
-            case 0: for (int i = 0; i < 8; i++) memcpy(&top->bus_rdata[i], p + 4 * i, 4); break;
-            case 1:
-                for (int i = 0; i < 32; i++)
-                    if (top->bus_be >> i & 1) p[i] = (uint8_t)(top->bus_wdata[i / 4] >> (8 * (i % 4)));
-                break;
-            case 2: memcpy(&top->bus_rdata[0], p, 4); break;
+            if (cmd == 0 || cmd == 3)
+                while (bus_got < 8 && bus_t >= word_at(bus_got)) {
+                    int w = (a >> 2) + bus_got & 7;
+                    memcpy(&top->bus_rdata[w], bus_at((a & ~31u) + 4 * w), 4);
+                    bus_got++;
+                    bus_cnt = (bus_cnt + 1) & 15;
+                }
+            if (bus_t >= bus_lat) {
+                nbus[cmd]++;
+                uint8_t *p = bus_at(a);
+                switch (cmd) {
+                case 1:
+                    for (int i = 0; i < 32; i++)
+                        if (top->bus_be >> i & 1) p[i] = (uint8_t)(top->bus_wdata[i / 4] >> (8 * (i % 4)));
+                    break;
+                case 2: memcpy(&top->bus_rdata[0], p, 4); break;
+                case 3:
+                    nbus[0]++; nbus[1]++;
+                    if ((top->bus_waddr << 5) != (a & ~31u)) write_back();
+                    mem_busy = cycles + lat_line * 3 / 4;
+                    break;
+                }
+                top->bus_done = 1;
+                bus_t = -1;
+                bus_hold = true;
             }
-            top->bus_done = 1;
-            bus_wait = -1;
-            bus_hold = true;
         }
+        top->bus_cnt = bus_cnt;
 
         // frames, keys
         if (top->lcd_show_t != show_d) { show_d = top->lcd_show_t; take_frame(); }
@@ -503,10 +538,11 @@ int main(int argc, char **argv)
     bool ok = !b.failed && (b.exit_code < 0 || b.exit_code == 0);
     double host = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     printf("%s: %.3f s at %d MHz; %llu instructions in %llu cycles (%llu in the idle loop); "
-           "bus: %llu line reads, %llu line writes, %llu word reads; %.0f s on the host%s\n",
+           "bus: %llu line reads, %llu line writes (%llu behind a fill), %llu word reads; %.0f s on the host%s\n",
            ok ? "ok" : "stopped", (double)b.cycles / CPU_HZ, (int)(CPU_HZ / 1000000),
            (unsigned long long)b.retired, (unsigned long long)b.cycles, (unsigned long long)b.idle_retired,
-           (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1], (unsigned long long)b.nbus[2],
+           (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1], (unsigned long long)b.nbus[3],
+           (unsigned long long)b.nbus[2],
            host, b.use_uc ? ", lockstep with Unicorn" : "");
     delete b.top;
     return ok && !b.mismatches ? 0 : 1;

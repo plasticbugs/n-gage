@@ -5,8 +5,14 @@
 // It answers the CPU's instruction port (arm_cpu.sv): an address at an edge
 // is answered in the next cycle by ic_ok, or not, and the CPU asks again.
 // So a miss costs the CPU nothing to handle: the cache starts the line's
-// fill and says "not yet" until the line is in.  A hit for another line is
+// fill and says "not yet" until the word is in.  A hit for another line is
 // answered while a fill is under way; a second miss waits.
+//
+// The line comes from the word missed on, then round (ngvm_mmu.sv), and
+// each word is written to the RAM as it arrives.  A fetch from the line is
+// answered once its word was written before the edge that read the RAM
+// (f2_have), so the CPU runs on down the line as it comes in.  The tag and
+// the valid bit are written when the last word is.
 //
 // The tags and the data are block RAM read at every edge with the CPU's
 // address.  The valid bits are flops, so IO_CACHE_FLUSH clears them in one
@@ -42,7 +48,8 @@ module ngvm_icache
     output logic  [31:0] fill_va,
     input  logic         fill_done,     // pulse; fill_line holds while fill_req does
     input  logic         fill_fault,
-    input  logic [255:0] fill_line
+    input  logic [255:0] fill_line,
+    input  logic   [3:0] fill_words     // how many of its words are in fill_line
 );
     // ------------------------------------------------------------ arrays
     logic [31:0]     dat0 [0:2047], dat1 [0:2047];
@@ -55,6 +62,7 @@ module ngvm_icache
     logic            vq0, vq1;
 
     logic        dw_en, dw_way, tw_en;
+    logic  [2:0] dw_w;
     logic [10:0] dw_a;
     logic [31:0] dw_d;
     logic  [7:0] tw_a;
@@ -90,36 +98,47 @@ module ngvm_icache
     logic [26:0] fline;
     wire         fmatch = fv && f2_va[31:5] == fline;
 
-    assign ic_ok    = f2_req && (hit || fmatch);
-    assign ic_abort = !hit;
-    assign ic_data  = hit1 ? q1 : q0;
-
     // ------------------------------------------------------------ fills
-    typedef enum logic [1:0] { S_IDLE, S_FILL, S_WRITE, S_WAIT } st_t;
+    typedef enum logic [1:0] { S_IDLE, S_FILL, S_WAIT } st_t;
     st_t         st;
     logic [31:0] mva;
     logic [TAGW-1:0] mtag;
-    logic        mway, discard;
-    logic  [2:0] k;
+    logic        mway, discard, fdone;
+    logic  [3:0] wk;                    // words written, 0-8
+    logic  [7:0] have, f2_have;         // which; and which were, when the RAM read
+
+    // the line coming in: a fetch from it whose word was written before the
+    // RAM read it (and the cycle after the line is done, while the valid bit
+    // the lookup reads is a cycle stale)
+    wire  fhit = f2_req && st != S_IDLE && !discard && f2_tag == mtag
+              && f2_set == mva[12:5] && f2_have[f2_va[4:2]];
+
+    assign ic_ok    = f2_req && (hit || fhit || fmatch);
+    assign ic_abort = !(hit || fhit);
+    assign ic_data  = hit1 || (fhit && mway) ? q1 : q0;
 
     wire start = st == S_IDLE && f2_req && !hit && !fmatch;
     wire vict  = !val0[f2_set] ? 1'b0 : !val1[f2_set] ? 1'b1 : lru[f2_set];
+    wire fw    = st == S_FILL && wk < fill_words;          // a word to write
+    wire fend  = st == S_FILL && (fdone || fill_done) && wk == 4'd8;
 
-    assign fill_req = st == S_FILL || st == S_WRITE;
-    assign fill_va  = {mva[31:5], 5'd0};
+    assign fill_req = st == S_FILL;
+    assign fill_va  = {mva[31:2], 2'd0};
 
     always_comb begin
-        dw_en  = st == S_WRITE;
+        dw_w   = mva[4:2] + wk[2:0];    // the word missed on came first
+        dw_en  = fw;
         dw_way = mway;
-        dw_a   = {mva[12:5], k};
-        dw_d   = fill_line[32*k +: 32];
-        tw_en  = st == S_WRITE && k == 3'd7 && !discard;
+        dw_a   = {mva[12:5], dw_w};
+        dw_d   = fill_line[32*dw_w +: 32];
+        tw_en  = fend && !discard;
         tw_a   = mva[12:5];
         tw_d   = mtag;
     end
 
     always_ff @(posedge clk) begin
-        if (f2_req && hit && st != S_WRITE) lru[f2_set] <= hit0;
+        f2_have <= start ? '0 : have;   // a new line has nothing in yet
+        if (f2_req && hit) lru[f2_set] <= hit0;
         case (st)
             S_IDLE: if (start) begin
                 st   <= S_FILL;
@@ -127,15 +146,14 @@ module ngvm_icache
                 mtag <= f2_tag;
                 mway <= vict;
                 discard <= 1'b0;
+                wk <= 4'd0; have <= '0; fdone <= 1'b0;
                 if (vict) val1[f2_set] <= 1'b0; else val0[f2_set] <= 1'b0;
             end
-            S_FILL: if (fill_done) begin
-                k  <= 3'd0;
-                st <= fill_fault ? S_WAIT : S_WRITE;
-            end
-            S_WRITE: begin
-                k <= k + 3'd1;
-                if (k == 3'd7) begin
+            S_FILL: begin
+                if (fw) begin wk <= wk + 4'd1; have[dw_w] <= 1'b1; end
+                if (fill_done) fdone <= 1'b1;
+                if (fill_done && fill_fault) st <= S_WAIT;
+                else if (fend) begin
                     st <= S_WAIT;
                     if (!discard) begin
                         if (mway) val1[mva[12:5]] <= 1'b1; else val0[mva[12:5]] <= 1'b1;
@@ -156,7 +174,7 @@ module ngvm_icache
             discard <= 1'b1;
         end
         if (rst) begin
-            st <= S_IDLE; val0 <= '0; val1 <= '0; lru <= '0; fv <= 1'b0;
+            st <= S_IDLE; val0 <= '0; val1 <= '0; lru <= '0; fv <= 1'b0; have <= '0;
         end
     end
 endmodule

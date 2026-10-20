@@ -13,6 +13,12 @@
 // for the drop before it takes the next, so the bus's read data (held until
 // the next bus request) is still there while a cache copies a line out of it.
 // The D-cache goes first when both ask.
+//
+// A fill asks for its line at the word the cache missed on, which the bus
+// brings first, and i_words / d_words count the words of the line that are
+// in rline so far (the critical word first, then on round the line), from
+// the bus request until the requester lets go.  A D-cache fill with d_wb
+// also writes d_wline back to d_pa's line, after the read (BC_RDWR).
 //------------------------------------------------------------------------------
 `default_nettype none
 
@@ -36,6 +42,7 @@ module ngvm_mmu
     // the D-cache: fills, write-backs, uncached loads, its combining buffer (MC_*)
     input  logic         d_req,
     input  logic   [1:0] d_cmd,
+    input  logic         d_wb,          // MC_FILL: write d_wline back to d_pa first
     input  logic  [31:0] d_va,
     input  logic  [26:0] d_pa,
     input  logic  [31:0] d_be,
@@ -45,15 +52,19 @@ module ngvm_mmu
     output logic  [26:0] d_fill_pa,
 
     output logic [255:0] rline,         // the answer to either, from the bus
+    output logic   [3:0] i_words,       // words of a fill's line in rline, 0-8
+    output logic   [3:0] d_words,
 
     // the bus (ngvm_sys's port): bus_req held until bus_done
     output logic         bus_req,
     output logic   [1:0] bus_cmd,       // BC_*
     output logic  [26:0] bus_addr,
+    output logic  [26:5] bus_waddr,     // BC_RDWR's write-back
     output logic  [31:0] bus_be,
     output logic [255:0] bus_wdata,
     input  logic         bus_done,
-    input  logic [255:0] bus_rdata
+    input  logic [255:0] bus_rdata,
+    input  logic   [3:0] bus_cnt        // words read in, from any count (ngvm_xbus.sv)
 );
     localparam logic [1:0] MC_FILL = 2'd0, MC_WB = 2'd1, MC_URD = 2'd2, MC_WCB = 2'd3;
 
@@ -79,7 +90,7 @@ module ngvm_mmu
     // ------------------------------------------------------------ requests
     typedef enum logic [2:0] { S_IDLE, S_XLATE, S_PT, S_BUS, S_RESP, S_HOLD } st_t;
     st_t         st;
-    logic        who_d, fault;
+    logic        who_d, fault, wb;
     logic  [1:0] cmd;
     logic [31:0] va;
     region_t     rg;
@@ -100,9 +111,17 @@ module ngvm_mmu
             MC_WB:   bus_cmd = BC_WRLINE;
             MC_WCB:  bus_cmd = BC_WRLINE;
             MC_URD:  bus_cmd = BC_RDWORD;
-            default: bus_cmd = BC_RDLINE;
+            default: bus_cmd = wb ? BC_RDWR : BC_RDLINE;
         endcase
     end
+
+    // the words in so far: the count since the request went out
+    logic [3:0] wbase;
+    wire        on_bus = st == S_BUS || st == S_RESP || st == S_HOLD;
+    always_ff @(posedge clk) if (!on_bus) wbase <= bus_cnt;
+    wire  [3:0] words  = on_bus ? bus_cnt - wbase : 4'd0;
+    assign i_words = who_d ? 4'd0 : words;
+    assign d_words = who_d ? words : 4'd0;
 
     assign i_done    = st == S_RESP && !who_d;
     assign d_done    = st == S_RESP &&  who_d;
@@ -115,12 +134,13 @@ module ngvm_mmu
             S_IDLE: if (ready) begin
                 if (d_req) begin
                     who_d <= 1'b1; cmd <= d_cmd; va <= d_va; fault <= 1'b0;
+                    wb <= d_cmd == MC_FILL && d_wb; bus_waddr <= d_pa[26:5];
                     if (d_cmd == MC_WB) begin
                         bus_addr <= {d_pa[26:5], 5'd0};
                         st <= S_BUS;
                     end else st <= S_XLATE;
                 end else if (i_req) begin
-                    who_d <= 1'b0; cmd <= MC_FILL; va <= i_va; fault <= 1'b0;
+                    who_d <= 1'b0; cmd <= MC_FILL; va <= i_va; fault <= 1'b0; wb <= 1'b0;
                     st <= S_XLATE;
                 end
             end
@@ -147,9 +167,10 @@ module ngvm_mmu
             S_HOLD: if (who_d ? !d_req : !i_req) st <= S_IDLE;
             default: st <= S_IDLE;
         endcase
-        // line commands go out aligned to the line, word commands to the word
+        // a fill goes out at the word missed on, a write aligned to its line,
+        // a word read to its word
         if (st == S_XLATE || st == S_PT)
-            if (cmd == MC_URD) bus_addr[1:0] <= 2'd0; else bus_addr[4:0] <= 5'd0;
+            if (cmd == MC_URD || cmd == MC_FILL) bus_addr[1:0] <= 2'd0; else bus_addr[4:0] <= 5'd0;
         if (rst) st <= S_IDLE;
     end
 endmodule

@@ -4,12 +4,17 @@
 //
 // Its only connection to memory is the bus port, one request at a time:
 //   bus_req   held from the request until bus_done
-//   bus_cmd   BC_RDLINE / BC_WRLINE (32 bytes, aligned; a write only the
-//             bytes bus_be[31:0] marks), BC_RDWORD (4 bytes, aligned)
+//   bus_cmd   BC_RDLINE (32 bytes, the word bus_addr[4:2] names first),
+//             BC_WRLINE (32 bytes, aligned; only the bytes bus_be[31:0]
+//             marks), BC_RDWORD (4 bytes, aligned), BC_RDWR (a line read
+//             as BC_RDLINE, then a whole line written to bus_waddr's line)
 //   bus_addr  a byte address on the bus (ngvm_pkg.sv)
 //   bus_wdata word i of a line in bits 32i+31:32i; a word in word 0
 //   bus_done  a pulse; bus_rdata is the answer from then until the next
 //             request (word 0 for a word)
+//   bus_cnt   counts words read in, from any value: a line read's word w
+//             is in bus_rdata, to stay, once the count has moved past it
+//             (words come in order from bus_addr[4:2], round the line)
 // so it takes a clock-domain crossing (ngvm_xbus.sv) without changing.
 //
 // The CPU is held in reset until the page table is cleared.
@@ -27,10 +32,12 @@ module ngvm_sys
     output logic         bus_req,
     output logic   [1:0] bus_cmd,
     output logic  [26:0] bus_addr,
+    output logic  [26:5] bus_waddr,
     output logic  [31:0] bus_be,
     output logic [255:0] bus_wdata,
     input  logic         bus_done,
     input  logic [255:0] bus_rdata,
+    input  logic   [3:0] bus_cnt,
 
     output logic  [31:0] lcd_base,
     output logic         lcd_on,
@@ -85,7 +92,8 @@ module ngvm_sys
 
     logic        i_req, i_done, i_fault;
     logic [31:0] i_va;
-    logic        d_req, d_done, d_fault;
+    logic        d_req, d_done, d_fault, d_wb;
+    logic  [3:0] i_words, d_words;
     logic  [1:0] d_cmd;
     logic [31:0] d_va;
     logic [26:0] d_pa, d_fill_pa;
@@ -96,7 +104,8 @@ module ngvm_sys
         .clk(clk), .rst(cpu_rst),
         .ic_req(ic_req), .ic_addr(ic_addr), .ic_data(ic_data), .ic_ok(ic_ok), .ic_abort(ic_abort),
         .win_id(win_id), .inv(inv_i), .pt_wr(pt_we),
-        .fill_req(i_req), .fill_va(i_va), .fill_done(i_done), .fill_fault(i_fault), .fill_line(rline)
+        .fill_req(i_req), .fill_va(i_va), .fill_done(i_done), .fill_fault(i_fault), .fill_line(rline),
+        .fill_words(i_words)
     );
 
     logic        io_req, io_we;
@@ -115,19 +124,19 @@ module ngvm_sys
         .win_id(win_id),
         .io_req(io_req), .io_we(io_we), .io_off(io_off), .io_wdata(io_wdata), .io_rdata(io_rdata),
         .clean(lcd_show), .cleaned(cleaned), .inv_i(inv_i),
-        .m_req(d_req), .m_cmd(d_cmd), .m_va(d_va), .m_pa(d_pa), .m_be(d_be), .m_wline(d_wline),
-        .m_done(d_done), .m_fault(d_fault), .m_fill_pa(d_fill_pa), .m_rline(rline)
+        .m_req(d_req), .m_cmd(d_cmd), .m_wb(d_wb), .m_va(d_va), .m_pa(d_pa), .m_be(d_be), .m_wline(d_wline),
+        .m_done(d_done), .m_fault(d_fault), .m_fill_pa(d_fill_pa), .m_rline(rline), .m_words(d_words)
     );
 
     ngvm_mmu u_mmu (
         .clk(clk), .rst(rst), .ready(mmu_ready),
         .pt_we(pt_we), .pt_idx(pt_idx), .pt_data(pt_data),
         .i_req(i_req), .i_va(i_va), .i_done(i_done), .i_fault(i_fault),
-        .d_req(d_req), .d_cmd(d_cmd), .d_va(d_va), .d_pa(d_pa), .d_be(d_be), .d_wline(d_wline),
+        .d_req(d_req), .d_cmd(d_cmd), .d_wb(d_wb), .d_va(d_va), .d_pa(d_pa), .d_be(d_be), .d_wline(d_wline),
         .d_done(d_done), .d_fault(d_fault), .d_fill_pa(d_fill_pa),
-        .rline(rline),
-        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_be(bus_be),
-        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata)
+        .rline(rline), .i_words(i_words), .d_words(d_words),
+        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_waddr(bus_waddr), .bus_be(bus_be),
+        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata), .bus_cnt(bus_cnt)
     );
 
     ngvm_io #(.CPU_HZ(CPU_HZ)) u_io (

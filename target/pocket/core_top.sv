@@ -883,8 +883,11 @@ module core_top
     wire         m_req, m_done;
     wire   [1:0] m_cmd;
     wire  [26:0] m_addr;
+    wire  [26:5] m_waddr;
     wire  [31:0] m_be;
     wire [255:0] m_wdata, m_rdata;
+    wire         m_free;
+    wire   [3:0] m_cnt;
     wire         l_req, l_wr, l_done;
     wire  [25:1] l_addr;
     wire   [5:0] l_len;
@@ -898,8 +901,8 @@ module core_top
         .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_download),
         .rom_size(rom_size), .drive_size(drive_size),
-        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
-        .m_done(m_done), .m_rdata(m_rdata),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
         .vram_req(1'b0), .vram_we(1'b0), .vram_addr(15'd0), .vram_din(16'd0), .vram_ben(2'b00),
@@ -947,8 +950,8 @@ module core_top
         //! yet: the game runs on behind the menu.  It must never be ORed into
         //! reset, which would boot the phone again when the menu closed.
         .clk(clk_sys), .clk_cpu(clk_cpu), .rst(g_reset), .pause(pause_core), .pix_sync(pix_sync),
-        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
-        .m_done(m_done), .m_rdata(m_rdata),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
         .keys(g_keys), .rom_size(rom_size), .drive_size(drive_size),

@@ -153,6 +153,17 @@ Menu → **SDRAM read late** and **SDRAM slow bursts** change how the SDRAM
 is read. Try each alone if the picture or the boot looks corrupt, and report
 which changed anything.
 
+Despite its name, **SDRAM read late** on catches each word a clock
+*earlier* than the default (`core_top.sv` inverts the bit):
+
+- off, the default: four clocks after the READ (the template's setting,
+  from a core whose chip was clocked in phase);
+- on: three clocks after it.
+
+Three is the clock the SDC's timing analysis checks, with +0.76 ns of setup
+slack (slow 0C). Four works at the default pace only because the word stays
+on the bus after the chip lets go of it, until the next one.
+
 Menu → **SDRAM fast reads** (second build on, off by default) issues a
 burst's READs one a clock instead of one every two. On the bench it makes
 a cache line's fetch 34 memory clocks instead of 47, and the CPU about 8%
@@ -160,8 +171,10 @@ faster through Virtua Cop's boot (726 against 673 million instructions in
 its first 20 s; the Nokia logo at 6.5 s, the N-Gage logo at 16.0 s). The
 bench's SDRAM model cannot say whether the Pocket's chip is read soundly at
 that pace: on another core it was not (METHODOLOGY 5.28), and on this one
-it is not either: the games crash with it on (log, 2026-10-19). Leave it
-off. It stays in the menu for a later test of other capture timings, and
+it is not either: the games crash with it on (log, 2026-10-19), with
+SDRAM read late off. With SDRAM read late on it has not been tried, and
+that is the combination the timing analysis says is sound (log). Until it
+has, leave fast reads off. It stays in the menu for a later test of other capture timings, and
 leaving it on does not survive a reload.
 
 The game runs on while the menu is open: that is expected (NGVM does not
@@ -219,3 +232,24 @@ that died belong here as much as the one that lived.
   samples each word after it has gone, which a half-rate read survives
   because the bus keeps the word until the next one, and a full-rate read
   does not.
+- 2026-10-19, from the code and the timing report, not the Pocket: the
+  capture the menu's default uses is READ+4 (`g_rd_late = ~mod_sw0[4]`),
+  but the one the timing analysis checks is READ+3. The SDC's multicycle
+  pairs the chip clock edge that launches a word with the core clock edge
+  14.18 ns later, and CL2 data is launched by the edge after the one that
+  took the READ. At READ+4, with a READ every clock, the bus already holds
+  the next word: every word of every line would be off by one, which
+  crashes at once. The bench's SDRAM model puts the data a clock later
+  than the real chip does, which is why the bench passes fast reads at
+  READ+4. Test: SDRAM read late on with fast reads off, then with fast
+  reads on. If both play, this is the fault. If the second still crashes
+  at once, it is not, and the next experiment is a capture half a clock
+  either side.
+- 2026-10-19, `463d34eb398d26783e9955a15dd897b7`, the same kernel
+  (critical word first, the write-back behind the fill, core-design 4.4):
+  Menu -> SDRAM read late on and SDRAM fast reads on: no crash, and the
+  games run smoothly and clearly faster, though still short of full speed.
+  This confirms the entry above: fast reads crashed because the default
+  captured at READ+4, and are sound at READ+3, the capture the timing
+  analysis checks. Not reported separately: the build at the menu's
+  defaults, and read late on with fast reads off.

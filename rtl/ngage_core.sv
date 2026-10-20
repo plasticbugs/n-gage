@@ -7,6 +7,7 @@
 // toggle handshake (ngvm_xbus.sv), and so does everything else that crosses,
 // each the simplest way that is safe for what it carries:
 //
+//   words read     96 MHz -> CPU   a Gray count on two flops (ngvm_xbus.sv)
 //   rst            96 MHz -> CPU   two flops; the CPU side is held in reset
 //                                  a further 16,640 clocks clearing its page
 //                                  table, which is far longer than the bus
@@ -39,10 +40,13 @@ module ngage_core #(
     output logic         m_req,
     output logic   [1:0] m_cmd,
     output logic  [26:0] m_addr,
+    output logic  [26:5] m_waddr,
     output logic  [31:0] m_be,
     output logic [255:0] m_wdata,
     input  logic         m_done,
     input  logic [255:0] m_rdata,
+    input  logic         m_free,
+    input  logic   [3:0] m_cnt,
 
     // ---------------- the LCD's line fetch, the same
     output logic         l_req,
@@ -90,6 +94,8 @@ module ngage_core #(
     logic         bus_req, bus_done;
     logic   [1:0] bus_cmd;
     logic  [26:0] bus_addr;
+    logic  [26:5] bus_waddr;
+    logic   [3:0] bus_cnt;
     logic  [31:0] bus_be;
     logic [255:0] bus_wdata, bus_rdata;
     logic  [31:0] lcd_base;
@@ -106,8 +112,8 @@ module ngage_core #(
 
     ngvm_sys #(.CPU_HZ(CPU_HZ)) u_sys (
         .clk(clk_cpu), .rst(rst_c),
-        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_be(bus_be),
-        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata),
+        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_waddr(bus_waddr), .bus_be(bus_be),
+        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata), .bus_cnt(bus_cnt),
         .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show_t(show_t), .vblank(vb_c), .keys(keys_s1),
         .rom_size(rom_size), .drive_size(drive_size),
         .snd(snd), .snd_tog(snd_tog),
@@ -119,11 +125,11 @@ module ngage_core #(
 
     ngvm_xbus u_xbus (
         .clk_a(clk_cpu), .rst_a(rst_c),
-        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_be(bus_be),
-        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata),
+        .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_waddr(bus_waddr), .bus_be(bus_be),
+        .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata), .bus_cnt(bus_cnt),
         .clk_b(clk), .rst_b(rst),
-        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
-        .m_done(m_done), .m_rdata(m_rdata)
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt)
     );
 
     // ------------------------------------------------------------ the LCD

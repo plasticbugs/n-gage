@@ -56,8 +56,11 @@ module tb_system_top #(
     logic         m_req, m_done;
     logic   [1:0] m_cmd;
     logic  [26:0] m_addr;
+    logic  [26:5] m_waddr;
     logic  [31:0] m_be;
     logic [255:0] m_wdata, m_rdata;
+    logic         m_free;
+    logic   [3:0] m_cnt;
     logic         l_req, l_wr, l_done;
     logic  [25:1] l_addr;
     logic   [5:0] l_len;
@@ -89,8 +92,8 @@ module tb_system_top #(
         .rd_late(1'b1), .burst_slow(1'b0), .rd_fast(rd_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
         .rom_size(rom_size), .drive_size(drive_size),
-        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
-        .m_done(m_done), .m_rdata(m_rdata),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
         .vram_req(1'b0), .vram_we(1'b0), .vram_addr(15'd0), .vram_din(16'd0), .vram_ben(2'b00),
@@ -127,8 +130,8 @@ module tb_system_top #(
     logic        hblank;
     ngage_core #(.CPU_HZ(CPU_HZ)) u_core (
         .clk(clk), .clk_cpu(clk_cpu), .rst(reset | ~mem_ready), .pause(1'b0), .pix_sync(1'b0),
-        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),
-        .m_done(m_done), .m_rdata(m_rdata),
+        .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
+        .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
         .keys(keys), .rom_size(rom_size), .drive_size(drive_size),

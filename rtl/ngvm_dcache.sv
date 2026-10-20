@@ -14,6 +14,21 @@
 // the edge that reads for the next request: if that is the same word, the
 // next compare merges the store's bytes over what the RAM gave (byp_*).
 //
+// A miss's line comes from the word missed on, then round (ngvm_mmu.sv), and
+// S_FILL writes each word to the RAM as it arrives.  While it does, a
+// waiting load is compared again every cycle, the RAMs reading r_va: it is
+// answered by a hit on another line, or from the line coming in once its
+// word was written before the edge that read the RAM (have_s).  So the load
+// that missed goes on at its own word, and loads down the line follow it as
+// the words come.  Everything else -- a store, a device, an uncached access,
+// another miss -- waits for the line, and then for S_REPLAY.  The tag and
+// the valid bit are written with the last word.
+//
+// A dirty victim goes out with the fill as one request (m_wb): the bus reads
+// the new line first and writes the victim behind it while the CPU goes on
+// (ngage_mem.sv).  Only if the fill faults does the victim go out alone, by
+// S_WB, before the abort is answered.
+//
 // What is not cached:
 //   * the devices (RG_IO): ngvm_io answers in the compare cycle;
 //   * the physical alias and the drive: a load is one word through the miss
@@ -64,6 +79,7 @@ module ngvm_dcache
     // the miss handler (ngvm_mmu): m_req is held until the answer is used
     output logic         m_req,
     output logic   [1:0] m_cmd,         // MC_*
+    output logic         m_wb,          // MC_FILL: m_wline goes back to m_pa too
     output logic  [31:0] m_va,          // a fill's, an uncached load's, the buffer's line
     output logic  [26:0] m_pa,          // a write-back's line
     output logic  [31:0] m_be,          // the buffer's byte mask
@@ -71,7 +87,8 @@ module ngvm_dcache
     input  logic         m_done,        // pulse
     input  logic         m_fault,
     input  logic  [26:0] m_fill_pa,
-    input  logic [255:0] m_rline        // a fill's line; word 0 an uncached load's
+    input  logic [255:0] m_rline,       // a fill's line; word 0 an uncached load's
+    input  logic   [3:0] m_words        // how many of a fill's words are in m_rline
 );
     localparam logic [1:0] MC_FILL = 2'd0, MC_WB = 2'd1, MC_URD = 2'd2, MC_WCB = 2'd3;
     localparam int PAW = 22;            // a line's bus address, [26:5]
@@ -96,7 +113,7 @@ module ngvm_dcache
     logic [10:0] dw_a;
     logic [31:0] dw_d;
     logic  [3:0] dw_be;
-    logic        tw_en;
+    logic        tw_en, tw_way;
     logic  [7:0] tw_a;
     logic [TAGW+PAW-1:0] tw_d;
 
@@ -119,8 +136,8 @@ module ngvm_dcache
         q1 <= dat1[rd_a];
     end
     always_ff @(posedge clk) begin
-        if (tw_en && !dw_way) tag0[tw_a] <= tw_d;
-        if (tw_en &&  dw_way) tag1[tw_a] <= tw_d;
+        if (tw_en && !tw_way) tag0[tw_a] <= tw_d;
+        if (tw_en &&  tw_way) tag1[tw_a] <= tw_d;
         t0 <= tag0[rd_a[10:3]];
         t1 <= tag1[rd_a[10:3]];
     end
@@ -133,9 +150,10 @@ module ngvm_dcache
     // 2.2 ns too slow at 80 MHz; read whole at the edge before, the same mux
     // sat behind the CPU's address adder, 0.4 ns too slow.  None of them
     // changes at an edge that reads one for a compare: a fill sets its bit
-    // the edge before S_REPLAY reads, a flush clears them the edge before
-    // S_DONE takes the next request, and a miss clears its victim's in a
-    // compare that takes none.
+    // at the edge that leaves S_FILL, where any request is left for S_REPLAY
+    // to read again, a flush clears them the edge before S_DONE takes the
+    // next request, and a miss clears its victim's in a compare that takes
+    // none.
     always_ff @(posedge clk) begin
         vg0 <= val0[16*int'(rd_a[10:7]) +: 16];
         vg1 <= val1[16*int'(rd_a[10:7]) +: 16];
@@ -146,10 +164,9 @@ module ngvm_dcache
         S_IDLE,         // compare when `look`
         S_REPLAY,       // read the RAMs again for r_*; compare next
         S_WBRD,         // read a line to write back, word by word
-        S_WB,           // write it back
+        S_WB,           // write it back (a walk's, or a faulted fill's victim)
         S_GAP,          // m_req low for a cycle between two requests
-        S_FILL,         // fetch the line
-        S_FWR,          // write it, word by word
+        S_FILL,         // fetch the line, writing each word as it comes
         S_UNC,          // an uncached word
         S_DONE,         // complete r_* from u_q / u_flt
         S_WALK,         // a clean or a flush: the next set with a dirty line
@@ -191,6 +208,20 @@ module ngvm_dcache
     wire  is_c    = !r_abt && !is_io && !is_unc;
     wire  st_hit  = cmp && is_c && hit && r_we;
 
+    // the line coming in (S_FILL)
+    logic [TAGW-1:0] mtag;              // its tag
+    logic  [2:0] mcrit;                 // the word missed on, which came first
+    logic  [3:0] wk;                    // words written, 0-8
+    logic  [7:0] have, have_s;          // which; and which were, when the RAMs read
+    logic        fdone;                 // the miss handler has answered
+    logic        fresh;                 // the RAMs read r_va at the last edge
+    wire  [2:0]  fw_w  = mcrit + wk[2:0];
+    wire         fw    = st == S_FILL && wk < m_words;
+    wire         fend  = st == S_FILL && (fdone || m_done) && wk == 4'd8;
+    wire         fhit  = st == S_FILL && r_tag == mtag && r_set == mset && have_s[r_va[4:2]];
+    wire         fcmp  = st == S_FILL && fresh && r_v && is_c && !r_we;
+    wire         r_v_n = dc_req || (r_v && !dc_ok);         // r_v after this edge
+
     logic [31:0] u_q;
     logic        u_flt;
 
@@ -211,7 +242,7 @@ module ngvm_dcache
     always_comb begin
         dc_ok    = 1'b0;
         dc_abort = 1'b0;
-        dc_rdata = hit1 ? q1m : q0m;
+        dc_rdata = hit1 || (fhit && mway) ? q1m : q0m;
         if (st == S_DONE) begin
             dc_ok = 1'b1; dc_abort = u_flt; dc_rdata = u_q;
         end else if (cmp) begin
@@ -219,7 +250,7 @@ module ngvm_dcache
             else if (is_io)               begin dc_ok = !is_fl; dc_rdata = io_rdata; end
             else if (is_c)                dc_ok = hit;
             else                          dc_ok = unc_now;
-        end
+        end else if (fcmp)                dc_ok = hit || fhit;
     end
 
     assign io_req   = cmp && is_io && !r_abt && !is_fl;
@@ -240,7 +271,8 @@ module ngvm_dcache
     wire  vict  = !val0[r_set] ? 1'b0 : !val1[r_set] ? 1'b1 : lru[r_set];
     wire  vdty  = vict ? val1[r_set] && dty1[r_set] : val0[r_set] && dty0[r_set];
 
-    assign m_req = st == S_WB || st == S_FILL || st == S_FWR || st == S_UNC || st == S_WCF;
+    assign m_req = st == S_WB || st == S_FILL || st == S_UNC || st == S_WCF;
+    assign m_wb  = mdty;
     always_comb begin
         case (st)
             S_WB:    m_cmd = MC_WB;
@@ -254,26 +286,31 @@ module ngvm_dcache
         m_wline = st == S_WCF ? wc_d : wb_d;
     end
 
-    // the RAMs' read address: the new request's, else the one the state needs
+    // the RAMs' read address: the new request's, else the one the state needs;
+    // while a line comes in, a waiting request's (a new one is taken only at
+    // an edge where none waits, or where the one waiting is answered: then
+    // the RAMs have read the old r_va, and `fresh` says so)
     always_comb begin
         case (st)
             S_REPLAY: rd_a = r_va[12:2];
+            S_FILL:   rd_a = r_v ? r_va[12:2] : dc_addr[12:2];
             S_WBRD:   rd_a = {mset, k[2:0]};
             S_WALK:   rd_a = {ws, 3'd0};
             default:  rd_a = dc_addr[12:2];
         endcase
     end
 
-    // writes: a store hit, or a fill
+    // writes: a store hit, or a word of a fill (never both: S_FILL takes no store)
     always_comb begin
-        dw_en  = st_hit || st == S_FWR;
-        dw_way = st == S_FWR ? mway : hit1;
-        dw_a   = st == S_FWR ? {mset, k[2:0]} : r_va[12:2];
-        dw_d   = st == S_FWR ? m_rline[32*k[2:0] +: 32] : r_wd;
-        dw_be  = st == S_FWR ? 4'hF : r_be;
-        tw_en  = st == S_FWR && k == 4'd7;
+        dw_en  = st_hit || fw;
+        dw_way = fw ? mway : hit1;
+        dw_a   = fw ? {mset, fw_w} : r_va[12:2];
+        dw_d   = fw ? m_rline[32*fw_w +: 32] : r_wd;
+        dw_be  = fw ? 4'hF : r_be;
+        tw_en  = fend;
+        tw_way = mway;
         tw_a   = mset;
-        tw_d   = {vtag_of(r_va, win_id), m_fill_pa[26:5]};
+        tw_d   = {mtag, m_fill_pa[26:5]};
     end
 
     wire  dsome = dty0[ws] || dty1[ws];
@@ -281,10 +318,10 @@ module ngvm_dcache
 
     // a miss: its victim, and where it goes first
     task automatic start_miss();
-        mway <= vict; mset <= r_set; mdty <= vdty;
+        mway <= vict; mset <= r_set; mdty <= vdty; mtag <= r_tag; mcrit <= r_va[4:2];
         mpa  <= vict ? t1[PAW-1:0] : t0[PAW-1:0];
         if (vict) val1[r_set] <= 1'b0; else val0[r_set] <= 1'b0;
-        k <= 4'd0;
+        k <= 4'd0; wk <= 4'd0; have <= '0; have_s <= '0; fdone <= 1'b0;
     endtask
 
     always_ff @(posedge clk) begin
@@ -297,6 +334,8 @@ module ngvm_dcache
         end else if (dc_ok) r_v <= 1'b0;
         // a compare next cycle if the RAMs read for it now and nothing else is due
         look <= (dc_req && (st == S_DONE || (st == S_IDLE && !clean_pend))) || st == S_REPLAY;
+        fresh <= st == S_FILL && (r_v ? !dc_req : dc_req);
+        have_s <= have;
 
         if (clean) clean_pend <= 1'b1;
 
@@ -306,7 +345,7 @@ module ngvm_dcache
             byp_a <= r_va[12:2]; byp_w <= hit1; byp_be <= r_be; byp_d <= r_wd;
             if (hit1) dty1[r_set] <= 1'b1; else dty0[r_set] <= 1'b1;
         end
-        if (cmp && is_c && hit) lru[r_set] <= hit0;
+        if ((cmp || fcmp) && is_c && hit) lru[r_set] <= hit0;
 
         // an uncached store into the buffer, now or after it is written out
         if ((cmp && unc_now && !r_abt) || (st == S_WCF && m_done && after == A_STORE)) begin
@@ -353,26 +392,30 @@ module ngvm_dcache
                 // read word k at this edge; word k-1 is out now
                 if (k != 4'd0) wb_d[32*kp +: 32] <= mway ? q1 : q0;
                 k <= k + 4'd1;
-                if (k == 4'd8) st <= S_WB;
+                if (k == 4'd8) st <= walking ? S_WB : S_FILL;
             end
             S_WB: if (m_done) begin
+                // a walk's write-back, or a faulted fill's victim: then the abort
                 st <= S_GAP;
-                gap_next <= walking ? S_WALK : S_FILL;
+                gap_next <= walking ? S_WALK : S_DONE;
                 if (mway) dty1[mset] <= 1'b0; else dty0[mset] <= 1'b0;
+                mdty <= 1'b0;
             end
             S_GAP: begin st <= gap_next; k <= 4'd0; end
-            S_FILL: if (m_done) begin
-                k <= 4'd0;
-                if (m_fault) begin u_flt <= 1'b1; u_q <= 32'd0; st <= S_DONE; end
-                else st <= S_FWR;
-            end
-            S_FWR: begin
-                k <= k + 4'd1;
-                if (k == 4'd7) begin
+            S_FILL: begin
+                if (fw) begin wk <= wk + 4'd1; have[fw_w] <= 1'b1; end
+                if (m_done) fdone <= 1'b1;
+                if (m_done && m_fault) begin
+                    // nothing came; a dirty victim has not gone out either
+                    u_flt <= 1'b1; u_q <= 32'd0;
+                    if (mdty) begin st <= S_GAP; gap_next <= S_WB; end
+                    else st <= S_DONE;
+                end else if (fend) begin
                     if (mway) begin val1[mset] <= 1'b1; dty1[mset] <= 1'b0; end
                     else      begin val0[mset] <= 1'b1; dty0[mset] <= 1'b0; end
                     lru[mset] <= !mway;
-                    st <= S_REPLAY;
+                    mdty <= 1'b0;
+                    st <= r_v_n ? S_REPLAY : S_IDLE;
                 end
             end
             S_UNC: if (m_done) begin
@@ -406,7 +449,7 @@ module ngvm_dcache
         endcase
 
         if (rst) begin
-            st <= S_IDLE; r_v <= 1'b0; look <= 1'b0; byp_v <= 1'b0; wc_v <= 1'b0;
+            st <= S_IDLE; r_v <= 1'b0; look <= 1'b0; byp_v <= 1'b0; wc_v <= 1'b0; mdty <= 1'b0;
             val0 <= '0; val1 <= '0; dty0 <= '0; dty1 <= '0; lru <= '0;
             clean_pend <= 1'b0; flushing <= 1'b0; walking <= 1'b0; u_flt <= 1'b0;
             cleaned <= 1'b0;
