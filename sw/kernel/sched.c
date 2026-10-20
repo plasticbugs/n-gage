@@ -253,7 +253,9 @@ void activity(void)
 void timer_tick(void)
 {
     u64 now = now_us();
+    u32 was = kflags;
     kflags = IO(IO_DBG_FLAGS);            /* the host may change them as it runs */
+    if (kflags & ~was & DBGF_THREADS) thread_dump();
     while (tq && tq->expiry <= now) {
         struct ktimer *k = tq;
         tq = k->qnext;

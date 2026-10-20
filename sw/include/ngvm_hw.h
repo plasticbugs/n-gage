@@ -76,6 +76,7 @@
 #define DBGF_SCHED        (1u << 1)   /* log thread switches                    */
 #define DBGF_IPC          (1u << 2)   /* log messages                           */
 #define DBGF_DUMP         (1u << 3)   /* dump every thread when a server is missing */
+#define DBGF_THREADS      (1u << 4)   /* dump every thread once, as the bit is set */
 
 #define IRQ_TIMER         (1u << 0)
 #define IRQ_VBLANK        (1u << 1)
