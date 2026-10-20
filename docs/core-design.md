@@ -214,7 +214,41 @@ Other rules:
 (section 6) runs the RTL with its caches against Unicorn, and a stale line
 shows as a divergence.
 
-## 5. The CPU
+### 4.3 What a memory request costs, measured
+
+`sim/run_sys.sh --lat L` charges every line read and line write L CPU
+clocks, and a word read L/2 + 1. The runs below are Sonic N's first 40 s
+at 73.85 MHz, no Unicorn, with the same RTL and kernel `c4369fba...`.
+"Work" is the instructions retired outside the idle loop.
+
+| L, clocks a request | work in 40 s | against L = 43 | idle-loop instructions | line reads | line writes |
+|---|---|---|---|---|---|
+| 2 | 1,176 M | +56% | 375 M | 30.6 M | 11.3 M |
+| 12 | 1,035 M | +37% | 317 M | 27.3 M | 9.5 M |
+| 22 | 920 M | +22% | 317 M | 24.1 M | 7.7 M |
+| 32 | 829 M | +10% | 317 M | 21.7 M | 6.4 M |
+| 43 | 756 M | | 317 M | 19.4 M | 5.5 M |
+
+**L = 43 is the Pocket.** `sim/run_system.sh` on the real memory glue
+measures 43 CPU clocks a bus request. Over the same 40 s it retires
+1,083 M instructions in all, against 1,073 M here at L = 43.
+
+**The time per instruction is linear in L.** Each instruction of work
+takes 33.6 + 0.449 L ns of the 40 s. That line, fitted to L = 22 and 43,
+predicts L = 12 and L = 2 within 1.5%. At L = 43, 37% of the time scales
+with the latency. Even memory that answered at once would give at most
++56%: the rest is the CPU itself, its clock and its CPI.
+
+**Readings for each change:**
+- A change is worth what it takes off the CPU's effective L.
+- Hiding every write-back (22% of requests) would make L about 34: +8%.
+- Fast reads, if they could be made sound, cut the memory side from 47
+  to 34 clocks, so L about 32: +10%.
+- Early restart lets the CPU go on at the first word, about 20 clocks.
+  The rest of the line still arrives behind it, so the effective L is
+  more like 25–30: +12–17%.
+- Together they might reach L about 15–20: +25–35%.
+
 
 ### 5.1 Why our own
 
