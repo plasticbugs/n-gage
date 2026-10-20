@@ -106,8 +106,12 @@ Rename it to `sym.rom`, in lower case, and put it in
 python3 mkdrive.py --from vcop.zip --out vcop.img
 ```
 
-`mkdrive.py` needs only Python 3. The game list
-(`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`.
+`mkdrive.py` needs only Python 3. A game's files must come to 32 MB at
+most, the size of the core's drive: of the retail games, only Glimmerati
+and Pathway to Glory are larger. The game list
+(`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`; to add a game,
+copy one of its files, name the copy after the game, and change its
+`filename` to the game's `.img`.
 
 ## Building the core
 

@@ -80,7 +80,10 @@ the drive stopped at 24 MB, which 20 of the 51 retail games read from a
 phone did not fit: most unpack to 23.8–30.1 MB. The drive now takes all
 32 MB of CRAM, which every one of them but two fits (Glimmerati, 53.7 MB,
 and Pathway to Glory, 56.8 MB). `tools/mkdrive.py` makes the content plus
-2 MB, at least 16 and at most 32.
+2 MB, at least 16 and at most 32. Checked: lockstep with Unicorn over the
+first 12 s of Worms World Party on a 31 MB image (575.5 M instructions),
+which passes the 3,000 reads the reference makes between 24.7 and 25.8 MB
+before the game starts; the 24 MB decode would have aborted the first.
 
 The Pocket's 256 KB SRAM is unused. It is the first place to look if the
 kernel's hot data needs a faster home than SDRAM.
