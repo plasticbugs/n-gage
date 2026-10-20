@@ -235,6 +235,20 @@ X and start, both OK, did otherwise before.
   the kernel ends each tone as it starts it. Without that, one key press
   in a game's menus silenced Puzzle Bobble for good and held it at 5
   frames a second, retrying its stream every 117 ms.
+- A game that falls behind its stream can drop it for good. Puyo Pop
+  updates its sound once a frame (game code `0x43c5c9a8`). Each update
+  turns the stream's position into samples played, and if that exceeds
+  what the game has written, the update `User::Leave`s with -39
+  (`0x43c5cb20`). Nothing calls MediaServer for that stream again. The
+  position counts the silence SoundDevice writes when a slot is asked for
+  and the game has written nothing. CPU-bound at 30 MIPS, Puyo updates
+  every 70–330 ms; its 50 ms writes run dry, and the attract and dialogue
+  music stop at their first gap (the reference: 39.5 s and 52.9 s, keys
+  every 2 s from 20 s). At 35, 40, 60 and 100 MIPS no update leaves, and
+  Stage 1 plays its music to 110 s. The Pocket's ~29 MIPS gives the
+  first. Asking for a slot as it starts to play rather than as it enters
+  the FIFO (`dsp_pump`) would put the position 32–64 ms later, which is
+  not enough (1,200 played against 800 written at 52.9 s).
 - Rates seen so far: 8 kHz and 16 kHz, mono. The rate codes are read from
   the start message; the 16 kHz reading is by ear and not yet proven.
 
