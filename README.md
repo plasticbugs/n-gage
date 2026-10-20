@@ -18,19 +18,23 @@ drivers.
 
 | part | implementation | verified by |
 |---|---|---|
-| CPU, ARMv4T + Thumb, 64 MHz (80 once its timing closes) | `rtl/arm_*.sv`: eight stages, branch prediction | lockstep with Unicorn, instruction by instruction (`sim/run_cpu.sh`, `sim/run_sys.sh`); docs/core-design.md 6 |
+| CPU, ARMv4T + Thumb, 73.85 MHz (80 does not meet timing) | `rtl/arm_*.sv`: eight stages, branch prediction | lockstep with Unicorn, instruction by instruction (`sim/run_cpu.sh`, `sim/run_sys.sh`); docs/core-design.md 6 |
 | caches, page table, devices | `rtl/ngvm_{icache,dcache,mmu,io,sys}.sv` | lockstep with Unicorn behind ideal memories (`sim/run_sys.sh`) |
 | the kernel | `sw/kernel` | the reference machine, `tools/ngvm/ngvm.py`; six of seven games reach their menus or play |
 | RAM, firmware | Pocket SDRAM (`target/pocket/ngage_mem.sv`) | `sim/run_system.sh`: loaded at the loader's rate, read back byte for byte |
 | memory card | Pocket CRAM (`target/pocket/cram_ctrl.sv`) | the same, with the chip's timing checked cycle by cycle (`sim/cram_model.sv`) |
-| LCD | `rtl/ngvm_lcd.sv`, scanned from RAM | pixel-identical to the reference on the boot screens (`sim/run_system.sh`, 0 of 36,608 differ), and still: three consecutive frames identical |
-| audio | the FIFO in `rtl/ngvm_io.sv`, at the game's rate | sample-for-sample the reference over 9.2 s of Virtua Cop's music, at the FIFO's output (`sim/run_system.sh --wav`) |
+| LCD | `rtl/ngvm_lcd.sv`: the framebuffer copied to block RAM when the firmware updates the display | pixel-identical to the reference on the boot screens (`sim/run_system.sh`, 0 of 36,608 differ), and still: three consecutive frames identical |
+| audio | the FIFO in `rtl/ngvm_io.sv`, 1,024 samples (32–64 ms) at the game's rate | sample-for-sample the reference over 9.2 s of Virtua Cop's music, at the FIFO's output (`sim/run_system.sh --wav`) |
 
 ## Status
 
-**It has not run on a Pocket yet.** The first build for one meets timing on
-every corner with the CPU at 64 MHz; `docs/bringup.md` says what it should
-show.
+**It runs on the Pocket.** The first flash (CPU at 64 MHz) boots and runs
+Sonic N into gameplay, with sound. Its picture combed during motion, its
+sound felt late and its frame rate was low. The second build makes a change
+for each: the picture is copied when the firmware updates the display, the
+audio FIFO is a quarter the size, and the CPU runs at 73.85 MHz. It meets
+timing on every corner but has not yet been seen on hardware.
+`docs/bringup.md` says what it should show, and logs what each build did.
 
 What is proven, and by what:
 

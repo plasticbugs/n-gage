@@ -25,13 +25,16 @@ someone decodes squares off a screen.
 - `./build-local.sh compile`: no negative slack in any corner
   (`projects/output_files/*.sta.summary`), no ignored constraints.
 
-The first flash's build passed all of these at 64 MHz, the bitstream's md5
-`346512887beedbb39c6aa82c3d304ba3`.
+| build | CPU | md5 of the packaged `bitstream.rbf_r` | worst slack, setup / hold |
+|---|---|---|---|
+| first flash | 64 MHz | `346512887beedbb39c6aa82c3d304ba3` | |
+| second | 73.85 MHz | `42a6ceb0fc00f8e8a03dc8d806bd09cb` | +0.653 / +0.079 ns, both on the CPU's clock |
 
-**One exception: the ignored constraints.** Two of the template's
-multicycles matched nothing. With one random-access client, the pointer
-they relax is optimised away, so the paths were timed in one cycle and met.
-The next build takes the two lines out.
+Each passed all of these, with one exception for the first: two of the
+template's multicycles matched nothing. With one random-access client, the
+pointer they relax is optimised away, so the paths were timed in one cycle
+and met. The second build takes the two lines out, and its reports name
+no constraint of ours as ignored.
 
 ## On the card
 
@@ -122,11 +125,23 @@ Row 1:
 | row 1 frozen | the CPU stopped: report the address; then the clock crossing (`rtl/ngvm_xbus.sv`) |
 | row 0 square 23 is 1 | the kernel panicked: row 2 holds the end of its message |
 | picture wrong in a pattern | the SDRAM switches below, then the PLL phase (SDC, METHODOLOGY 5.20) |
+| a moving picture combed, or old above a line and new below it on every frame | the copy on `IO_LCD_SHOW` (`rtl/ngvm_lcd.sv`): a copy that tears once is expected, one that tears every frame is not |
 | menu restarts the game | `pause` has reached a reset; METHODOLOGY 5.5 |
 
-**Bring-up: SDRAM read late** and **SDRAM slow bursts** change how the SDRAM
+Menu → **SDRAM read late** and **SDRAM slow bursts** change how the SDRAM
 is read. Try each alone if the picture or the boot looks corrupt, and report
 which changed anything.
+
+Menu → **SDRAM fast reads** (second build on, off by default) issues a
+burst's READs one a clock instead of one every two. On the bench it makes
+a cache line's fetch 34 memory clocks instead of 47, and the CPU about 8%
+faster through Virtua Cop's boot (726 against 673 million instructions in
+its first 20 s; the Nokia logo at 6.5 s, the N-Gage logo at 16.0 s). The
+bench's SDRAM model cannot say whether the Pocket's chip is read soundly at
+that pace: on another core it was not (METHODOLOGY 5.28). Turn it on while
+a game runs. If the game crashes, freezes or draws garbage, it is unsound:
+turn it off and report what you saw. Leaving it on does not survive a
+reload.
 
 The game runs on while the menu is open: that is expected (NGVM does not
 pause yet).
@@ -157,3 +172,17 @@ order — each step's reading tells the next where to look
 
 Date, build md5, what was seen, what it ruled out. One line each. The theories
 that died belong here as much as the one that lived.
+
+- 2026-10-19, `346512887beedbb39c6aa82c3d304ba3` (64 MHz): boots and runs
+  Sonic into gameplay, with sound. Seen: what looked like
+  interlacing during motion, mostly Sonic's title screens and animations and
+  not its gameplay; sound that felt late; a low frame rate. That the picture
+  appeared at all rules out a gross fault in the loader, the SDRAM's capture
+  phase, the CRAM and the clock crossing. The theory for the
+  "interlacing": the LCD scanned the framebuffer while the game drew it, and
+  the rows reached SDRAM out of order through the write-back cache. The
+  reference emulator, shown only what the firmware sends the display, never
+  has a frame of one parity alone (docs/hardware.md, LCD). The audio FIFO
+  held 128-256 ms. The second build copies the picture on the firmware's
+  update instead, holds 32-64 ms of sound and runs the CPU 15% faster. If
+  it still combs, the theory is dead.

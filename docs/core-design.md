@@ -15,7 +15,7 @@ a design target until a bench or the hardware measures it.
           |   | I-cache   | D-cache   |<-- page table (block RAM)         |
           |   +-----+-----+-----+-----+                                   |
           |         |  ARMv4T   |---- devices: timer, IRQ, keys, debug    |
-          |         +-----------+---- LCD scan-out --> video out          |
+          |         +-----------+---- LCD frame store --> video out       |
           |                     +---- audio FIFO   --> 48 kHz I2S         |
           +---------------------------------------------------------------+
 ```
@@ -28,24 +28,33 @@ miss.
 
 | clock | frequency | drives |
 |---|---|---|
-| `clk_sys` | 96 MHz | the CPU, caches, SDRAM controller, CRAM, devices |
+| `clk_cpu` | 73.85 MHz = 960 / 13; the first flash ran at 64 = 960 / 15, and 80 = 960 / 12 does not close (section 5.4) | the CPU, caches, page table, devices (`rtl/ngvm_sys.sv`) |
+| `clk_sys` | 96 MHz | the SDRAM and CRAM controllers, the LCD (`target/pocket/ngage_mem.sv`, `rtl/ngvm_lcd.sv`) |
 | `clk_sdram` | 96 MHz, phase-shifted | the SDRAM pin clock (template, unchanged) |
-| `clk_vid` | 6.4 MHz = 96 / 15 | the LCD raster; `pix_sync` pins its divider |
+| `clk_vid` | 6.857 MHz = 96 / 14 | the raster; `pix_sync` pins the dot divider to it (template, unchanged) |
 
-The CPU runs at `clk_sys`, so a cache miss crosses no clock domain. If the
-CPU cannot close timing at 96 MHz (section 5.4), it gets its own PLL output.
-Its only connection to the memory side is then the miss port, a
-request/acknowledge pair that takes a clock-domain crossing without changing
-the CPU. The miss port is built that way from the start.
+The CPU closes timing alone at 87–91 MHz (section 5.4), not 96, so it has
+its own PLL output. The two sides share the PLL's VCO but are timed as
+asynchronous. Everything between them crosses by a toggle handshake or two
+flops; `rtl/ngage_core.sv` lists each crossing and why it is safe.
 
-**Raster.**
+- **The bus.** `rtl/ngvm_xbus.sv` carries the miss port's one request at a
+  time across. The fields are held still from the request to the answer.
+  A toggle says when they may be taken, and another says the answer is
+  ready.
+- **Cost.** A miss pays about three clocks of each side for the crossing,
+  on top of the memory's own time.
+- **`CPU_HZ`.** `ngvm_io` counts real time by this parameter. It is set in
+  `core_top` and must equal the PLL output.
 
-- 408 × 262 dots at 6.4 MHz: 59.87 Hz, with lines at 15.69 kHz. That is
-  NTSC's line rate, so the Analogizer drives a 15 kHz CRT with no
-  converter.
-- Visible: 176 × 208, centred.
-- The kernel sees 59.87 Hz frames through `IO_LCD_FRAME` and `IRQ_VBLANK`.
-  `ngvm.py` is to match (it uses 60.000 today).
+**Raster.** The template's, kept so the Analogizer's 15 kHz path and its
+bench need no converter:
+
+- 452 × 253 dots at 6.857 MHz: 59.96 Hz, with lines at 15.17 kHz.
+- Visible: 176 × 208, in dots 0–175 of lines 24–231.
+- Hsync is on dots 300–331. Vsync is on lines 235–237.
+- The LCD's frame pulse (NGVM's vblank) comes at line 232. It sets
+  `IRQ_VBLANK`.
 
 ## 3. Where each memory lives
 
@@ -58,8 +67,8 @@ the CPU. The miss port is built that way from the start.
 | drive, `0x60000000` | ≤ 24 MB | CRAM0 (16 MB) + CRAM1 (8 MB) | uncached 16-bit words |
 | page table | 16,640 × 16 bits | block RAM | one read a miss |
 | I-cache, D-cache | 16 KB each *(section 4)* | block RAM | every cycle |
-| audio FIFO | 2,048 × 32 bits | block RAM | |
-| LCD line buffers | 2 × 176 × 16 bits | block RAM | |
+| audio FIFO | 1,024 × 32 bits | block RAM | 32–64 ms of sound at 16 kHz |
+| LCD frame store | 36,608 × 12 bits, as 32K + 4K | block RAM | written by a copy from SDRAM, read by the raster |
 
 The 64 MB SDRAM cannot hold all of RAM, ROM, KSEC and a drive image. The
 drive is the one region only the kernel's drive LDD reads, through
@@ -72,6 +81,49 @@ CRAM, `tools/mkdrive.py` keeps its default size.
 
 The Pocket's 256 KB SRAM is unused. It is the first place to look if the
 kernel's hot data needs a faster home than SDRAM.
+
+**How each request reaches a chip** (`target/pocket/ngage_mem.sv`):
+
+| bus request | SDRAM | CRAM |
+|---|---|---|
+| line read (32 B) | one 16-halfword burst | 16 halfword reads; never asked for (the drive is uncached) |
+| line write, masked | one 16-halfword burst, DQM masking each byte | a write per halfword with a byte in the mask |
+| word read | a 2-halfword burst | 2 halfword reads |
+
+- **SDRAM.** The controller is the template's, widened to all 64 MB of the
+  chip: bank `[25:24]`, row `[23:11]`, column `[10:1]`. A burst issues a
+  READ or WRITE every two clocks.
+- **SDRAM fast reads** (the menu, off by default) issues a burst's READs
+  one a clock. Over the first 20 s of Virtua Cop on `sim/run_system.sh`, a
+  line request takes 33-34 memory clocks instead of 45-47, a bus round trip
+  32 CPU clocks instead of 41-43, and the CPU retires 725,824,799
+  instructions instead of 673,111,453 (+7.8 %). The bench's SDRAM model
+  says nothing about whether the Pocket's chip is read soundly at that
+  pace, and on another core it was not (METHODOLOGY 5.28), so it is a
+  switch until hardware has chosen.
+- **CRAM.** `target/pocket/cram_ctrl.sv`:
+  - asynchronous, with the address multiplexed on DQ;
+  - 12 clocks a halfword read and 10 a write, back to back, each with
+    margin against the -70 part's limits;
+  - a write must fit inside the loader's fastest halfword, 14 clocks,
+    or the download queue grows without end: `sim/run_system.sh --gap 7`
+    sends a megabyte at that rate and checks every byte;
+  - `sim/cram_model.sv` checks those limits cycle by cycle.
+- **The LCD's copy.** `IO_LCD_SHOW` (the firmware's screen update,
+  `docs/hardware.md`) has the D-cache write its dirty lines back and then
+  the LCD copy the 36,608-halfword frame into its frame store, from which
+  alone it scans. The copy shares the burst port in bursts of at most 32
+  halfwords; the CPU and the LCD take turns when both wait, so a miss
+  waits at most one such burst.
+- **Copy budget, measured.** A copy takes at most 136,723 clocks, 1.42 ms
+  (`sim/run_system.sh`, Virtua Cop's boot at 73.85 MHz), including the
+  waits behind the CPU's bursts.
+- **Why a copy.** The first flash scanned the framebuffer itself, 60 times
+  a second, a line ahead. The picture showed drawing half done, and through
+  the write-back D-cache, which wrote back at each vblank and evicted in
+  between, a moving picture reached SDRAM a few rows at a time. That is
+  the explanation for the combing the first flash showed in Sonic's title
+  animations; the second flash tests it.
 
 **Cached or not:**
 
@@ -416,14 +468,61 @@ processor:
   on the integrated core, where the CPU can have its own clock
   (section 2).
 
-**The core's project is set for area.** It uses
-`OPTIMIZATION_MODE "AGGRESSIVE AREA"`, `OPTIMIZATION_TECHNIQUE AREA` and a
-standard fit, with physical-synthesis register duplication off. These
-fits used high-performance effort, and their retiming and duplication
-are visible in the netlists. When the CPU joins the core, the project or
-the CPU's partition needs the same settings, and the timing gets
-measured again there. If it misses, the CPU moves to its own PLL output
-(section 2).
+**In the whole core, measured.** The project now uses
+`OPTIMIZATION_MODE "HIGH PERFORMANCE EFFORT"` and the CPU has its own PLL
+output (section 2). The first full fit at 80 MHz:
+
+- 13,568 of 18,480 ALMs (73 %), 15,705 registers.
+- **`clk_cpu` missed by 2.226 ns** at the hot slow corner (2.124 cold),
+  −407 ns in total: about 68 MHz. Every other clock met.
+- **All 200 worst paths had one shape:** the D-cache's compare to the
+  return stack, at −2.23 to −1.95 ns. The valid bits were indexed by the
+  request address in the compare cycle, a 256-to-1 mux of 4.8 ns. The
+  hit then went into M's stall and abort, and from those into
+  `a_redirect` and `m_redirect`. Those chose which return address
+  repairs the stack, and Quartus put that choice in front of the
+  `pc + 4` adder: another 2.7 ns. The CPU alone had been timed with
+  `dc_ok` as an input port, so no path from the compare existed there.
+- **The fix, first step.** The valid bits were read whole at the edge
+  before the compare, as the tags are (`rtl/ngvm_dcache.sv`). Each case's
+  return address was computed into a flop as its instruction enters D2
+  or A (`rtl/arm_cpu.sv`). Over 12 s of Virtua Cop in lockstep the CPU
+  retired the same 541,985,611 instructions in the same 960 M cycles,
+  with the same bus traffic, as before the change.
+
+  The fit: −0.305 ns hot, −0.394 cold (78.1 MHz). The 256-to-1 mux now
+  sat behind the CPU's address adder: an operand from late forwarding,
+  `base + offset`, then the mux into `v0q`. Its twin `v1q` made
+  +0.077 ns. The only other failures were 45 ps and 1 ps.
+- **Second step.** The edge before the compare reads the 16 sets that
+  address bits [12:9] pick. The compare picks its own set from those with
+  `r_va[8:5]`, beside the tag compare. The same 541,985,611 instructions
+  in lockstep. The fit: −0.619 ns hot, −0.374 cold. The worst path now
+  runs from the 16-to-1 mux behind those flops through the hit, A's
+  stall (`a_free`, 557 loads) and the return stack's write enable, and
+  two more groups miss by 0.2–0.3 ns: the BTB's read address (from the
+  CPSR's T bit through `f1_pc_n` and `a_redirect`) and the I-cache's
+  valid bits (from the D-cache's walk through `inv_i`). Three unrelated
+  groups at once is placement pressure at this clock, not one path.
+- **73.85 MHz (960 / 13) instead.** The PLL's other outputs fix the VCO
+  at 960 MHz, so the clocks within reach are 80, 73.85 and 68.57 MHz.
+  The fit at 73.85: setup met on every corner, +0.344 ns the least
+  (Fmax 77.96 MHz cold, 79.44 hot). Hold missed by 0.019 ns at the fast
+  0 °C corner, on the BTB's write data into its block RAM's input
+  register, which `OPTIMIZE_HOLD_TIMING "ALL PATHS"` did not pad enough.
+  The BTB only predicts, and every prediction is checked, so a wrong
+  bit there costs a misprediction, not a wrong result. Even so, that build
+  was not flashed. The next fit, the same CPU with the LCD's frame store
+  and the fast-reads switch added (section 3), met every clock on every corner:
+  +0.653 ns setup on `clk_cpu` the least, +0.079 ns hold on it the least.
+  Nothing was done for the hold path; the new placement moved it. A later
+  fit may miss it again, and the BTB's write data is the first place to
+  look. The second flash is that fit. The real clock is 73.89 MHz,
+  the VCO being fractional off 74.25 MHz; `CPU_HZ` is 73,846,154, 0.06 %
+  slow for the timer and the audio FIFO's pace.
+- **The first flash runs the CPU at 64 MHz** (960 / 15) on the RTL before
+  either step. That fit met every clock on every corner: `clk_cpu` with
+  +0.993 ns hot (Fmax 68.4 MHz), and +0.109 ns the least anywhere.
 
 ### 5.5 Where the cycles go, measured
 
@@ -669,6 +768,19 @@ firmware. Every instruction it writes has a defined result in ARMv4.
 | eight stages: 1,000 random programs, about 64% Thumb | 26.8 M | identical |
 | eight stages: 300 more after each timing change (section 5.4), 1,500 in all | | identical |
 
+**With the caches, page table and devices** (`sim/run_sys.sh`: all of
+`ngvm_sys` behind a bus of ideal latency, Unicorn alongside):
+
+| run | instructions in lockstep | result |
+|---|---|---|
+| Bomberman card, to 24.4 virtual s | 875 M | identical (stopped there) |
+| Sonic N card, to 26.3 virtual s | 889 M | identical (stopped there) |
+| Virtua Cop card, to 16.3 virtual s | 631 M | identical (stopped there) |
+| Virtua Cop card, to 12 virtual s, D-cache data in byte-enabled block RAM | 542 M | identical |
+
+The first three ran before the D-cache's data RAMs were rewritten in the
+form Quartus infers as block RAM; the last is on the RTL as committed.
+
 The three game runs and the last 300 random programs (seeds 9001–9300)
 are on the RTL as committed. The random programs write only the flags
 with MSR, so mode changes, which D1's register indices depend on, are
@@ -708,14 +820,22 @@ Still unexercised:
 
 ## 7. Loading
 
-| slot | file | where it goes |
-|---|---|---|
-| 0 | `ngvm_kernel.bin` (ours, ships in the package) | RAM page 0 |
-| 1 | `SYM.ROM` (the user's firmware; never shipped) | SDRAM ROM region |
-| 2 | the game's drive image (`tools/mkdrive.py`) | CRAM |
+| slot | file | bridge (= bus) address | where it goes |
+|---|---|---|---|
+| 0 | the game's instance JSON | | names slot 3's file |
+| 1 | `ngvm.bin` (ours: `build/kernel/kernel.bin`, ships in the package) | `0x0000000` | SDRAM, RAM page 0 on |
+| 2 | `sym.rom` (the user's firmware; never shipped) | `0x2000000` | SDRAM |
+| 3 | the game's drive image (`tools/mkdrive.py`) | `0x4000000` | CRAM |
 
-Each game is an instance JSON naming its drive image. The core holds the
-CPU in reset until all slots are loaded.
+- **Routing.** `ngage_mem` routes each byte by its address. Bytes pair into
+  little-endian halfwords. Each memory has a 64-deep FIFO, because the
+  loader cannot wait.
+- **Sizes.** `IO_ROM_SIZE` and `IO_DRIVE_SIZE` are one past the last byte
+  loaded into each region.
+- **Reset.** The CPU is held in reset until every slot is loaded.
+- **Running again.** A menu reset runs the kernel again over memory as the
+  last run left it. Its `.data` therefore comes from a copy in the image,
+  restored at every boot (`sw/kernel/kernel.ld`).
 
 ## 8. Budgets
 
@@ -723,9 +843,10 @@ CPU in reset until all slots are loaded.
 |---|---|---|---|---|
 | CPU Fmax, alone | ≥ 96 MHz | without a BTB: median 97.0 MHz over four seeds (parallel fit), 100.3 (one processor); with the BTB: 87.2–90.6, median 88.7 (one processor); high-performance fit (section 5.4) | | |
 | CPI, ideal memories, first 15 s of a game | as low as the clock allows | 1.59–1.66 with the BTB, 2.12–2.21 without (sections 5.5, 5.6) | | |
-| MIPS delivered, Virtua Cop | ≥ the phone's (about 50); 70 a stretch | 55.6 at 88.7 MHz, ideal memories, before any cache miss | | |
-| LCD line fetch | 176 words in one line (63.75 µs) | | | |
-| audio FIFO | never empty while playing | | | |
+| MIPS delivered, Virtua Cop | ≥ the phone's (about 50); 70 a stretch | 55.6 at 88.7 MHz, ideal memories, before any cache miss | 20.6–21.6 at 80 MHz while the firmware boots (`sim/run_system.sh`, 7.5–8.5 s); the title at 35 s, against the reference's 30 | |
+| LCD copy | done before the next update, at most 240 a second (Virtua Cop's intro at 100 MIPS): 4 ms | | at most 1.42 ms over Virtua Cop's boot, waiting on the CPU's bursts included | |
+| audio latency | as little as keeps the FIFO from running dry | | 505–1,022 samples queued over 22 s of Virtua Cop's music (`sim/run_system.sh`, CPU at 80 MHz): 32–64 ms at 16 kHz (it was 128–256) | |
+| audio FIFO | never empty while playing | | 505 samples at the lowest over those 22 s; Sonic's music 510 | |
 
 ## 9. What is not cycle-exact, and why that is acceptable
 
