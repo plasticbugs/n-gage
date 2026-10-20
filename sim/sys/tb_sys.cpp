@@ -22,6 +22,7 @@
 //   obj_sys/Vngvm_sys --rom SYM.ROM --kernel build/kernel/kernel.elf
 //       [--drive game.img] [--seconds S] [--no-uc] [--lat CYCLES]
 //       [--frames-to DIR --frame-every N] [--keys "S:MASK ..."]
+//       [--watch-pc ADDR,ADDR,...]  (hex; prints when each retires, its first 20 times)
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -423,6 +424,10 @@ struct Bench {
     // D-cache had written back what IO_LCD_SHOW asked for (lcd_show_t)
     std::vector<uint16_t> shown = std::vector<uint16_t>(LCD_W * LCD_H, 0);
     bool show_d = false;
+    // the audio FIFO's output: samples played, those not silent, the first of them
+    bool snd_d = false;
+    uint64_t snd_n = 0, snd_loud = 0, snd_first = 0;
+    std::map<uint32_t, uint64_t> watch;      // --watch-pc: retirements of each
     void take_frame() {
         uint32_t base = top->lcd_base;
         if (base - NGVM_PHYS_BASE >= NGVM_RAM_SIZE) return;
@@ -451,6 +456,11 @@ struct Bench {
         // what this cycle presents, before the edge
         bool rt = top->rt_valid;
         Ret r = {top->rt_pc, top->rt_instr, top->rt_cpsr, (bool)top->rt_thumb, (bool)top->rt_irq};
+        if (rt && !watch.empty()) {
+            auto w = watch.find(r.pc & ~1u);
+            if (w != watch.end() && w->second++ < 20)
+                printf("[watch] %08x at %.6f s\n", w->first, (double)cycles / CPU_HZ);
+        }
         if (top->io_rd) io_reads.push_back({(uint32_t)top->io_rd_off * 4, top->io_rd_data});
         if (top->dbg_putc) {
             char c = (char)(top->dbg_data & 0xFF);
@@ -508,6 +518,11 @@ struct Bench {
 
         // frames, keys
         if (top->lcd_show_t != show_d) { show_d = top->lcd_show_t; take_frame(); }
+        if (top->snd_tog != snd_d) {
+            snd_d = top->snd_tog;
+            snd_n++;
+            if (top->snd && !snd_loud++) snd_first = cycles;
+        }
         top->vblank = 0;
         if (cycles >= next_frame) {
             next_frame += frame_period;
@@ -547,6 +562,10 @@ int main(int argc, char **argv)
         else if (a == "--lat" && i + 1 < argc) { b.lat_line = atoi(argv[++i]); b.lat_word = b.lat_line / 2 + 1; }
         else if (a == "--frames-to" && i + 1 < argc) b.frames_to = argv[++i];
         else if (a == "--frame-every" && i + 1 < argc) b.frame_every = atoi(argv[++i]);
+        else if (a == "--watch-pc" && i + 1 < argc) {
+            for (char *t = strtok(argv[++i], ","); t; t = strtok(nullptr, ","))
+                b.watch[(uint32_t)strtoul(t, nullptr, 16) & ~1u] = 0;
+        }
         else if (a == "--keys" && i + 1 < argc) {
             // "S:MASK S:MASK ...": from S seconds, IO_KEYS reads MASK
             std::string s = argv[++i];
@@ -626,6 +645,10 @@ int main(int argc, char **argv)
            host, b.use_uc ? ", lockstep with Unicorn" : "");
     if (Bench::n_invalid)
         printf("%llu user-mode MOVS pc / LDM ^ met, run by the RTL as plain writes to pc\n", Bench::n_invalid);
+    for (auto &w : b.watch) printf("[watch] %08x retired %llu times\n", w.first, (unsigned long long)w.second);
+    printf("audio: %llu samples played, %llu not silent", (unsigned long long)b.snd_n, (unsigned long long)b.snd_loud);
+    if (b.snd_loud) printf(", the first at %.3f s", (double)b.snd_first / CPU_HZ);
+    printf("\n");
     delete b.top;
     return ok && !b.mismatches ? 0 : 1;
 }
