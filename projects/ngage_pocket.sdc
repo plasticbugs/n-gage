@@ -88,6 +88,20 @@ set_false_path -from [get_ports {sram_dq[*]}]
 set_false_path -to   [get_ports {cram0_* cram1_*}]
 set_false_path -from [get_ports {cram0_dq[*] cram1_dq[*] cram0_wait cram1_wait}]
 
+# The BTB's write port (arm_cpu.sv: bwq_d, bwq_ctr, bwq_i) into its block
+# RAMs' input registers is the one hold path two fits have missed at the
+# fast 0C corner, by 0.019 and 0.051 ns, with OPTIMIZE_HOLD_TIMING on every
+# path: the fitter's estimate of a register-to-RAM hold is short there.  So
+# the fitter alone is asked for 0.3 ns of hold on it; the timing analysis
+# (quartus_sta) never sees this line and checks the true requirement.  Both
+# filters were checked against a fit (71 registers, 116 RAM inputs).  A
+# fit-only line is not policed by CI's applied-constraint check, so if the
+# hold report names this path again, check the filters first.
+if {$::quartus(nameofexecutable) eq "quartus_fit"} {
+    set_min_delay -from [get_keepers {*|arm_cpu:u_cpu|bwq_*}] \
+                  -to   [get_keepers {*|arm_cpu:u_cpu|altsyncram:btb_*|*}] 0.3
+}
+
 # ------------------------------------------------------------------------------
 # Multicycle exceptions for clock-enabled blocks go here.  None are claimed
 # yet, because the skeleton has nothing that needs one.  Before adding any,
