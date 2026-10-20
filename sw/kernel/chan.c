@@ -356,13 +356,19 @@ static void isi_deliver(struct channel *c)
  *   0x23 filled  [10] buffer  [11] 2, or 1 for the last  [12..13] samples
  *                                                                  -> 0x24
  *   0x27 filled  as 0x23, once playing: the buffer last asked for -> 0x28
+ *   0x2a stop    (no body)               -> 0x2b [10..11] the bytes played
  *   0x26 (from the DSP) [11] a buffer to fill
  * 0x24 moves SoundDevice from starting to playing.  It fills one buffer
  * at the start and one for each 0x26, so the DSP asks for the other buffer
- * as it starts to play one: double buffering.  After the last buffer
- * (flag 1) it sends 0x2b with [10..11] the bytes played, a guess not yet
- * checked.  Samples are 16-bit little endian, mono; the FIFO takes them as
- * L = R. */
+ * as it starts to play one: double buffering.  isimsg.dll builds the
+ * requests (0x19, 0x1c, 0x1e, 0x20, 0x23, 0x27, 0x28, 0x2a); SoundDevice
+ * takes 0x1a, 0x1b, 0x1d, 0x1f, 0x21, 0x22, 0x24, 0x25, 0x26 and 0x2b (its
+ * table at 0x505b46dc).  A game stops its stream between screens (Puyo
+ * Pop): unanswered, the stop left SoundDevice playing nothing for good.
+ * 0x2b stops SoundDevice's side whatever its state (0x505b495e), so it is
+ * also sent after the last buffer (flag 1), which is not yet checked
+ * against a game that ends a stream.  Samples are 16-bit little endian,
+ * mono; the FIFO takes them as L = R. */
 #define DSP_BASE 0x0a061000u
 static struct {
     struct channel *c;
@@ -424,6 +430,14 @@ static int dsp_request(struct channel *c, const u8 *m, int n, u8 *r)
         r[9] = m[9] + 1; r[10] = 0; r[11] = 0;
         return 1;
     }
+    case 0x2a: {
+        int b = dsp.playing ? dsp.pos * 2 : 0;
+        if (kflags & DBGF_IPC) kprintf("[dsp] stop after %d bytes\n", b);
+        dsp.playing = 0; dsp.full[0] = dsp.full[1] = 0; dsp.pos = 0; dsp.want = -1;
+        IO(IO_IRQ_ENABLE) &= ~IRQ_AUDIO;
+        r[9] = 0x2b; r[10] = b >> 8; r[11] = b;
+        return 1;
+    }
     }
     kprintf("[dsp] request %02x not modelled\n", m[9]);
     return 0;
@@ -460,6 +474,23 @@ void dsp_pump(void)
     if (!dsp.full[dsp.cur]) IO(IO_IRQ_ENABLE) &= ~IRQ_AUDIO;
 }
 
+/* ---- the DSP's tone player (ISI resource 0x1F) ---------------------------
+ * SoundDevice.mda starts a key click or a tone with message 0x01 and holds
+ * the audio device (its state 14) until the DSP says the tone has ended:
+ * message 0x03 with [10] anything but 0x14, or 0x06 with [10] 0x0d (its
+ * receive handler, 0x505b4460).  While it holds it, a stream of lower
+ * priority than the tone's -- every game's -- is refused with KErrInUse
+ * (0x505b11a4, then 0x505b138e).  A game that pressed a key in its menus
+ * then never sounds again, and one that retries the stream (Puzzle Bobble,
+ * every 117 ms) waits on each try.  NGVM has no tone generator, so a tone
+ * ends as soon as it starts. */
+static void tone_ended(struct channel *c, const u8 *m)
+{
+    u8 e[ISI_LEN] = { m[0], m[2], m[1], 0x1F, 0, ISI_LEN - 6, m[7], m[6], m[8], 0x03, 0, 0, 0, 0 };
+    if (kflags & DBGF_IPC) kprintf("[tone] ended\n");
+    isi_post(c, e);
+}
+
 static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
 {
     if (fn != 4 && fn != 6) return mute_control(c, fn, a1, a2);
@@ -489,6 +520,7 @@ static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
         isi_q[q].c = c;
         isi_q[q].seq = isi_seq++;
         isi_deliver(c);
+        if (m[3] == 0x1F && m[9] == 0x01) tone_ended(c, m);
         return KErrNone;
     }
     kprintf("[isi] reply queue full\n");

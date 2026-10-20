@@ -199,7 +199,15 @@ The kernel reads `IO_KEYS` at each vblank (`sw/kernel/event.c`).
   put 128–256 ms between a game's sound and its picture (256–512 ms at
   8 kHz).
 - The kernel fills it from its model of the DSP's PCM player (ISI resource
-  `0xE8`, the protocol `SoundDevice.mda` speaks).
+  `0xE8`, the protocol `SoundDevice.mda` speaks), including its stop
+  (`0x2a`, answered `0x2b`), which a game sends between screens.
+- Key clicks and tones go to the DSP's tone player (ISI resource `0x1F`).
+  SoundDevice holds the audio device from a tone's start (`0x01`) until
+  the DSP says it has ended (`0x03`), and refuses every game stream of
+  lower priority meanwhile (`KErrInUse`). There is no tone generator, so
+  the kernel ends each tone as it starts it. Without that, one key press
+  in a game's menus silenced Puzzle Bobble for good and held it at 5
+  frames a second, retrying its stream every 117 ms.
 - Rates seen so far: 8 kHz and 16 kHz, mono. The rate codes are read from
   the start message; the 16 kHz reading is by ear and not yet proven.
 
@@ -230,7 +238,8 @@ Taken from the boot traces (`ngvm.py --trace 1`) on all seven cards.
 - keys (EKeyboard);
 - the drive (MMC);
 - Audioldd's shared buffer;
-- NOSDRIVER, as an ISI/Phonet router that answers the DSP's PCM player;
+- NOSDRIVER, as an ISI/Phonet router that answers the DSP's PCM player
+  and ends its tones at once;
 - the mute and vibra controls;
 - every other channel any boot opens, with its minimum answer: open and
   never complete, or complete with `KErrNotSupported`.
@@ -238,8 +247,8 @@ Taken from the boot traces (`ngvm.py --trace 1`) on all seven cards.
 **Not modelled, and what it costs:**
 
 - adspserver's MADI link to the DSP over Comm unit 0. AudioServer panics
-  ("SS Audio Server 4"), so key clicks and the tone player are silent. No
-  game's music or effects go this way.
+  ("SS Audio Server 4"). Key clicks and the tone player are silent (their
+  tones are ended at once, above). No game's music or effects go this way.
 - Bluetooth HCI. Snakes' multiplayer cannot start; single player runs.
 - The radio side, SIM, telephony, the camera, IrDA and USB.
 
@@ -269,9 +278,9 @@ share of cache misses, branch penalties and multi-cycle instructions;
 
 ## 10. Open questions
 
-- The meaning of the DSP's `0x2b` message, and whether `0x46` means 16 kHz.
-- Whether Puzzle Bobble's sound is silent because of the AudioServer path.
-  Snakes imports no stream library.
+- Whether `0x2b` is also how the DSP ends a stream after its last buffer
+  (the kernel sends it then), and whether `0x46` means 16 kHz.
+- Snakes imports no stream library.
 - Sonic N's intro timing changed when sound started.
 - Process priorities the EKA1 kernel assigns itself:
   - The file server runs at 750 (EPriorityFileServer). EFile's ROM header
