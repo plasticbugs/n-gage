@@ -5,6 +5,11 @@
 #        cut-release.sh v1.0.0 32214080417
 #        cut-release.sh v1.0.0 release/pocket/Cores/<id>/bitstream.rbf_r
 #
+# The kernel (Assets/ngage/common/ngvm.bin) is the core's software and is
+# tested with the bitstream: it comes from the package beside a local
+# bitstream, from the run's artifact, or from KERNEL=path. A tag with a
+# hyphen (v0.1.0-alpha) is published as a pre-release.
+#
 # Takes the bitstream from that CI run, or the local file that was flashed,
 # rather than recompiling, so the release ships the exact gateware that was
 # tested on hardware. Everything outside the
@@ -85,8 +90,17 @@ done
 for d in "$OUT"/Cores/*/; do
     [ -f "$d/bitstream.rbf_r" ] || { echo "no bitstream for $(basename "$d") in run $RUN"; exit 1; }
 done
-for extra in ngage.mra README.md tools/mra_build.py; do
-    [ -f "$extra" ] && cp "$extra" "$OUT/$(basename "$extra")"
+# the kernel that was tested with this bitstream
+if [ -n "$KERNEL" ]; then KBIN=$KERNEL
+elif [ -f "$RUN" ]; then KBIN=$(dirname "$RUN")/../../Assets/ngage/common/ngvm.bin
+else KBIN=$(find "$STAGE" -path '*/Assets/ngage/common/ngvm.bin' | head -1)
+fi
+[ -f "$KBIN" ] || { echo "no kernel (ngvm.bin) beside the bitstream; set KERNEL=path"; exit 1; }
+mkdir -p "$OUT/Assets/ngage/common"
+cp "$KBIN" "$OUT/Assets/ngage/common/ngvm.bin"
+echo "kernel from $KBIN (md5 $(md5 -q "$KBIN" 2>/dev/null || md5sum "$KBIN" | cut -d' ' -f1))"
+for extra in ngage.mra README.md tools/mra_build.py tools/mkdrive.py; do
+    if [ -f "$extra" ]; then cp "$extra" "$OUT/$(basename "$extra")"; fi
 done
 
 # Sanity-check the package before it goes out.
@@ -120,7 +134,9 @@ for c in $CORES; do
     echo "  $c  md5 $(md5 -q "$OUT/Cores/$c/bitstream.rbf_r")"
 done
 
-gh release create "$TAG" \
+PRE=
+case "$TAG" in *-*) PRE=--prerelease ;; esac
+gh release create "$TAG" $PRE \
     --title "$TITLE for Analogue Pocket $TAG" \
     --notes-file docs/release-notes.md \
     "$ZIP"

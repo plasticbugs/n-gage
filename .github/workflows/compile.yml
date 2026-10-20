@@ -46,6 +46,14 @@ jobs:
             raetro/quartus:pocket \
             quartus_sh --flow compile projects/ngage_pocket.qpf
 
+      # The kernel is part of the package (Assets/ngage/common/ngvm.bin).
+      # Ubuntu's GCC is newer than the one releases are built with, so this
+      # kernel is for the artifact only: a release ships the tested one.
+      - name: Build the kernel
+        run: |
+          sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
+          make -C sw/kernel
+
       - name: Package for Pocket
         run: python3 package-pocket.py
 
