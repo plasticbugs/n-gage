@@ -9,7 +9,7 @@
 // the clock m_cnt counts it, as well as at m_done: the CPU side uses a word
 // as soon as the count says it is in (ngvm_xbus.sv).
 //
-//   obj_mem/Vtb_mem_top [-gap N] [-hold N] [-quick] [-fastrd] [-slow]
+//   obj_mem/Vtb_mem_top [-gap N] [-hold N] [-quick] [-halfrd] [-slow] [-late]
 //
 // The image is pseudo-random, which is a harder test than a real one (no runs
 // of equal words to hide a dropped or merged write) and needs nothing the
@@ -28,8 +28,12 @@
 //        strobe's level rather than its edge fails here (METHODOLOGY 5.8).
 // -quick reads back every 61st line rather than every one.
 //
-// -fastrd sets the menu's "SDRAM fast reads": a burst READ every clock.
+// The SDRAM is read as the Pocket's menu reads it when left alone: a burst
+// READ every clock, each word caught three clocks after its READ.
+// -halfrd sets the menu's "SDRAM half-rate reads": a burst READ every 2 clocks.
 // -slow   sets its "SDRAM slow bursts": a burst READ every 5 clocks.
+// -late   sets its "SDRAM read late": each word caught at READ+4.  With a
+//         READ every clock this must fail, as it did on the Pocket.
 //
 // The bus layout must match target/pocket/ngage_mem.sv.
 #include "Vtb_mem_top.h"
@@ -160,21 +164,22 @@ static void check(int cmd, uint32_t a, const char *what)
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
-    int gap = 7, hold = 4; bool quick = false, fastrd = false, slow = false;
+    int gap = 7, hold = 4; bool quick = false, fastrd = true, slow = false, late = false;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         if (a == "-gap" && i + 1 < argc) gap = atoi(argv[++i]);
         else if (a == "-hold" && i + 1 < argc) hold = atoi(argv[++i]);
         else if (a == "-quick") quick = true;
-        else if (a == "-fastrd") fastrd = true;
+        else if (a == "-halfrd") fastrd = false;
         else if (a == "-slow") slow = true;
+        else if (a == "-late") late = true;
         else if (a[0] != '+') { fprintf(stderr, "unknown argument %s\n", a.c_str()); return 2; }
     }
     if (hold >= gap) hold = gap - 1;
     if (hold < 1) hold = 1;
 
     dut = new Vtb_mem_top;
-    dut->init = 1; dut->rd_late = 1; dut->burst_slow = slow; dut->rd_fast = fastrd;
+    dut->init = 1; dut->rd_late = late; dut->burst_slow = slow; dut->rd_fast = fastrd;
     dut->dl_we = 0; dut->dl_active = 0; dut->m_req = 0; dut->l_req = 0; dut->vram_req = 0;
     for (int i = 0; i < 16; i++) tick();
     dut->init = 0;

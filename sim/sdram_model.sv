@@ -2,13 +2,21 @@
 // Derived from the Punch-Out!! core's model; extended with four independent
 // banks and reads without auto-precharge (open-row bursts). CL2 only.
 //
-// PHASE_LAG 1 models the chip clocked in phase with the controller (its edge
-// just after ours): a command registered at edge N is sampled by the chip at
-// N+1, and CL2 read data is on the bus during [N+3, N+4), so the controller's
-// sample at N+4 is the good one.
+// PHASE_LAG 0 models the Pocket's chip: CL2 read data for a READ registered
+// at edge N is on the bus during [N+2, N+3), so the controller's sample at
+// N+3 is the good one.  That is the capture the SDC's timing analysis
+// checks, and the Pocket agrees: a READ every clock plays caught at READ+3
+// and crashes at once caught at READ+4 (docs/bringup.md, log, 2026-10-19).
+// PHASE_LAG 1 is the template's chip clocked in phase with the controller,
+// its data a clock later, caught at READ+4.  With it the bench passed what
+// the Pocket crashed on.
+//
+// The bus floats the clock after a word.  The Pocket's keeps the last word
+// until the next, so READ+4 at two clocks a READ fails here and played on
+// every build before the third: stricter than the chip, never looser.
 `default_nettype none
 
-module sdram_model #(parameter PHASE_LAG = 1, parameter AW = 22) (
+module sdram_model #(parameter PHASE_LAG = 0, parameter AW = 22) (
     input  logic        clk,
     inout  wire  [15:0] dq,
     input  logic [12:0] a,

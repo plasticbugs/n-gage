@@ -5,7 +5,7 @@
 //   obj_system/Vtb_system_top --rom SYM.ROM [--kernel kernel.bin]
 //       [--drive game.img] [--frames N] [--snap a,b,c] [-o DIR]
 //       [--gap N] [--dl BYTES | --full] [--keys "S:MASK ..."] [--wav FILE]
-//       [--fastrd]
+//       [--halfrd] [--late]
 //
 // Every byte of the kernel goes through the download port, a byte every
 // --gap clocks (the APF loader's rate is one per 7-8); of the ROM and the
@@ -18,6 +18,10 @@
 // pressed set (KEY_* bits, hex) at given seconds of machine time.  --wav
 // records what the Pocket would play: the audio FIFO's current sample, held,
 // taken at 48 kHz of machine time as core_top's crossing takes it.
+//
+// The SDRAM is read as the Pocket's menu reads it when left alone: a burst
+// READ every clock, each word caught three clocks after its READ.  --halfrd
+// and --late set the menu's "SDRAM half-rate reads" and "SDRAM read late".
 #include "Vtb_system_top.h"
 #include "Vtb_system_top___024root.h"
 #include "Vtb_system_top_tb_system_top.h"
@@ -100,7 +104,7 @@ int main(int argc, char **argv)
     const char *rom = nullptr, *kernel = "build/kernel/kernel.bin", *drive = nullptr, *wav = nullptr;
     int frames = 10, gap = 8, hold = 4;
     size_t dl = 0x10000;
-    bool full = false, fastrd = false;
+    bool full = false, fastrd = true, late = false;
     std::string out = ".";
     std::set<int> snaps;
     std::vector<std::pair<double, unsigned>> keys;
@@ -114,7 +118,8 @@ int main(int argc, char **argv)
         else if (a == "--gap") gap = atoi(next().c_str());
         else if (a == "--dl") dl = strtoul(next().c_str(), nullptr, 0);
         else if (a == "--full") full = true;
-        else if (a == "--fastrd") fastrd = true;
+        else if (a == "--halfrd") fastrd = false;
+        else if (a == "--late") late = true;
         else if (a == "-o") out = next();
         else if (a == "--wav") wav = argv[++i];
         else if (a == "--snap") {
@@ -146,7 +151,7 @@ int main(int argc, char **argv)
 
     dut = new Vtb_system_top;
     t_sys = 0; t_cpu = 0.37;                       // the two clocks are unrelated in phase
-    dut->reset = 1; dut->dl_we = 0; dut->dl_active = 0; dut->keys = 0; dut->rd_fast = fastrd;
+    dut->reset = 1; dut->dl_we = 0; dut->dl_active = 0; dut->keys = 0; dut->rd_fast = fastrd; dut->rd_late = late;
     tick_sys(16);
     long t = 0; while (!dut->mem_ready && t++ < 200000) tick_sys(1);
     if (!dut->mem_ready) { printf("FAIL  the memory never came ready\n"); return 1; }

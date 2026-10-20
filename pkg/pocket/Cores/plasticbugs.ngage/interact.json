@@ -90,7 +90,7 @@
         "mask": "0xFFFFFFDF"
       },
       {
-        "name": "SDRAM fast reads",
+        "name": "SDRAM half-rate reads",
         "id": 93,
         "type": "check",
         "enabled": true,

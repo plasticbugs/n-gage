@@ -93,30 +93,34 @@ kernel's hot data needs a faster home than SDRAM.
 
 - **SDRAM.** The controller is the template's, widened to all 64 MB of the
   chip: bank `[25:24]`, row `[23:11]`, column `[10:1]`. A burst issues a
-  READ or WRITE every two clocks.
-- **SDRAM fast reads** (the menu, off by default) issues a burst's READs
-  one a clock. Over the first 20 s of Virtua Cop on `sim/run_system.sh`, a
-  line request takes 33-34 memory clocks instead of 45-47, a bus round trip
-  32 CPU clocks instead of 41-43, and the CPU retires 725,824,799
-  instructions instead of 673,111,453 (+7.8 %). The bench's SDRAM model
-  says nothing about whether the Pocket's chip is read soundly at that
-  pace. On NBA Jam's hardware it was not (METHODOLOGY 5.28), and on this
-  core's it is not either: with the switch on, the games crash (second
-  build, docs/bringup.md log). Reads stay at one every two clocks; the
-  switch stays, off, for a test of other capture timings.
-- **Which clock catches a word.** The menu's default takes each word four
-  clocks after its READ; the timing analysis checks the capture three
-  clocks after. The SDC pairs the chip clock edge that launches a word with
-  the core clock edge 14.18 ns later, and in CL2 a READ's data is launched
-  by the edge after the one that took it. At four clocks a word is caught
-  after the chip has let go of it, which works at one READ every two clocks
-  because nothing else drives the bus until the next word. With a READ
-  every clock, the next word is already there: every word would be off by
-  one, and the games crash at once, as they did. "SDRAM read late" on is
-  the three-clock capture (the bit is inverted in `core_top.sv`), and
-  `sim/sdram_model.sv` puts the data a clock later than the chip does,
-  which is why the bench passed fast reads at four. Not yet tried on the
-  Pocket: docs/bringup.md, log.
+  WRITE every two clocks and a READ every clock, and each word is caught
+  three clocks after its READ.
+- **Reads one a clock** (fourth build on; until then the menu's "SDRAM
+  fast reads", off). Over the first 20 s of Virtua Cop on
+  `sim/run_system.sh`, a line request takes 33-34 memory clocks instead of
+  45-47, a bus round trip 32 CPU clocks instead of 41-43, and the CPU
+  retires 725,824,799 instructions instead of 673,111,453 (+7.8 %). With
+  the memory path of section 4.4, over Sonic N's first 40 s: 1,347 M
+  instructions against 1,255 M (+7.3 %), 578 frames shown against 493, a
+  bus request 32.7 CPU clocks against 44.8, no memory protocol error
+  (frames in `artifacts/system/sonic74fast`). Menu "SDRAM half-rate
+  reads" goes back to a READ every two clocks.
+- **Which clock catches a word.** The timing analysis checks the capture
+  three clocks after the READ. The SDC pairs the chip clock edge that
+  launches a word with the core clock edge 14.18 ns later, and in CL2 a
+  READ's data is launched by the edge after the one that took it. Up to
+  the third build the default caught each word at four clocks, after the
+  chip had let go of it. That worked at one READ every two clocks, because
+  nothing else drives the bus until the next word. With a READ every
+  clock, the next word is already there: every word was off by one, and
+  the games crashed at once (second build). At three clocks they play,
+  faster (third build, both menu switches on; docs/bringup.md, log). Menu
+  "SDRAM read late" goes back to four. The bench's `sim/sdram_model.sv`
+  used to put the data a clock later than the chip does, so it passed
+  what crashed on the Pocket. It now matches the Pocket: the memory gate
+  passes at three clocks, at either pace, and fails at four with a READ
+  every clock. Its bus does not keep a word after the chip lets go, so it
+  also fails four clocks at the half pace, which the Pocket played.
 - **CRAM.** `target/pocket/cram_ctrl.sv`:
   - asynchronous, with the address multiplexed on DQ;
   - 12 clocks a halfword read and 10 a write, back to back, each with
@@ -259,8 +263,8 @@ with the latency. Even memory that answered at once would give at most
 **Readings for each change:**
 - A change is worth what it takes off the CPU's effective L.
 - Hiding every write-back (22% of requests) would make L about 34: +8%.
-- Fast reads, if they could be made sound, cut the memory side from 47
-  to 34 clocks, so L about 32: +10%.
+- Fast reads, if they could be made sound (they were: section 3), cut
+  the memory side from 47 to 34 clocks, so L about 32: +10%.
 - Early restart lets the CPU go on at the first word, about 20 clocks.
   The rest of the line still arrives behind it, so the effective L is
   more like 25–30: +12–17%.

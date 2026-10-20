@@ -149,33 +149,26 @@ Row 1:
 | menu restarts the game | `pause` has reached a reset; METHODOLOGY 5.5 |
 | the Nokia logo, then nothing else for good | a server started twice at boot (`docs/hardware.md`, open questions): check `ngvm.bin`'s md5 above |
 
-Menu → **SDRAM read late** and **SDRAM slow bursts** change how the SDRAM
-is read. Try each alone if the picture or the boot looks corrupt, and report
+Menu → **SDRAM read late**, **SDRAM slow bursts** and **SDRAM half-rate
+reads** change how the SDRAM is read. All three are off by default, and off
+is the setting tested on the Pocket (fourth build on; log, 2026-10-19):
+each word caught three clocks after its READ, the clock the SDC's timing
+analysis checks (+0.76 ns of setup, slow 0C), and a burst's READs one a
+clock. Try each alone if the picture or the boot looks corrupt, and report
 which changed anything.
 
-Despite its name, **SDRAM read late** on catches each word a clock
-*earlier* than the default (`core_top.sv` inverts the bit):
+- **SDRAM read late** catches each word a clock later, at READ+4: the
+  template's setting, from a core whose chip was clocked in phase. It was
+  the default up to the third build. On its own it crashes the games at
+  once, because with a READ every clock the bus already holds the next
+  word. With half-rate reads as well it plays, because the bus keeps each
+  word until the next one.
+- **SDRAM half-rate reads** issues a burst's READs every two clocks: the
+  default up to the third build. On the bench a cache line takes 47
+  memory clocks this way, against 34.
+- **SDRAM slow bursts** issues them every five.
 
-- off, the default: four clocks after the READ (the template's setting,
-  from a core whose chip was clocked in phase);
-- on: three clocks after it.
-
-Three is the clock the SDC's timing analysis checks, with +0.76 ns of setup
-slack (slow 0C). Four works at the default pace only because the word stays
-on the bus after the chip lets go of it, until the next one.
-
-Menu → **SDRAM fast reads** (second build on, off by default) issues a
-burst's READs one a clock instead of one every two. On the bench it makes
-a cache line's fetch 34 memory clocks instead of 47, and the CPU about 8%
-faster through Virtua Cop's boot (726 against 673 million instructions in
-its first 20 s; the Nokia logo at 6.5 s, the N-Gage logo at 16.0 s). The
-bench's SDRAM model cannot say whether the Pocket's chip is read soundly at
-that pace: on another core it was not (METHODOLOGY 5.28), and on this one
-it is not either: the games crash with it on (log, 2026-10-19), with
-SDRAM read late off. With SDRAM read late on it has not been tried, and
-that is the combination the timing analysis says is sound (log). Until it
-has, leave fast reads off. It stays in the menu for a later test of other capture timings, and
-leaving it on does not survive a reload.
+None of them survives a reload.
 
 The game runs on while the menu is open: that is expected (NGVM does not
 pause yet).

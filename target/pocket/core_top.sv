@@ -872,12 +872,14 @@ module core_top
                           p1_right | j1_right, p1_left | j1_left,
                           p1_down  | j1_down,  p1_up   | j1_up};
 
-    //! Bring-up switches from the modifier word (the "Bring-up" entries of
-    //! interact.json; take them off the menu for a release, leave them here):
-    //! bit 4 SDRAM read capture alternate, 5 slow bursts, 6 fast burst reads.
-    wire g_rd_late    = ~mod_sw0[4];
+    //! SDRAM switches from the modifier word (the "SDRAM" entries of
+    //! interact.json): bit 4 catches read data at READ+4 instead of READ+3,
+    //! 5 slows bursts to a READ every 5 clocks, 6 issues a burst's READs every
+    //! 2 clocks instead of every clock.  Each bit is 0 at the setting tested
+    //! on the Pocket (docs/bringup.md, log), so a menu left alone gets it.
+    wire g_rd_late    =  mod_sw0[4];
     wire g_burst_slow =  mod_sw0[5];
-    wire g_rd_fast    =  mod_sw0[6];
+    wire g_rd_fast    = ~mod_sw0[6];
 
     // NGVM's bus and the LCD's line fetch, between the machine and the memories
     wire         m_req, m_done;
