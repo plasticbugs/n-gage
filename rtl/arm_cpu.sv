@@ -267,6 +267,7 @@ module arm_cpu
     // ============================================================ D2
     logic        d2_valid, d2_thumb, d2_abt;
     logic [31:0] d2_pc, d2_arm, d2_pc_op, d2_imm;
+    logic [31:0] d2_link;                       // d2_pc's return address, for the stack's repair
     logic [15:0] d2_half;
     logic        d2_imm_en, d2_bl, d2_und;
     logic        d2_ub, d2_blp, d2_lsm, d2_swp, d2_mlal, d2_red_done;
@@ -466,6 +467,7 @@ module arm_cpu
             d2_ixd <= phys(d1_arm[15:12], cpsr[4:0]);
             d2_ixl <= phys(lowest(d1_arm[15:0]), d1_lmode);
             d2_pc <= d1.pc; d2_thumb <= d1.thumb; d2_abt <= d1.abt;
+            d2_link <= d1.pc + (d1.thumb ? 32'd3 : 32'd4);
             d2_arm <= d1_arm; d2_half <= d1_half; d2_pc_op <= d1_pc_op;
             d2_imm_en <= d1.thumb && t_imm_en; d2_imm <= t_imm;
             d2_bl <= d1.thumb && t_bl; d2_und <= d1.thumb && t_und;
@@ -522,6 +524,7 @@ module arm_cpu
     uop_t        s_u;
     logic        a_valid, a_dred;
     uop_t        a_u;
+    logic [31:0] a_link;                        // a_u.pc's return address, for the stack's repair
     logic        m_valid, m_exec, m_mem;
     uop_t        m_u;
     logic [31:0] m_ra, m_rb;
@@ -919,6 +922,7 @@ module arm_cpu
             else if (a_free)        a_valid <= s_adv;
             if (a_free) begin
                 a_u <= s_u;
+                a_link <= s_u.pc + (s_u.thumb ? 32'd3 : 32'd4);
                 a_u.a <= sa; a_u.b <= sb; a_u.c <= sc;
                 a_dred <= s_dred;
                 a_op2 <= s_op2; a_op2_c <= s_op2_c; a_cpass <= s_cpass; a_blate <= s_blate;
@@ -1057,6 +1061,9 @@ module arm_cpu
 
     // The stack as it was before the redirecting instruction, plus that
     // instruction's own push or pop if it was a call or return that went.
+    // Which case applies waits on the D-cache's hit (M's stall and abort), so
+    // each case's return address is ready in a flop: an adder behind the
+    // choice put the hit 2.2 ns past 80 MHz (docs/core-design.md 5.4).
     always_comb begin
         fix_push = 1'b0; fix_link = 32'd0;
         if (w_redirect) begin                           // a load to PC
@@ -1071,12 +1078,12 @@ module arm_cpu
         end else if (a_redirect) begin
             fix_base = a_u.p_sp;
             fix_push = a_brtaken && a_u.br_call;
-            fix_link = a_u.pc + (a_u.thumb ? 32'd3 : 32'd4);   // a_ra, from flops
+            fix_link = a_link;
             fix_sp   = fix_push ? a_u.p_sp + 3'd1 : (a_brtaken && a_u.br_ret) ? a_u.p_sp - 3'd1 : a_u.p_sp;
         end else begin                                  // D2: B, BL, a Thumb BL pair
             fix_base = d2_psp;                          // a call, from flops rather than the decoder
             fix_push = d2_bls || (d2_ub && d2_arm[24]);
-            fix_link = d2_pc + (d2_thumb ? 32'd3 : 32'd4);
+            fix_link = d2_link;
             fix_sp   = fix_push ? d2_psp + 3'd1 : d2_psp;
         end
     end

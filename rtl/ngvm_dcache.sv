@@ -88,6 +88,7 @@ module ngvm_dcache
     logic [10:0] rd_a;                  // what the RAMs read at this edge
     logic [31:0] q0, q1;
     logic [TAGW+PAW-1:0] t0, t1;
+    logic [15:0] vg0, vg1;              // the valid bits of 16 sets, read with the tags
 
     logic        dw_en, dw_way;
     logic [10:0] dw_a;
@@ -121,6 +122,22 @@ module ngvm_dcache
         t0 <= tag0[rd_a[10:3]];
         t1 <= tag1[rd_a[10:3]];
     end
+    // The valid bits are flops, so a flush can clear them all at once, but
+    // the compare takes them half as it takes the tags.  The edge before it
+    // reads the 16 sets the request's address picks with [12:9], and the
+    // compare picks its set from those with r_va[8:5], beside the tag
+    // compare.  Indexed by r_va in the compare cycle alone, the bits were a
+    // 256-to-1 mux in front of the hit, the stall and everything behind it,
+    // 2.2 ns too slow at 80 MHz; read whole at the edge before, the same mux
+    // sat behind the CPU's address adder, 0.4 ns too slow.  None of them
+    // changes at an edge that reads one for a compare: a fill sets its bit
+    // the edge before S_REPLAY reads, a flush clears them the edge before
+    // S_DONE takes the next request, and a miss clears its victim's in a
+    // compare that takes none.
+    always_ff @(posedge clk) begin
+        vg0 <= val0[16*int'(rd_a[10:7]) +: 16];
+        vg1 <= val1[16*int'(rd_a[10:7]) +: 16];
+    end
 
     // ------------------------------------------------------------ the request
     typedef enum logic [3:0] {
@@ -147,8 +164,8 @@ module ngvm_dcache
 
     // ------------------------------------------------------------ compare
     wire [TAGW-1:0] r_tag = vtag_of(r_va, win_id);
-    wire  hit0 = val0[r_set] && t0[TAGW+PAW-1:PAW] == r_tag;
-    wire  hit1 = val1[r_set] && t1[TAGW+PAW-1:PAW] == r_tag;
+    wire  hit0 = vg0[r_va[8:5]] && t0[TAGW+PAW-1:PAW] == r_tag;
+    wire  hit1 = vg1[r_va[8:5]] && t1[TAGW+PAW-1:PAW] == r_tag;
     wire  hit  = hit0 || hit1;
 
     // the store bypass: the word written at the edge that read this one

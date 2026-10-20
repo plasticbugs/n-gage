@@ -60,8 +60,10 @@ set SDRAM_OUT [get_ports {dram_a[*] dram_ba[*] dram_cke dram_dqm[*] dram_dq[*] d
 set_output_delay -max -clock dram_clk  1.5 $SDRAM_OUT
 set_output_delay -min -clock dram_clk -0.8 $SDRAM_OUT
 set_multicycle_path -setup 2 -from [get_clocks {dram_clk}] -to [get_registers {*|sdram_ctrl:*|dq_in[*]}]
-set_multicycle_path -setup 3 -from [get_registers {*|sdram_ctrl:*|last[*]}] -to [get_registers {*|sdram_ctrl:*|*}]
-set_multicycle_path -hold  2 -from [get_registers {*|sdram_ctrl:*|last[*]}] -to [get_registers {*|sdram_ctrl:*|*}]
+# The template relaxed paths from sdram_ctrl's round-robin pointer `last`
+# here.  NGVM has one random-access client (NCLI = 1), so the pointer is
+# optimised away and the two multicycles matched nothing; its paths need no
+# relaxing.  Put them back if a second client returns.
 
 # The pixel hand-over to the 6.857 MHz video clock. The dot enable's phase is
 # pinned to clk_vid (core_top.sv's pix_sync into clk_enables.sv), so the
