@@ -104,7 +104,7 @@ struct process {
     u32  id;
     struct handles h;
     const struct rom_image *rom;      /* ROM image, or 0 if RAM-loaded       */
-    struct library *code;             /* RAM-loaded: the code it runs        */
+    u32  chunk;                       /* RAM-loaded: its code, .data, .bss   */
     u32  uid[3];
     u32  entry;
     u32  heap_min, heap_max, stack_size;

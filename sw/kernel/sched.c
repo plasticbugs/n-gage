@@ -362,6 +362,7 @@ void proc_kill(struct process *p, int type, s32 reason, const u16 *cat, int catl
         winid_free(p->winid);
     }
     p->win_pages = 0;
+    if (p->chunk) { vm_release(p->chunk); p->chunk = 0; }   /* a RAM image (vm_release flushes) */
 }
 
 /* Every live thread: its state, where it stopped, and the ROM code

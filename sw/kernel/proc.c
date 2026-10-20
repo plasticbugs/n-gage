@@ -180,15 +180,28 @@ static int call_list_walk(u32 table, u32 *list, int n, int max)
     return n;
 }
 
+/* A library the loader linked: its own dependencies first (a ROM DLL's
+ * table, or what the loader added to a RAM DLL), then it. */
+static int lib_walk(struct library *l, u32 *list, int n, int max)
+{
+    for (int j = 0; j < n; j++) if (list[j] == l->entry) return n;
+    if (n >= max) return n;
+    list[n++] = l->entry;                     /* claimed, as in call_list_walk */
+    int at = n - 1;
+    if (l->rom) n = call_list_walk(l->dllref, list, n, max);
+    else for (int i = 0; i < l->ndeps; i++) if (l->deps[i]->entry) n = lib_walk(l->deps[i], list, n, max);
+    for (int j = at; j < n - 1; j++) list[j] = list[j + 1];
+    list[n - 1] = l->entry;
+    return n;
+}
+
+/* A ROM process's list comes from its TDllRefTable; a RAM process has none,
+ * and its imports are what the loader added (exec 0x4B), each with its own. */
 u32 proc_static_calls(struct process *p, u32 *list, int max)
 {
     int n = call_list_walk(p->dllref, list, 0, max);
-    for (int i = 0; i < p->nram_deps && n < max; i++)
-        if (p->ram_deps[i]->entry) {
-            int seen = 0;
-            for (int j = 0; j < n; j++) if (list[j] == p->ram_deps[i]->entry) seen = 1;
-            if (!seen) list[n++] = p->ram_deps[i]->entry;
-        }
+    for (int i = 0; i < p->nram_deps; i++)
+        if (p->ram_deps[i]->entry) n = lib_walk(p->ram_deps[i], list, n, max);
     return n;
 }
 
