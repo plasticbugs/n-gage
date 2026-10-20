@@ -13,6 +13,14 @@ run is reproducible instruction for instruction, whatever the host's speed.
 The idle thread's loop is recognised by address and skipped to the next
 interrupt.
 
+The CPU runs in slices of --slice instructions, and the clock the kernel
+reads stands at a slice's start, so a timer set within a slice fires when
+the slice ends: up to a slice late, where the RTL's fires on time.  The
+default, 20,000 (0.2 ms), is fine enough for the kernel's 2 ms lent
+slices (sw/kernel/sched.c); 200,000 held Ashen to 4,610 LCD updates in
+45 s against 4,951 (5,014 at 10,000).  Each slice costs the host some
+40 us.
+
 A key script is a list of "SECONDS:KEYS" steps: at that virtual time the
 pressed set becomes KEYS, names joined with '+' (up down left right a b x y
 l r select start), or nothing for none.  "26:start 26.2: 30:a 30.2:" taps
@@ -672,7 +680,7 @@ def main():
     ap.add_argument('--drive')
     ap.add_argument('--seconds', type=float, default=10)
     ap.add_argument('--mips', type=int, default=100)
-    ap.add_argument('--slice', type=int, default=200000)
+    ap.add_argument('--slice', type=int, default=20000, help='instructions a slice; timers fire up to a slice late')
     ap.add_argument('--trace', type=lambda x: int(x, 0), default=0, help='DBGF_* bits for the kernel')
     ap.add_argument('--trace-from', type=float, default=0, help='trace only from this virtual second')
     ap.add_argument('--watch', help='lo:hi (hex): log reads of this range')
