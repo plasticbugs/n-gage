@@ -18,7 +18,7 @@ module ngvm_io
     import ngvm_pkg::*;
 #(
     parameter int CPU_HZ   = 80_000_000,
-    parameter int AUDIO_N  = 4096       // FIFO samples; ngvm.py's IO_AUDIO_SIZE
+    parameter int AUDIO_N  = 1024       // FIFO samples: AUDIO_FIFO_N in ngvm_hw.h
 ) (
     input  logic        clk,
     input  logic        rst,

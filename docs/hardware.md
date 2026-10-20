@@ -182,6 +182,11 @@ The kernel reads `IO_KEYS` at each vblank (`sw/kernel/event.c`).
 - A stereo sample FIFO: `IO_AUDIO_DATA` takes L in bits 15:0, R in 31:16.
 - It drains at `IO_AUDIO_RATE` Hz.
 - `IO_AUDIO_SIZE` gives the capacity; `IO_AUDIO_LEVEL` the samples waiting.
+- The capacity is 1,024 samples (`AUDIO_FIFO_N`). `IRQ_AUDIO` holds while
+  it is half empty and the kernel tops it up to full, so the FIFO delays
+  sound by 32–64 ms at 16 kHz. It was 4,096 for the first flash, which
+  put 128–256 ms between a game's sound and its picture (256–512 ms at
+  8 kHz).
 - The kernel fills it from its model of the DSP's PCM player (ISI resource
   `0xE8`, the protocol `SoundDevice.mda` speaks).
 - Rates seen so far: 8 kHz and 16 kHz, mono. The rate codes are read from

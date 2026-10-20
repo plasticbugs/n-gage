@@ -247,7 +247,7 @@ class Machine:
         if off == IO_AUDIO_RATE:
             return self.audio_rate
         if off == IO_AUDIO_SIZE:
-            return 4096
+            return AUDIO_FIFO_N
         if off == IO_DRIVE_SIZE:
             return self.drive_size
         if off == IO_ROM_SIZE:
@@ -381,7 +381,7 @@ class Machine:
             self.on_frame()
         # the audio FIFO drains at its rate
         self.audio_fifo = max(0.0, self.audio_fifo - self.audio_rate * self.slice_us)
-        if self.audio_fifo <= 2048:
+        if self.audio_fifo <= AUDIO_FIFO_N // 2:
             self.irq_status |= IRQ_AUDIO
 
     def next_event_insns(self):

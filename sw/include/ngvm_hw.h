@@ -80,6 +80,11 @@
 #define IRQ_VBLANK        (1u << 1)
 #define IRQ_AUDIO         (1u << 2)   /* FIFO at or below half full           */
 
+/* The audio FIFO's capacity (IO_AUDIO_SIZE; ngvm_io.sv's AUDIO_N).  The
+ * kernel tops it up whenever it is half empty, so it delays sound by half to
+ * all of this: 32-64 ms at 16 kHz, on top of SoundDevice's own buffers. */
+#define AUDIO_FIFO_N      1024
+
 /* The LCD: 176 x 208, 16 bits a pixel, 0x0RGB (4 bits per channel), rows
  * of 176 halfwords, scanned from IO_LCD_BASE.  60 frames a second.  The
  * gateware reads it from RAM, so IO_LCD_BASE is an address in the physical
