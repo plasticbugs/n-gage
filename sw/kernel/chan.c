@@ -312,10 +312,22 @@ static s32 lcd_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
  * does not have: COMMON_MESSAGE (0xF0), COMM_SERVICE_NOT_IDENTIFIED_RESP
  * (0x01), the request's message id, back to the sender's object with its
  * transaction id.  Clients take their error paths instead of waiting for
- * ever (MediaServer waited on ETel, and the game on MediaServer). */
+ * ever (MediaServer waited on ETel, and the game on MediaServer).
+ *
+ * A few get a real answer, because something reads it.  Accessory mode
+ * (resource 0x1C): none.  Energy management (0x17), which Nokia.dsy turns
+ * into the System Agent's charger (0x100052C9) and battery (0x100052D3)
+ * states: without the charger's, Xanadu Next exits at start and System Rush
+ * stops after its first screens.  Each reply is status 1 (ok), a count of
+ * subblocks, then subblocks of id, length, data.  0x08 is answered by 0x09
+ * with subblock 0x13, byte 2 the charger: 1 not connected (2-4 connected,
+ * 5 not charging); 0x0A by 0x0B with subblock 0x16, byte 3 the battery
+ * level in bars, 7 full.  Read from Nokia.dsy's handler for the resource
+ * (0x50fc7d88 in SYM.ROM); not checked against a phone. */
 #define ISI_REPLIES 32
-#define ISI_LEN 14
-static struct { struct channel *c; u32 seq; u8 m[ISI_LEN]; } isi_q[ISI_REPLIES];
+#define ISI_LEN 14                            /* a reply with four bytes of body */
+#define ISI_MAX 16                            /* the longest NGVM sends */
+static struct { struct channel *c; u32 seq; u8 m[ISI_MAX]; u8 len; } isi_q[ISI_REPLIES];
 static u32 isi_seq;                           /* queued messages go out in order */
 static struct { struct channel *c; struct thread *t; u32 st, buf; } isi_rx[16];
 
@@ -332,7 +344,7 @@ static void isi_deliver(struct channel *c)
             extern struct process *proc_mapped(void);
             struct process *was = proc_mapped();
             proc_switch_in(t->proc);
-            s32 e = des_write8(isi_rx[r].buf, isi_q[q].m, ISI_LEN);
+            s32 e = des_write8(isi_rx[r].buf, isi_q[q].m, isi_q[q].len);
             proc_switch_in(was);
             isi_q[q].c = 0;
             if (kflags & DBGF_IPC) {
@@ -384,6 +396,7 @@ static void isi_post(struct channel *c, const u8 *m)
     for (int q = 0; q < ISI_REPLIES; q++)
         if (!isi_q[q].c) {
             memcpy(isi_q[q].m, m, ISI_LEN);
+            isi_q[q].len = ISI_LEN;
             isi_q[q].c = c;
             isi_q[q].seq = isi_seq++;
             isi_deliver(c);
@@ -513,8 +526,19 @@ static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
         r[4] = 0; r[5] = ISI_LEN - 6;
         r[6] = m[7]; r[7] = m[6];
         r[8] = m[8]; r[9] = 0xF0; r[10] = 0x01; r[11] = m[9]; r[12] = 0; r[13] = 0;
+        isi_q[q].len = ISI_LEN;
         if (m[3] == 0x1C && m[9] == 0x10) {   /* accessory mode: PHONETSY reads one byte */
             r[9] = 0x11; r[10] = 0; r[11] = 0;     /* 0: no accessory */
+        }
+        if (m[3] == 0x17 && m[9] == 0x08) {   /* energy management: the charger */
+            r[5] = 16 - 6; isi_q[q].len = 16;
+            r[9] = 0x09; r[10] = 1; r[11] = 1;     /* status ok, one subblock */
+            r[12] = 0x13; r[13] = 4; r[14] = 1; r[15] = 0;   /* 1: not connected */
+        }
+        if (m[3] == 0x17 && m[9] == 0x0A) {   /* energy management: the battery */
+            r[5] = 16 - 6; isi_q[q].len = 16;
+            r[9] = 0x0B; r[10] = 1; r[11] = 1;     /* status ok, one subblock */
+            r[12] = 0x16; r[13] = 4; r[14] = 0; r[15] = 7;   /* level: 7 bars, full */
         }
         if (m[3] == 0xE8) dsp_request(c, m, n, r);
         isi_q[q].c = c;

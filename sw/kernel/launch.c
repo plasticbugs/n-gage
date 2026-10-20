@@ -9,21 +9,34 @@
  *
  * The phone itself never reaches its idle screen -- Startup waits for SIM
  * and security states that only a modem would give -- so nothing else
- * would ever start the game. */
+ * would ever start the game.
+ *
+ * First the launcher says what the Phone application would: no call.  The
+ * Phone app publishes the System Agent's current-call state once its call
+ * engine is up, which needs the modem, so here it is never published and
+ * RSystemAgent::GetState answers KErrUnknown.  Games read that as a call in
+ * progress: Snakes pauses its music at start and plays it only if a
+ * message-server event happens to resume it. */
 #include "kobj.h"
 
 #define EUSER_HANDLE_CLOSE     172      /* RHandleBase::Close()                              */
 #define EUSER_PROCESS_CREATE   292      /* RProcess::Create(const TDesC&, const TDesC&, TOwnerType) */
 #define EUSER_PROCESS_RESUME   953      /* RProcess::Resume()                                */
+#define EUSER_SEND_RECEIVE     972      /* RSessionBase::SendReceive(TInt, TAny*) const      */
+#define SYSAGT_CONNECT         20       /* RSystemAgentBase::Connect()                       */
+#define SA_SET_STATE           9        /* the message RSAVarChangeNotify::NotifySaVarChangeL sends */
+#define KUidCurrentCall        0x100052CB
+#define ESACallNone            0
 
 /* the servers an application needs before AppRun can start one */
-static const char *const needs[] = { "Windowserver", "Fontbitmapserver", "AppListServer", "EikAppUiServer", 0 };
+static const char *const needs[] = { "Windowserver", "Fontbitmapserver", "AppListServer", "EikAppUiServer",
+                                     "SystemAgent", 0 };
 #define SETTLE_US 2000000                /* and then this long, for the boot to quieten */
 
 static u16 exe[] = u"Z:\\System\\Programs\\AppRun.exe";
 static u16 app[NGVM_LAUNCH_MAX];
 static struct { u32 len, ptr; } d_exe, d_app;   /* TPtrC16: length | EPtrC << 28, pointer */
-static u32 f_create, f_resume, f_close;
+static u32 f_create, f_resume, f_close, f_send, f_sa_connect;
 u64 launch_due = ~0ull;
 static int state;                                /* 0 none, 1 waiting, 2 settling, 3 done */
 
@@ -38,6 +51,9 @@ void launch_init(void)
     f_create = euser_export(EUSER_PROCESS_CREATE);
     f_resume = euser_export(EUSER_PROCESS_RESUME);
     f_close = euser_export(EUSER_HANDLE_CLOSE);
+    f_send = euser_export(EUSER_SEND_RECEIVE);
+    const struct rom_image *sa = rom_image("\\System\\Libs\\Sysagt.dll");
+    if (sa) f_sa_connect = uread32(sa->export_dir + 4 * (SYSAGT_CONNECT - 1));
     kprintf("[launch] will run ");
     kputs16(app, n);
     kprintf("\n");
@@ -48,6 +64,12 @@ void launch_init(void)
 /* Runs in user mode, as the launcher thread's function. */
 static s32 launcher(u32 unused)
 {
+    u32 sa[2] = { 0, 0 };                          /* RSAVarChangeNotify: an RSessionBase */
+    if (f_sa_connect && ((s32 (*)(u32 *))f_sa_connect)(sa) == KErrNone) {
+        u32 set[2] = { KUidCurrentCall, ESACallNone };
+        ((s32 (*)(u32 *, int, u32 *))f_send)(sa, SA_SET_STATE, set);
+        ((void (*)(u32 *))f_close)(sa);
+    }
     u32 proc = 0;                                  /* RProcess */
     s32 r = ((s32 (*)(u32 *, void *, void *, int))f_create)(&proc, &d_exe, &d_app, 0);
     if (r == KErrNone) {

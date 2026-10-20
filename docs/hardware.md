@@ -239,10 +239,30 @@ Taken from the boot traces (`ngvm.py --trace 1`) on all seven cards.
 - the drive (MMC);
 - Audioldd's shared buffer;
 - NOSDRIVER, as an ISI/Phonet router that answers the DSP's PCM player
-  and ends its tones at once;
+  and ends its tones at once. It also answers energy management (resource
+  `0x17`): the charger is not connected (message `0x08` answered by `0x09`,
+  subblock `0x13`), and the battery is full at 7 bars (`0x0A` answered by
+  `0x0B`, subblock `0x16`). Nokia.dsy turns these replies into the System
+  Agent's charger and battery states. Without the charger's, Xanadu Next
+  exits at start and System Rush stops after its first screens. Snakes
+  lost its music with it, until the current-call state below was
+  published too.
+  Accessory mode (`0x1C`) is answered "none", and any other service
+  "service not identified";
 - the mute and vibra controls;
 - every other channel any boot opens, with its minimum answer: open and
   never complete, or complete with `KErrNotSupported`.
+
+The Phone application publishes the System Agent's current-call state
+(`0x100052CB`) once its call engine is up, which needs the modem. Here it
+never is, so `RSystemAgent::GetState` answered `KErrUnknown` (-19), and
+games read that as a call in progress. Snakes paused its music at start,
+and played it only when a message-server event happened to resume it:
+entries changed at boot while the game started, which stopped happening
+once the charger reply moved the boot's timing. So the
+launcher (`sw/kernel/launch.c`) publishes "no call" (`ESACallNone`, 0)
+itself, with the message `RSAVarChangeNotify::NotifySaVarChangeL` sends,
+before it starts the game.
 
 **Not modelled, and what it costs:**
 
