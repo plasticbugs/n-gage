@@ -99,7 +99,9 @@ fi
 mkdir -p "$OUT/Assets/ngage/common"
 cp "$KBIN" "$OUT/Assets/ngage/common/ngvm.bin"
 echo "kernel from $KBIN (md5 $(md5 -q "$KBIN" 2>/dev/null || md5sum "$KBIN" | cut -d' ' -f1))"
-for extra in ngage.mra README.md tools/mra_build.py tools/mkdrive.py; do
+# no ROM recipe: the firmware is the user's own dump (ngage.mra is the
+# template's unfilled placeholder and stays out)
+for extra in README.md tools/mkdrive.py; do
     if [ -f "$extra" ]; then cp "$extra" "$OUT/$(basename "$extra")"; fi
 done
 
