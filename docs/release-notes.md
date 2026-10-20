@@ -15,7 +15,12 @@ dump and your own games.
 
 1. Unzip onto the SD card root, keeping the folders.
 2. Into `Assets/ngage/common/`, next to `ngvm.bin`, put:
-   - `sym.rom`: your N-Gage's firmware, dumped from your phone (about 18 MB);
+   - `sym.rom`: the N-Gage's firmware (the "BIOS"), about 18 MB. Dump it
+     from your own phone. A compatible one is `bios/Nokia/N-Gage/SYM.ROM`
+     in the [retrobios](https://github.com/Abdess/retrobios) repository on
+     GitHub: the firmware this core was tested on, 18,612,224 bytes, md5
+     `64a95a4a884cf4cc15a566b856603193`. Rename it to `sym.rom`, in lower
+     case;
    - one `.img` per game, built from the game's files with the builder in
      this zip (Python 3 only):
 

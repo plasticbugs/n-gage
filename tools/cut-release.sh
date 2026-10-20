@@ -53,6 +53,17 @@ if bad:
 EOF
 done
 
+# Every release's notes say where to find a compatible firmware (the
+# "BIOS"): the user asked for it from v0.1.0-alpha on, so a rewrite of the
+# notes must not drop it.
+FW_MD5=64a95a4a884cf4cc15a566b856603193
+if ! grep -q 'github.com/Abdess/retrobios' docs/release-notes.md || ! grep -q "$FW_MD5" docs/release-notes.md; then
+    echo "docs/release-notes.md must say where to find a compatible firmware:"
+    echo "  retrobios (github.com/Abdess/retrobios) bios/Nokia/N-Gage/SYM.ROM, md5 $FW_MD5,"
+    echo "  renamed sym.rom, in Assets/ngage/common/"
+    exit 1
+fi
+
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
