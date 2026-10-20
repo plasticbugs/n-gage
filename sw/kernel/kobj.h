@@ -296,6 +296,7 @@ void ipc_deliver(struct server *s);
 
 /* ---- exec.c --------------------------------------------------------------- */
 void exec_dispatch(struct ctx *c, u32 n);
+void exc_restore(struct ctx *c);
 int  executor(struct thread *t, u32 attr, u32 args, u32 status);
 
 #endif

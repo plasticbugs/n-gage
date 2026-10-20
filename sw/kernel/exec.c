@@ -549,6 +549,82 @@ static s32 static_call_list(u32 h, u32 pcount, u32 plist)
     return KErrNone;
 }
 
+/* ---- exceptions ------------------------------------------------------------------
+ * EKA1's model.  A thread's handler runs in that thread, inside EUser's
+ * User::HandleException(handler, type), which calls it and then waits once on
+ * the thread's request semaphore.  So raising an exception on another thread
+ * signals that semaphore (which also frees the thread from a
+ * User::WaitForAnyRequest, the wait that last one repeats), saves the
+ * thread's context on its own stack, and starts it in HandleException with
+ * exc_return (start.S) to come back to, whose SWI puts the context back.
+ * On the thread itself, exec 0xA1 answers KErrGeneral and EUser calls
+ * HandleException directly.  Requiem of Hell's main thread raises
+ * EExcUserInterrupt to tell its mixer thread what to do. */
+#define EUSER_HANDLEEXCEPTION 520      /* User::HandleException(TExceptionHandler, TExcType) */
+#define EExcMaxNumber         25
+extern char exc_return[];
+
+/* the KException* class (e32std.h) of each TExcType */
+static u32 exc_class(u32 type)
+{
+    if (type == 1 || type == 4) return 0x20;            /* divide by zero, overflow: Integer */
+    if (type == 2 || type == 3) return 0x40;            /* single step, breakpoint: Debug    */
+    if (type >= 13 && type <= 19) return 0x08;          /* the floating-point ones: Fpe      */
+    if (type == 20) return 0x01;                        /* EExcAbort                         */
+    if (type == 21) return 0x02;                        /* EExcKill                          */
+    if (type == 22) return 0x04;                        /* EExcUserInterrupt                 */
+    return 0x10;                                        /* the rest: Fault                   */
+}
+
+static int exc_handled(struct thread *t, u32 type)
+{
+    return t->exc_handler && type < EExcMaxNumber && (t->exc_mask & exc_class(type));
+}
+
+/* a context saved on a user stack: in chunk space, and mapped */
+static int exc_frame_ok(u32 f)
+{
+    return f - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE - sizeof(struct ctx) && vm_mapped(f) &&
+           vm_mapped(f + sizeof(struct ctx) - 1);
+}
+
+static void exc_raise(struct thread *t, u32 type)
+{
+    struct ctx *c = &t->ctx;
+    u32 f = (c->r[13] - sizeof *c) & ~7u;
+    if (t->state == T_DEAD) return;
+    if (!exc_handled(t, type) || !exc_frame_ok(f)) {
+        thread_exit(t, 2, 3, (const u16 *)u"KERN-EXEC", 9);
+        return;
+    }
+    if (kflags & DBGF_EXEC) {
+        kprintf("[exec]   exception %d to ", type);
+        kputs16(t->o.name, t->o.namelen);
+        kprintf(" at pc %p: handler %p\n", c->pc, t->exc_handler);
+    }
+    ucopy_to(f, c, sizeof *c);
+    u32 he = euser_export(EUSER_HANDLEEXCEPTION);
+    c->r[0] = t->exc_handler;
+    c->r[1] = type;
+    c->r[13] = f;
+    c->r[14] = (u32)exc_return;
+    c->pc = he & ~1u;
+    c->cpsr = 0x10 | ((he & 1) << 5);
+    thread_signal(t, 1);
+}
+
+/* exc_return's SWI: sp is at the context exc_raise saved */
+void exc_restore(struct ctx *c)
+{
+    u32 f = c->r[13];
+    if (!exc_frame_ok(f)) {
+        thread_exit(cur, 2, 3, (const u16 *)u"KERN-EXEC", 9);
+        return;
+    }
+    ucopy_from(c, f, sizeof *c);
+    c->cpsr = (c->cpsr & 0xF8000020u) | 0x10;          /* its flags and state, in user mode */
+}
+
 /* ---- dispatch ------------------------------------------------------------------- */
 void exec_dispatch(struct ctx *c, u32 n)
 {
@@ -836,14 +912,29 @@ void exec_dispatch(struct ctx *c, u32 n)
     case 0x8D: { s32 v = (s32)uread32(ARG(0)); uwrite32(ARG(0), v + 1); r = v; break; }
     case 0x8E: { s32 v = (s32)uread32(ARG(0)); uwrite32(ARG(0), v - 1); r = v; break; }
     case 0x9D: r = (s32)IO(IO_TIMER_US); break;    /* FastCounter: 1 MHz    */
+    case 0x9E: { struct thread *t = thr(ARG(0)); r = t ? (s32)t->exc_handler : 0; break; }
     case 0x9F: {                                    /* RThread::SetExceptionHandler(handler,
-                                                       mask, thread): kept, but not yet called;
-                                                       a fault still ends the thread */
+                                                       mask, thread): called for RaiseException;
+                                                       a fault still stops the kernel (main.c) */
         struct thread *t = thr(ARG(2));
         if (!t) { r = KErrBadHandle; break; }
         t->exc_handler = ARG(0); t->exc_mask = ARG(1);
         break;
     }
+    case 0xA0: {                                    /* ModifyExceptionMask(clear, set, thread) */
+        struct thread *t = thr(ARG(2));
+        if (!t) { r = KErrBadHandle; break; }
+        t->exc_mask = (t->exc_mask & ~ARG(0)) | ARG(1);
+        break;
+    }
+    case 0xA1: {                                    /* RaiseException(type, thread)  */
+        struct thread *t = thr(ARG(1));
+        if (!t) { r = KErrBadHandle; break; }
+        if (t == me) { r = KErrGeneral; break; }
+        exc_raise(t, ARG(0));
+        break;
+    }
+    case 0xA2: { struct thread *t = thr(ARG(1)); r = t ? exc_handled(t, ARG(0)) : 0; break; }  /* IsExceptionHandled */
     case 0xCC: IO(IO_CACHE_FLUSH) = 1; break;      /* User::IMB_Range(addr, size): code written
                                                        as data; the caches are flushed whole */
     case 0xA8: break;                               /* heap created: a note  */

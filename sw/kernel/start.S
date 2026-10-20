@@ -121,6 +121,14 @@ thread_tramp:
 2:  swi 0xFFFFFF                    @ no heap: the kernel reports it
     b   2b
 
+/* Where User::HandleException returns, after an exception another thread
+ * raised (exec.c, exc_raise): sp is at the context it interrupted, which
+ * this SWI puts back. */
+    .global exc_return
+exc_return:
+    swi 0xFFFFFE
+    b   exc_return
+
 /* The idle thread: a user-mode loop the harness recognises by its address
  * and fast-forwards to the next interrupt. */
     .global idle_loop

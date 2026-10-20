@@ -49,6 +49,7 @@ void exc_dispatch(struct ctx *c, int kind)
             }
             kpanic("thread start: no heap");
         }
+        if (n == 0xFFFFFE) { exc_restore(c); break; }   /* exc_return (start.S) */
         exec_dispatch(c, n);
         break;
     }
