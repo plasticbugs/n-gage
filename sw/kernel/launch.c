@@ -11,6 +11,15 @@
  * and security states that only a modem would give -- so nothing else
  * would ever start the game.
  *
+ * For the same reason the Starter never runs the second half of its list
+ * (Starter_Arm.RSC: NcnList, Satsvr, CalenSvr, CbsServer, BtServer, ...),
+ * which waits for that idle state.  Of those, games use BtServer: Ghost
+ * Recon's profile screen connects to it through BTSrvClient.dll, which
+ * starts the server itself when it is not running -- asking for UID3
+ * 0x10005999, the client's own, where BtServer.exe is 0x10005950, so the
+ * loader refuses (KErrNotSupported) and the game waits for ever.  The
+ * launcher starts it, as the Starter would have, before the game.
+ *
  * First the launcher says what the Phone application would: no call.  The
  * Phone app publishes the System Agent's current-call state once its call
  * engine is up, which needs the modem, so here it is never published and
@@ -34,8 +43,9 @@ static const char *const needs[] = { "Windowserver", "Fontbitmapserver", "AppLis
 #define SETTLE_US 2000000                /* and then this long, for the boot to quieten */
 
 static u16 exe[] = u"Z:\\System\\Programs\\AppRun.exe";
+static u16 bt[] = u"Z:\\System\\Programs\\BtServer.exe";
 static u16 app[NGVM_LAUNCH_MAX];
-static struct { u32 len, ptr; } d_exe, d_app;   /* TPtrC16: length | EPtrC << 28, pointer */
+static struct { u32 len, ptr; } d_exe, d_app, d_bt, d_none;   /* TPtrC16: length | EPtrC << 28, pointer */
 static u32 f_create, f_resume, f_close, f_send, f_sa_connect;
 u64 launch_due = ~0ull;
 static int state;                                /* 0 none, 1 waiting, 2 settling, 3 done */
@@ -48,6 +58,8 @@ void launch_init(void)
     for (const char *s = rec + 8; *s && n < NGVM_LAUNCH_MAX - 1; s++) app[n++] = (u8)*s;
     d_exe.len = (sizeof exe / 2 - 1) | (1u << 28); d_exe.ptr = (u32)exe;
     d_app.len = n | (1u << 28);                    d_app.ptr = (u32)app;
+    d_bt.len = (sizeof bt / 2 - 1) | (1u << 28);   d_bt.ptr = (u32)bt;
+    d_none.len = 1u << 28;                         d_none.ptr = (u32)bt;
     f_create = euser_export(EUSER_PROCESS_CREATE);
     f_resume = euser_export(EUSER_PROCESS_RESUME);
     f_close = euser_export(EUSER_HANDLE_CLOSE);
@@ -71,6 +83,10 @@ static s32 launcher(u32 unused)
         ((void (*)(u32 *))f_close)(sa);
     }
     u32 proc = 0;                                  /* RProcess */
+    if (((s32 (*)(u32 *, void *, void *, int))f_create)(&proc, &d_bt, &d_none, 0) == KErrNone) {
+        ((void (*)(u32 *))f_resume)(&proc);
+        ((void (*)(u32 *))f_close)(&proc);
+    }
     s32 r = ((s32 (*)(u32 *, void *, void *, int))f_create)(&proc, &d_exe, &d_app, 0);
     if (r == KErrNone) {
         ((void (*)(u32 *))f_resume)(&proc);

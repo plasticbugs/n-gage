@@ -291,6 +291,18 @@ launcher (`sw/kernel/launch.c`) publishes "no call" (`ESACallNone`, 0)
 itself, with the message `RSAVarChangeNotify::NotifySaVarChangeL` sends,
 before it starts the game.
 
+The Starter's list (`Starter_Arm.RSC`) has a second half that waits for
+the same idle state: FaxModem, NcnList, Satsvr, CalenSvr, clknitzmdls,
+CbsServer, BtServer, UNIPERTAR, UnlockMMC, Emon, Notes. None of it ever
+starts here. Games use BtServer: Ghost Recon's profile screen connects to
+it through `BTSrvClient.dll`, which starts the server itself when it is not
+running, but asks the loader for UID3 0x10005999 (the client's own) where
+`BtServer.exe` is 0x10005950. EFile's loader compares the two after
+loading (`0x503d9a28`) and answers `KErrNotSupported`, and the game waits
+for ever with its music playing. The launcher starts
+`Z:\System\Programs\BtServer.exe`, with no UIDs asked for, before the game.
+At 30 MIPS that delays a game's start by some 0.6 s.
+
 Characters are the kernel's on EKA1: exec 0x4F-0x53 fold, collate, change
 case and give a character's category (`TChar::GetCategory`, behind
 estlib's `isalnum` and the rest of `ctype.h`). `sw/kernel/misc.c` answers
