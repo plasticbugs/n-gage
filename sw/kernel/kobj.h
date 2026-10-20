@@ -127,6 +127,7 @@ struct process {
     struct library *ram_deps[MAX_PDEPS]; int nram_deps; /* added by the loader */
     struct logon *logons;
     int  owner_type;
+    int  low;                         /* the game's: memory under NGVM_LOW_BASE */
 };
 
 /* ---- libraries (code images) -------------------------------------------- */

@@ -119,7 +119,7 @@ static s32 library_create_ram(struct thread *t, u32 li)
     u32 refs = uread32(li + LI_DLLREFS);
     u32 size = code + 4 + 8 * refs;           /* the code, then the reference table */
     struct library *l = (struct library *)obj_new(O_LIBRARY, sizeof(struct library), 0);
-    l->chunk = vm_reserve(size);
+    l->chunk = vm_reserve_for(t->proc->low, size);
     if (!l->chunk || vm_commit(l->chunk, size)) { obj_unref(&l->o); return KErrNoMemory; }
     for (int i = 0; i < 3; i++) l->uid[i] = uread32(li + LI_UID + 4 * i);
     l->code_base = l->chunk;
@@ -221,10 +221,11 @@ static s32 process_create_ram(struct thread *t, u32 li, u32 cmd, int cmdlen)
     int n = li_name(li, path);
     u32 code = (uread32(li + LI_CODESIZE) + 3) & ~3u;
     u32 data = uread32(li + LI_DATASIZE), bss = uread32(li + LI_BSSSIZE);
-    u32 base = vm_reserve(code + data + bss);
+    u32 base = vm_reserve_for(1, code + data + bss);
     if (!base) return KErrNoMemory;
     if (vm_commit(base, code + data + bss)) { vm_release(base); return KErrNoMemory; }
     struct process *p = proc_new(path, n);
+    p->low = 1;
     p->chunk = base;
     for (int i = 0; i < 3; i++) p->uid[i] = uread32(li + LI_UID + 4 * i);
     p->entry = base + uread32(li + LI_ENTRY);
@@ -264,6 +265,7 @@ static s32 process_create(struct thread *t, u32 li, u32 cmd, int cmdlen)
     u16 path[NAME_MAX];
     int n = li_name(li, path);
     struct process *p = proc_new(path, n);
+    p->low = t->proc->low;                    /* the game's, if the game asked */
     proc_setup_from_rom(p, img);
     proc_cmdline(p, cmd, cmdlen);
     data_home(p, li);

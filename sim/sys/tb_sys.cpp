@@ -153,7 +153,11 @@ struct Bench {
     }
 
     // ---------------------------------------------------- Unicorn
+    // entries LOW_FIRST..LOW_END-1 at the low name only, as ngvm.py maps them
+    static constexpr uint32_t LOW_FIRST = NGVM_LOW_BASE >> NGVM_PAGE_SHIFT;
+    static constexpr uint32_t LOW_END = (NGVM_LOW_BASE + NGVM_LOW_SIZE) >> NGVM_PAGE_SHIFT;
     static uint32_t pt_virt(uint32_t i) {
+        if (i >= LOW_FIRST && i < LOW_END) return i << NGVM_PAGE_SHIFT;
         return i < NGVM_PT_CHUNK ? NGVM_CHUNK_BASE + (i << NGVM_PAGE_SHIFT)
                                  : NGVM_DATA_BASE + ((i - NGVM_PT_CHUNK) << NGVM_PAGE_SHIFT);
     }
@@ -182,7 +186,8 @@ struct Bench {
         for (uint32_t k = lo; k <= hi; k++) {
             if (ucm.pt[k] == NGVM_PT_NONE) continue;
             uint32_t s = k;
-            while (k + 1 <= hi && k + 1 != NGVM_PT_CHUNK && ucm.pt[k + 1] == ucm.pt[k] + 1) k++;
+            while (k + 1 <= hi && k + 1 != NGVM_PT_CHUNK && k + 1 != LOW_FIRST && k + 1 != LOW_END &&
+                   ucm.pt[k + 1] == ucm.pt[k] + 1) k++;
             uint32_t n = k - s + 1;
             uc_err e = uc_mem_map_ptr(uc, pt_virt(s), (size_t)n << NGVM_PAGE_SHIFT, UC_PROT_ALL,
                                       &ucm.ram[(size_t)ucm.pt[s] << NGVM_PAGE_SHIFT]);

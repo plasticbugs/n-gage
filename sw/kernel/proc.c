@@ -41,7 +41,7 @@ struct thread *thread_create(struct process *p, u32 func, u32 ptr, u32 stack, u3
     t->exit_type = 3;
     if (stack < 0x1000) stack = 0x1000;
     stack = (stack + NGVM_PAGE_SIZE - 1) & ~(NGVM_PAGE_SIZE - 1);
-    t->stack_base = vm_reserve(stack);
+    t->stack_base = vm_reserve_for(p->low, stack);
     if (!t->stack_base || vm_commit(t->stack_base, stack)) kpanic("no memory for a %u-byte stack", stack);
     t->stack_size = stack;
     t->first_in_process = first;

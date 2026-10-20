@@ -104,6 +104,7 @@ void launch_poll(void)
     launch_due = ~0ull;
     struct process *p = proc_new(u"NGVMLaunch", 10);
     p->exit_type = 3;
+    p->low = 1;                                    /* what it starts is the game */
     struct thread *t = thread_create(p, (u32)launcher, 0, 0x2000, 0, 0x1000, 0x10000, 1);
     obj_set_name_a(&t->o, "Main");
     thread_resume(t);

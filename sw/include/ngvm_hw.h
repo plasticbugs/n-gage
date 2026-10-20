@@ -43,6 +43,17 @@
  * kernel's and are never handed out.                                       */
 #define NGVM_PT_NONE      0xFFFFu
 
+/* The low name of chunk space: 0x00800000-0x01FFFFFF is 0x40800000-
+ * 0x41FFFFFF, through the same table entries (512-2047).  On the phone a
+ * game's chunks ran low in EKA1's moving model, and some games keep
+ * pointers in 24 or 25 bits (Colin McRae Rally 2005; the Airplay ports:
+ * Tomb Raider, Tony Hawk's, Pandemonium), so the kernel gives the game's
+ * processes their memory here.  It never uses these pages' high name: the
+ * caches are virtually tagged, and one page under two tags would not stay
+ * coherent.  The reference maps the low name only.                         */
+#define NGVM_LOW_BASE     0x00800000u
+#define NGVM_LOW_SIZE     0x01800000u
+
 /* ---- devices, at NGVM_IO_BASE + offset, all 32-bit ---------------------- */
 #define IO_DBG_PUTC       0x000  /* W: one byte to the debug console          */
 #define IO_DBG_EXIT       0x004  /* W: stop the simulation with this code     */

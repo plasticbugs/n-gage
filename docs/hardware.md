@@ -70,6 +70,7 @@ Reaching the kernel:
 |---|---|---|---|
 | `0x00000000` | 1 MB | the kernel's code, data and stacks (RAM pages 0–63) | kernel |
 | `0x00400000` | 4 MB | the running EXE's static data, paged per process (EKA1's moving model) | user, through the table |
+| `0x00800000` | 24 MB | the low name of chunk space's `0x40800000`–`0x41FFFFFF`: the game's memory | user, through the table |
 | `0x20000000` | 32 MB | all of RAM, flat, for the kernel's own use | kernel |
 | `0x40000000` | 256 MB of addresses | chunk space: every heap, stack, DLL data and loaded image, paged in 16 KB pages | user, through the table |
 | `0x50000000` | ≤ 20 MB | `SYM.ROM`, as linked; read-only | everyone |
@@ -81,11 +82,29 @@ The ROM base, the fixed-process data addresses and the 4 MB EXE data window
 come from the firmware's own linkage. NGVM puts memory where the code already
 expects it, so nothing in `SYM.ROM` is relocated or patched.
 
+**The low name.** On the phone a game's chunks ran low, in its moving
+process's data section, and some games rely on it: they keep pointers in 24
+or 25 bits. Colin McRae Rally 2005 masks to 24 bits; the Ideaworks Airplay
+ports (Tomb Raider, Tony Hawk's Pro Skater, Pandemonium) pack an 8-bit tag
+above a pointer and keep it in 25. With every chunk at `0x40000000` and up,
+each faulted on its first masked pointer (`0x46f74b8c` read as `0x00f74b8c`).
+So `0x00800000`–`0x01FFFFFF` is a second name for chunk space's
+`0x40800000`–`0x41FFFFFF`, through the same table entries (512–2047), and the
+kernel reserves the game's memory there first (`vm_reserve_for`): the stacks,
+chunks and RAM code of the process the launcher starts, of every EXE loaded
+from the card, and of whatever those processes start. The rest of the system
+reserves around those pages and never uses their high name, because the
+caches are virtually tagged and one page under two tags would not stay
+coherent. The reference maps the low name only, so a use of the high name
+faults there and in the lockstep bench. The low name fills from the bottom,
+so a game's first 8 MB of reservations are under 16 MB.
+
 ## 4. Paging
 
 One table of 16,640 16-bit entries:
 
-- entries 0–16383 map chunk space (`0x40000000` + n × 16 KB);
+- entries 0–16383 map chunk space (`0x40000000` + n × 16 KB); 512–2047 map
+  `0x00800000` + (n − 512) × 16 KB as well, the low name (section 3);
 - entries 16384–16639 map the 4 MB data window.
 
 Each entry holds a 16 KB RAM page number, or `0xFFFF` for none. The kernel

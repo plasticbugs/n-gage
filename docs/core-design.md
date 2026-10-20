@@ -208,8 +208,8 @@ CPI, and its I misses about 0.04.
 
 ### 4.2 Correctness with virtual tags
 
-NGVM has one address space, so a virtual tag is unique, with two
-exceptions the kernel creates. Both need a contract change in
+NGVM has one address space, so a virtual tag is unique, with three
+exceptions the kernel creates. Each needs a contract change in
 `ngvm_hw.h`:
 
 1. **The physical alias.** `pg_alloc` zeroes new pages through
@@ -227,6 +227,15 @@ exceptions the kernel creates. Both need a contract change in
    process's window number; the kernel writes it in `proc_switch_in`.
    Cache tags for addresses in the window include it, so each process's
    lines stay valid across switches and never hit for another process.
+
+3. **The low name.** `0x00800000`–`0x01FFFFFF` reaches table entries
+   512–2047, which also map `0x40800000`–`0x41FFFFFF` (hardware.md
+   section 3: games that keep pointers in 24 or 25 bits).
+
+   **Rule:** the kernel reserves those entries' pages by their low name
+   only, so no page is ever cached under both. The reference and the
+   lockstep bench map the low name alone, and a use of the high name
+   faults there.
 
 Other rules:
 

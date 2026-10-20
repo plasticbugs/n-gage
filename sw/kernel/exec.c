@@ -195,7 +195,7 @@ static struct chunk *chunk_new(u32 max, u32 bottom, u32 top, int de)
     max = (max + NGVM_PAGE_SIZE - 1) & ~(NGVM_PAGE_SIZE - 1);
     k->max = max;
     k->reserved = de || max <= CHUNK_RESERVE_MAX ? max : CHUNK_RESERVE_MAX;
-    k->base = vm_reserve(k->reserved);
+    k->base = vm_reserve_for(cur->proc->low, k->reserved);
     k->double_ended = de;
     if (!k->base) return 0;
     k->bottom = bottom & ~(NGVM_PAGE_SIZE - 1);
@@ -581,10 +581,11 @@ static int exc_handled(struct thread *t, u32 type)
     return t->exc_handler && type < EExcMaxNumber && (t->exc_mask & exc_class(type));
 }
 
-/* a context saved on a user stack: in chunk space, and mapped */
+/* a context saved on a user stack: in chunk space or its low name, and mapped */
 static int exc_frame_ok(u32 f)
 {
-    return f - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE - sizeof(struct ctx) && vm_mapped(f) &&
+    return (f - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE - sizeof(struct ctx) ||
+            f - NGVM_LOW_BASE < NGVM_LOW_SIZE - sizeof(struct ctx)) && vm_mapped(f) &&
            vm_mapped(f + sizeof(struct ctx) - 1);
 }
 

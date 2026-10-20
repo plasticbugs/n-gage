@@ -66,6 +66,7 @@ void pg_free(int p)
 static int pt_index(u32 va)
 {
     if (va - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE) return (va - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT;
+    if (va - NGVM_LOW_BASE < NGVM_LOW_SIZE) return va >> NGVM_PAGE_SHIFT;
     if (va - NGVM_DATA_BASE < NGVM_DATA_SIZE) return NGVM_PT_CHUNK + ((va - NGVM_DATA_BASE) >> NGVM_PAGE_SHIFT);
     return -1;
 }
@@ -85,23 +86,41 @@ u32 pt_get_va(u32 va)
 
 int vm_mapped(u32 va) { return pt_get_va(va) != NGVM_PT_NONE; }
 
-/* ---- reservations in chunk space ------------------------------------------ */
-u32 vm_reserve(u32 size)
+/* ---- reservations in chunk space ------------------------------------------
+ * Three ranges: chunk space below its low name's pages, the low name
+ * (NGVM_LOW_BASE, for the game's processes), and chunk space above. */
+#define LOW_HIGH (NGVM_CHUNK_BASE + NGVM_LOW_BASE)   /* the low name's pages, by their high name */
+
+static u32 reserve_in(u32 lo, u32 hi, u32 size)
 {
     size = (size + NGVM_PAGE_SIZE - 1) & ~(NGVM_PAGE_SIZE - 1);
     if (!size) size = NGVM_PAGE_SIZE;
     /* first fit, leaving one unmapped page between reservations so that an
      * overrun faults instead of landing in a neighbour */
-    u32 base = NGVM_CHUNK_BASE + NGVM_PAGE_SIZE;
+    u32 base = lo + NGVM_PAGE_SIZE;
     int at = 0;
+    while (at < nres && res[at].base < lo) at++;
     for (; at < nres; at++) {
         if (base + size + NGVM_PAGE_SIZE <= res[at].base) break;
         base = res[at].base + res[at].size + NGVM_PAGE_SIZE;
     }
-    if (base + size > NGVM_CHUNK_BASE + NGVM_CHUNK_SIZE || nres == MAXRES) return 0;
+    if (base + size > hi || nres == MAXRES) return 0;
     for (int j = nres; j > at; j--) res[j] = res[j - 1];
     res[at].base = base; res[at].size = size; nres++;
     return base;
+}
+
+u32 vm_reserve(u32 size)
+{
+    u32 b = reserve_in(NGVM_CHUNK_BASE, LOW_HIGH, size);
+    return b ? b : reserve_in(LOW_HIGH + NGVM_LOW_SIZE, NGVM_CHUNK_BASE + NGVM_CHUNK_SIZE, size);
+}
+
+/* low: under the low name if it has room */
+u32 vm_reserve_for(int low, u32 size)
+{
+    u32 b = low ? reserve_in(NGVM_LOW_BASE, NGVM_LOW_BASE + NGVM_LOW_SIZE, size) : 0;
+    return b ? b : vm_reserve(size);
 }
 
 /* reservations: how many, and how many bytes of chunk space they take */
