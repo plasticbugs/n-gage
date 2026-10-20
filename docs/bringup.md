@@ -57,31 +57,37 @@ files. Verify the bitstream's md5 on the card.
 
 Loading takes a while: about 35 MB go through the loader (the firmware and
 a 16–18 MB card), and the screen stays black until the last byte is in.
-Then, as `sim/run_system.sh` ran Virtua Cop with the CPU at 64 MHz, as
-the first flash has it (machine time from the end of the load; the frames
-are in `artifacts/system/vcop64/`, and every one from 10 to 25 s is
-pixel-identical to the reference emulator's):
+Then, as `sim/run_system.sh` ran Virtua Cop on the second build, the CPU
+at 73.85 MHz (machine time from the end of the load; the frames are in
+`artifacts/system/vcop74/`):
 
 | time | screen | sound |
 |---|---|---|
-| 0–5 s | black: the LCD is still off | none |
-| 10 s | the Nokia logo, on white (still there at 15 s) | none |
-| 20 s | the N-Gage logo, on black | none |
-| 25 s | the same, with Nokia's copyright under it | none |
-| 30 s | SEGA | none |
-| 35 s | X-Forge | the music starts at 35.9 s |
-| 40 s | Virtua Cop's title, "press any key" | music |
+| 0–7 s | black: the LCD is still off | none |
+| 7.0 s | the Nokia logo, on white | none |
+| 17.0 s | the N-Gage logo, on black | none |
+| 22.5 s | the same, under a "Virtua Cop" launch note | none |
+| 25 s | the N-Gage logo with Nokia's copyright under it | none |
+| 27.5 s | SEGA | none |
+| 30 s | X-Forge | none |
+| 32.2 s | Virtua Cop's title, "press any key" (on screen by 32.5 s) | the music starts at 32.19 s |
 
-The music the bench recorded is sample-for-sample the reference's
-(`artifacts/system/vcop64/music_from_35.9s_16k.wav`). The bench stops at the
+The first flash's build, at 64 MHz, reached the same title at 40 s on the
+bench (`artifacts/system/vcop64/`, whose frames from 10 to 25 s are
+pixel-identical to the reference emulator's).
+
+The music is sample-for-sample the first flash's recording, which is the
+reference's: all 293,624 samples of
+`artifacts/system/vcop74/music_from_32.2s_16k.wav`. The bench stops at the
 FIFO's output, though: the hand-over to the Pocket's audio clock is not in
 it.
 
 The reference emulator reaches the title at 30 s at 100 MIPS. On the
-Pocket's memories the RTL delivers about 17–21 MIPS while the firmware
-boots, most of it waiting on first-time cache misses. A stopwatch reading
-of when the title appears on hardware is worth writing down. If it is far
-from 40 s, the memories are slower or faster than the bench's models.
+Pocket's memories the RTL delivers 19–25 MIPS while the firmware boots
+(17.4 at the least), most of it waiting on cache misses. A stopwatch
+reading of when the title appears on hardware is worth writing down. If
+it is far from 32 s, the memories are slower or faster than the bench's
+models.
 
 ## The panel
 
