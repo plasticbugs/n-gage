@@ -159,10 +159,10 @@ a cache line's fetch 34 memory clocks instead of 47, and the CPU about 8%
 faster through Virtua Cop's boot (726 against 673 million instructions in
 its first 20 s; the Nokia logo at 6.5 s, the N-Gage logo at 16.0 s). The
 bench's SDRAM model cannot say whether the Pocket's chip is read soundly at
-that pace: on another core it was not (METHODOLOGY 5.28). Turn it on while
-a game runs. If the game crashes, freezes or draws garbage, it is unsound:
-turn it off and report what you saw. Leaving it on does not survive a
-reload.
+that pace: on another core it was not (METHODOLOGY 5.28), and on this one
+it is not either: the games crash with it on (log, 2026-10-19). Leave it
+off. It stays in the menu for a later test of other capture timings, and
+leaving it on does not survive a reload.
 
 The game runs on while the menu is open: that is expected (NGVM does not
 pause yet).
@@ -207,3 +207,12 @@ that died belong here as much as the one that lived.
   held 128-256 ms. The second build copies the picture on the firmware's
   update instead, holds 32-64 ms of sound and runs the CPU 15% faster. If
   it still combs, the theory is dead.
+- 2026-10-19, `42a6ceb0fc00f8e8a03dc8d806bd09cb` with kernel
+  `c4369fba680bae31d19806a044f4d91c`: Menu -> SDRAM fast reads on, the
+  games crash. Reads at one a clock are unsound at this build's capture
+  timing, as on NBA Jam (METHODOLOGY 5.28). Timing analysis passes the
+  capture (setup slack +0.76 ns at slow 0C, no hold violation in any
+  corner), so either the SDC's chip delays are not the chip's, that
+  analysis does not model a word every clock, or the fault is not in the
+  capture: none of these is checked. Not yet asked: how soon the crash
+  came, and whether garbage came first.

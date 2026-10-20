@@ -99,8 +99,10 @@ kernel's hot data needs a faster home than SDRAM.
   32 CPU clocks instead of 41-43, and the CPU retires 725,824,799
   instructions instead of 673,111,453 (+7.8 %). The bench's SDRAM model
   says nothing about whether the Pocket's chip is read soundly at that
-  pace, and on another core it was not (METHODOLOGY 5.28), so it is a
-  switch until hardware has chosen.
+  pace. On NBA Jam's hardware it was not (METHODOLOGY 5.28), and on this
+  core's it is not either: with the switch on, the games crash (second
+  build, docs/bringup.md log). Reads stay at one every two clocks; the
+  switch stays, off, for a test of other capture timings.
 - **CRAM.** `target/pocket/cram_ctrl.sv`:
   - asynchronous, with the address multiplexed on DQ;
   - 12 clocks a halfword read and 10 a write, back to back, each with
