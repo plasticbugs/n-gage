@@ -815,7 +815,7 @@ module core_top
     wire clk_vid_90deg; // Video: 6.857 MHz @ 90deg (Pocket RGB clock pair)
     wire clk_sdram;     // SDRAM chip clock: 96.0 MHz, phase-shifted (see the SDC)
     wire clk_ana;       // Analogizer: 48.0 MHz, clk_sys / 2, in phase with it
-    wire clk_cpu;       // NGVM's CPU side: 80.0 MHz, asynchronous to the rest by design
+    wire clk_cpu;       // NGVM's CPU side: 73.85 MHz (VCO / 13), asynchronous to the rest by design
 
     core_pll core_pll
     (
@@ -940,7 +940,7 @@ module core_top
     always @(posedge clk_sys) begin vt_s <= vt; vt_d <= vt_s; end
     wire pix_sync = vt_s ^ vt_d;
 
-    ngage_core #(.CPU_HZ(64_000_000)) u_core (
+    ngage_core #(.CPU_HZ(73_846_154)) u_core (
         //! pause_core is the Pocket's menu being open.  NGVM does not use it
         //! yet: the game runs on behind the menu.  It must never be ORed into
         //! reset, which would boot the phone again when the menu closed.

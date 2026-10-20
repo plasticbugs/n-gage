@@ -18,7 +18,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 cd "$here"
 verilator --version >/dev/null 2>&1 || { echo "verilator not found" >&2; exit 2; }
-HZ=${CPU_HZ:-64000000}
+HZ=${CPU_HZ:-73846154}
 OBJ=${OBJ:-$here/obj_system}
 make -s -C "$root"/sw/kernel >/dev/null
 
