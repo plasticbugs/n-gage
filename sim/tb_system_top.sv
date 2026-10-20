@@ -45,7 +45,13 @@ module tb_system_top #(
 
     // for measurement: an instruction retiring (clk_cpu), the LCD copying a frame
     output logic        retired,
-    output logic        lcd_busy
+    output logic        lcd_busy,
+    // and what the CPU side waits on (clk_cpu): an I-cache fill, a D-cache
+    // command to the miss handler (MC_*), the bus
+    output logic        w_i, w_d, w_bus,
+    output logic  [1:0] w_dcmd,
+    output logic [15:0] a_lvl,          // samples in the audio FIFO
+    output logic        w_m             // the bus request, crossed into clk
 );
     logic         m_req, m_done;
     logic   [1:0] m_cmd;
@@ -137,6 +143,12 @@ module tb_system_top #(
     assign pchar = u_core.dbg_data[7:0];
     assign retired  = u_core.rt_valid;
     assign lcd_busy = u_core.u_lcd.c_go;
+    assign w_i    = u_core.u_sys.i_req;
+    assign w_d    = u_core.u_sys.d_req;
+    assign w_dcmd = u_core.u_sys.d_cmd;
+    assign w_bus  = u_core.u_sys.bus_req;
+    assign a_lvl  = 16'(u_core.u_sys.u_io.a_lvl);
+    assign w_m    = m_req;
 endmodule
 
 `default_nettype wire

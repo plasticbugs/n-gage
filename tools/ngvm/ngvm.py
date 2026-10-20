@@ -270,7 +270,10 @@ class Machine:
         if off == IO_DBG_PUTC:
             c = value & 0xFF
             if c == 10:
-                print(self.con.decode('latin-1'), flush=True)
+                line = self.con.decode('latin-1')
+                if self.a.stamp:
+                    line = '[%7.3f s] %s' % (self.now_us() / 1e6, line)
+                print(line, flush=True)
                 self.con = bytearray()
             else:
                 self.con.append(c)
@@ -619,6 +622,8 @@ def main():
     ap.add_argument('--frame-every', type=int, default=0)
     ap.add_argument('--profile', action='store_true', help='sample where the CPU spends its time')
     ap.add_argument('--wav', help='write what the audio FIFO was given to this WAV file')
+    ap.add_argument('--stamp', action='store_true',
+                    help="prefix each line the kernel prints with virtual time, as sim/run_system.sh does")
     ap.add_argument('--memtrace', help='FROM:SECONDS:FILE: record fetches and data accesses for a cache model')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
     a = ap.parse_args()

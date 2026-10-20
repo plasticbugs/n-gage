@@ -194,6 +194,14 @@ int main(int argc, char **argv)
     std::string line;
     size_t ki = 0;
     uint64_t insns = 0, insns_mark = 0, cpu_mark = 0, fetch_run = 0, fetch_max = 0, copies = 0, copies_mark = 0;
+    // CPU clocks waiting on: an I fill, a D-cache command (MC_FILL, MC_WB,
+    // MC_URD, MC_WCB), the bus; and how many of each began
+    enum { W_I, W_D, W_BUS = W_D + 4, N_I, N_D, N_BUS = N_D + 4, W_N };
+    uint64_t wc[W_N] = {}, wm[W_N] = {};
+    bool wi_d = false, wd_d = false, wb_d = false;
+    unsigned a_min = ~0u, a_max = 0;               // the audio FIFO's level, between reports
+    uint64_t m_cyc = 0, m_n = 0, m_mark = 0, mn_mark = 0;  // the request in the memory's clock
+    bool wm_d = false;
     std::vector<uint32_t> audio;                   // 48 kHz: 96 MHz / 2000
     uint64_t played = 0;
     bool snd_tog_d = dut->snd_tog;
@@ -201,9 +209,20 @@ int main(int argc, char **argv)
         // the colour and de are registered together at the edge that ends a
         // pix_ce cycle, as core_top's clk_vid flops then take them
         bool edge = dut->pix_ce, ret = dut->retired;
+        bool wi = dut->w_i, wd = dut->w_d, wb = dut->w_bus;
+        int dcmd = dut->w_dcmd;
         uint64_t sc = sys_cycles, cc = cpu_cycles;
         step();
-        if (cpu_cycles != cc && ret) insns++;
+        if (cpu_cycles != cc) {
+            if (ret) insns++;
+            if (wi) wc[W_I]++;
+            if (wd) wc[W_D + dcmd]++;
+            if (wb) wc[W_BUS]++;
+            if (wi && !wi_d) wc[N_I]++;
+            if (wd && !wd_d) wc[N_D + dcmd]++;
+            if (wb && !wb_d) wc[N_BUS]++;
+            wi_d = wi; wd_d = wd; wb_d = wb;
+        }
         double secs = (sys_cycles - sys0) / MEM_HZ;
         while (ki < keys.size() && secs >= keys[ki].first) dut->keys = keys[ki++].second;
         if (dut->putc && !putc_d) {
@@ -218,6 +237,9 @@ int main(int argc, char **argv)
         snd_tog_d = dut->snd_tog;
         if (sys_cycles == sc) continue;            // a CPU edge only: the picture did not move
         if (wav && (sys_cycles - sys0) % 2000 == 0) audio.push_back(dut->snd);
+        a_min = std::min<unsigned>(a_min, dut->a_lvl); a_max = std::max<unsigned>(a_max, dut->a_lvl);
+        if (dut->w_m) { m_cyc++; if (!wm_d) m_n++; }
+        wm_d = dut->w_m;
         if (dut->lcd_busy) { if (!fetch_run) copies++; if (++fetch_run > fetch_max) fetch_max = fetch_run; } else fetch_run = 0;
         if (edge && dut->de && px < W * H) {
             frame[3 * px + 0] = (dut->rgb >> 16) & 0xff;
@@ -237,8 +259,23 @@ int main(int argc, char **argv)
                        secs, frame_no, dut->dbg_pc, (unsigned long long)insns, mips,
                        (unsigned long long)(copies - copies_mark), (unsigned long long)fetch_max);
                 copies_mark = copies;
+                uint64_t d[W_N], cyc = std::max<uint64_t>(1, cpu_cycles - cpu_mark);
+                for (int i = 0; i < W_N; i++) d[i] = wc[i] - wm[i];
+                auto pc = [&](int i) { return 100.0 * d[i] / cyc; };
+                printf("           waiting: I fill %.0f%%, D fill %.0f%%, write-back %.0f%%, uncached %.0f%%, "
+                       "combining %.0f%%; %llu I fills, %llu D fills, %llu write-backs; %.1f clocks a bus request\n",
+                       pc(W_I), pc(W_D), pc(W_D + 1), pc(W_D + 2), pc(W_D + 3),
+                       (unsigned long long)d[N_I], (unsigned long long)d[N_D], (unsigned long long)d[N_D + 1],
+                       d[N_BUS] ? (double)d[W_BUS] / d[N_BUS] : 0.0);
+                printf("           an I fill %.1f clocks; on the memory's side a request is %.1f of its clocks\n",
+                       d[N_I] ? (double)d[W_I] / d[N_I] : 0.0,
+                       m_n > mn_mark ? (double)(m_cyc - m_mark) / (m_n - mn_mark) : 0.0);
+                m_mark = m_cyc; mn_mark = m_n;
+                printf("           audio FIFO %u-%u samples\n", a_min, a_max);
+                a_min = ~0u; a_max = 0;
                 fflush(stdout);
                 insns_mark = insns; cpu_mark = cpu_cycles;
+                std::copy(wc, wc + W_N, wm);
             }
             frame_no++; px = 0;
             std::fill(frame.begin(), frame.end(), 0);
