@@ -836,6 +836,16 @@ void exec_dispatch(struct ctx *c, u32 n)
     case 0x8D: { s32 v = (s32)uread32(ARG(0)); uwrite32(ARG(0), v + 1); r = v; break; }
     case 0x8E: { s32 v = (s32)uread32(ARG(0)); uwrite32(ARG(0), v - 1); r = v; break; }
     case 0x9D: r = (s32)IO(IO_TIMER_US); break;    /* FastCounter: 1 MHz    */
+    case 0x9F: {                                    /* RThread::SetExceptionHandler(handler,
+                                                       mask, thread): kept, but not yet called;
+                                                       a fault still ends the thread */
+        struct thread *t = thr(ARG(2));
+        if (!t) { r = KErrBadHandle; break; }
+        t->exc_handler = ARG(0); t->exc_mask = ARG(1);
+        break;
+    }
+    case 0xCC: IO(IO_CACHE_FLUSH) = 1; break;      /* User::IMB_Range(addr, size): code written
+                                                       as data; the caches are flushed whole */
     case 0xA8: break;                               /* heap created: a note  */
     case 0xB8: r = (s32)rom_root_dir(); break;      /* the image's one, with NGVM's additions */
     case 0xBC: r = (s32)NGVM_ROM_BASE; break;
