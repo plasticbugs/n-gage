@@ -291,6 +291,9 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         break;
     }
     case 0x05: case 0x08: case 0x06:             /* add/free device drivers */
+    case 0x04:                                   /* compress a heap: it only returns
+                                                    memory early, so keeping it is
+                                                    sound (EKA2L1 does the same) */
         r = KErrNone;
         break;
     case 0x44: case 0x45: case 0x46: {           /* RUndertaker               */
