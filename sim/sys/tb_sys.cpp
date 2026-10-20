@@ -231,6 +231,80 @@ struct Bench {
             uc_emu_stop(u);
         }
     }
+    // A user-mode instruction Unicorn refuses that the N-Gage's ARM920T runs:
+    // the 26-bit APCS returns, MOVS pc, lr (a data-processing op with S set
+    // and pc its destination) and LDM with ^ and pc.  User mode has no SPSR;
+    // the RTL reads the CPSR in its place (arm_cpu.sv, spsr_of), so the CPSR
+    // is unchanged and the instruction is a plain write to pc.  As
+    // tools/ngvm/ngvm.py's on_invalid; anything else stays a fault.
+    static inline unsigned long long n_invalid;   // how often it was met
+    static bool uc_invalid(uc_engine *u, void *) {
+        static const int R[16] = {UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3,
+            UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7, UC_ARM_REG_R8, UC_ARM_REG_R9,
+            UC_ARM_REG_R10, UC_ARM_REG_R11, UC_ARM_REG_R12, UC_ARM_REG_SP, UC_ARM_REG_LR, UC_ARM_REG_PC};
+        uint32_t cpsr, pc, i;
+        uc_reg_read(u, UC_ARM_REG_CPSR, &cpsr);
+        uc_reg_read(u, UC_ARM_REG_PC, &pc);
+        if ((cpsr & 0x20) || (cpsr & 0x1F) != 0x10 || uc_mem_read(u, pc, &i, 4)) return false;
+        bool n = cpsr >> 31 & 1, z = cpsr >> 30 & 1, c = cpsr >> 29 & 1, v = cpsr >> 28 & 1;
+        const bool cs[16] = {z, !z, c, !c, n, !n, v, !v, c && !z, !c || z, n == v, n != v,
+                             !z && n == v, z || n != v, true, false};
+        bool cond = cs[i >> 28];
+        auto reg = [&](unsigned r) { uint32_t x = pc + 8; if (r != 15) uc_reg_read(u, R[r], &x); return x; };
+        uint32_t next = pc + 4;
+        unsigned op = i >> 21 & 15;
+        if ((i & 0x0C10F000) == 0x0010F000 && (i & 0x02000090) != 0x90 && !(op >= 8 && op <= 11)) {
+            uint32_t op2;
+            if (i & (1u << 25)) {
+                unsigned rot = (i >> 8 & 15) * 2, imm = i & 0xFF;
+                op2 = rot ? (imm >> rot) | (imm << (32 - rot)) : imm;
+            } else if (i & 0x10) {
+                return false;                  // shifted by a register: not met
+            } else {
+                uint32_t rm = reg(i & 15); unsigned typ = i >> 5 & 3, sh = i >> 7 & 31;
+                if (typ == 0) op2 = rm << sh;
+                else if (typ == 1) op2 = sh ? rm >> sh : 0;
+                else if (typ == 2) op2 = (uint32_t)((int32_t)rm >> (sh ? sh : 31)) ;
+                else op2 = sh ? (rm >> sh) | (rm << (32 - sh)) : ((uint32_t)c << 31) | (rm >> 1);
+            }
+            uint32_t rn = reg(i >> 16 & 15), res = 0;
+            switch (op) {
+            case 0: res = rn & op2; break;           case 1: res = rn ^ op2; break;
+            case 2: res = rn - op2; break;           case 3: res = op2 - rn; break;
+            case 4: res = rn + op2; break;           case 5: res = rn + op2 + c; break;
+            case 6: res = rn - op2 - 1 + c; break;   case 7: res = op2 - rn - 1 + c; break;
+            case 12: res = rn | op2; break;          case 13: res = op2; break;
+            case 14: res = rn & ~op2; break;         default: res = ~op2; break;
+            }
+            if (cond) next = res & ~3u;
+            uc_reg_write(u, UC_ARM_REG_PC, &next);
+            n_invalid++;
+            return true;
+        }
+        if ((i & 0x0E508000) == 0x08508000) {  // LDM, ^, pc in the list
+            if (cond) {
+                unsigned rn = i >> 16 & 15, cnt = 0;
+                for (int r = 0; r < 16; r++) cnt += i >> r & 1;
+                uint32_t base = reg(rn), up = i >> 23 & 1, pre = i >> 24 & 1;
+                uint32_t a = up ? base + (pre ? 4 : 0) : base - 4 * cnt + (pre ? 0 : 4);
+                uint32_t vals[16];
+                if (uc_mem_read(u, a, vals, 4 * cnt)) return false;
+                if ((i >> 21 & 1) && !(i >> rn & 1)) {
+                    uint32_t wb = up ? base + 4 * cnt : base - 4 * cnt;
+                    uc_reg_write(u, R[rn], &wb);
+                }
+                for (int r = 0, k = 0; r < 16; r++)
+                    if (i >> r & 1) {
+                        uint32_t x = vals[k++];
+                        if (r == 15) next = x & ~3u; else uc_reg_write(u, R[r], &x);
+                    }
+            }
+            uc_reg_write(u, UC_ARM_REG_PC, &next);
+            n_invalid++;
+            return true;
+        }
+        return false;
+    }
     void uc_init() {
         uc_err e = uc_open(UC_ARCH_ARM, UC_MODE_ARM, &uc);
         if (e) { fprintf(stderr, "uc_open: %s\n", uc_strerror(e)); exit(3); }
@@ -243,6 +317,7 @@ struct Bench {
         uc_mmio_map(uc, NGVM_IO_BASE, 0x1000, uc_io_read, this, uc_io_write, this);
         uc_hook h;
         uc_hook_add(uc, &h, UC_HOOK_INTR, (void *)uc_intr, this, 1, 0);
+        uc_hook_add(uc, &h, UC_HOOK_INSN_INVALID, (void *)uc_invalid, this, 1, 0);
         uint32_t cpsr = 0xD3;
         uc_reg_write(uc, UC_ARM_REG_CPSR, &cpsr);
     }
@@ -544,6 +619,8 @@ int main(int argc, char **argv)
            (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1], (unsigned long long)b.nbus[3],
            (unsigned long long)b.nbus[2],
            host, b.use_uc ? ", lockstep with Unicorn" : "");
+    if (Bench::n_invalid)
+        printf("%llu user-mode MOVS pc / LDM ^ met, run by the RTL as plain writes to pc\n", Bench::n_invalid);
     delete b.top;
     return ok && !b.mismatches ? 0 : 1;
 }

@@ -22,7 +22,7 @@ import argparse, array, bisect, ctypes, os, re, struct, sys, time
 
 from unicorn import (Uc, UcError, UC_ARCH_ARM, UC_MODE_ARM, UC_HOOK_INTR,
                      UC_PROT_READ, UC_PROT_EXEC, UC_PROT_ALL, UC_HOOK_MEM_WRITE, UC_HOOK_MEM_READ, UC_HOOK_CODE,
-                     UC_HOOK_BLOCK)
+                     UC_HOOK_BLOCK, UC_HOOK_INSN_INVALID)
 from unicorn.arm_const import *
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -115,6 +115,7 @@ class Machine:
             uc.mem_write(addr, data)
         self.idle_pc = self.syms['idle_loop']
         uc.hook_add(UC_HOOK_INTR, self.on_intr)
+        uc.hook_add(UC_HOOK_INSN_INVALID, self.on_invalid)
         if args.brk:
             from romsyms import Syms
             self.romsyms = Syms(args.rom)
@@ -376,6 +377,60 @@ class Machine:
             self.enter(0x08, 0x13, uc.reg_read(UC_ARM_REG_PC))
         else:
             self.fault('CPU exception %d' % intno)
+
+    def on_invalid(self, uc, ud):
+        """A user-mode instruction Unicorn refuses that the N-Gage's ARM920T
+        runs: the 26-bit APCS returns, MOVS pc, lr (a data-processing op with
+        S set and pc its destination) and LDM with ^ and pc, which some games'
+        division routines still use.  User mode has no SPSR; the RTL reads the
+        CPSR in its place (arm_cpu.sv, spsr_of), so the CPSR is unchanged and
+        the instruction is a plain write to pc.  Anything else stays a fault."""
+        cpsr, pc = uc.reg_read(UC_ARM_REG_CPSR), uc.reg_read(UC_ARM_REG_PC)
+        if cpsr & 0x20 or (cpsr & 0x1F) != 0x10:
+            return False
+        i = int.from_bytes(uc.mem_read(pc, 4), 'little')
+        n, z, c, v = (cpsr >> 31) & 1, (cpsr >> 30) & 1, (cpsr >> 29) & 1, (cpsr >> 28) & 1
+        cond = (z, not z, c, not c, n, not n, v, not v, c and not z, not c or z, n == v, n != v,
+                not z and n == v, z or n != v, True, False)[i >> 28]
+        reg = lambda r: (pc + 8) if r == 15 else uc.reg_read(REGS[r])
+        M = 0xFFFFFFFF
+        if (i & 0x0C10F000) == 0x0010F000 and (i & 0x02000090) != 0x90 and not 8 <= (i >> 21 & 15) <= 11:
+            if i & (1 << 25):
+                rot, imm = (i >> 8 & 15) * 2, i & 0xFF
+                op2 = ((imm >> rot) | (imm << (32 - rot))) & M
+            elif i & 0x10:
+                return False                   # shifted by a register: not met
+            else:
+                rm, typ, sh = reg(i & 15), i >> 5 & 3, i >> 7 & 31
+                if typ == 0:
+                    op2 = (rm << sh) & M
+                elif typ == 1:
+                    op2 = rm >> sh if sh else 0
+                elif typ == 2:
+                    op2 = ((rm - (rm >> 31 << 32)) >> (sh or 32)) & M
+                else:
+                    op2 = ((rm >> sh) | (rm << (32 - sh))) & M if sh else (c << 31) | (rm >> 1)
+            rn = reg(i >> 16 & 15)
+            res = (rn & op2, rn ^ op2, rn - op2, op2 - rn, rn + op2, rn + op2 + c, rn - op2 - 1 + c,
+                   op2 - rn - 1 + c, 0, 0, 0, 0, rn | op2, op2, rn & ~op2, ~op2)[i >> 21 & 15] & M
+            uc.reg_write(UC_ARM_REG_PC, (res & ~3) if cond else pc + 4)
+            return True
+        if (i & 0x0E508000) == 0x08508000:     # LDM, ^, pc in the list
+            if not cond:
+                uc.reg_write(UC_ARM_REG_PC, pc + 4)
+                return True
+            rn = i >> 16 & 15
+            regs = [r for r in range(16) if i >> r & 1]
+            base = reg(rn)
+            up, pre = i >> 23 & 1, i >> 24 & 1
+            lo = base + (4 if pre else 0) if up else base - 4 * len(regs) + (0 if pre else 4)
+            vals = struct.unpack('<%dI' % len(regs), uc.mem_read(lo & M, 4 * len(regs)))
+            if i >> 21 & 1 and rn not in regs:
+                uc.reg_write(REGS[rn], (base + 4 * len(regs) if up else base - 4 * len(regs)) & M)
+            for r, x in zip(regs, vals):
+                uc.reg_write(REGS[r], (x & ~3) if r == 15 else x)
+            return True
+        return False
 
     def irq_line(self):
         return self.irq_status & self.irq_enable
