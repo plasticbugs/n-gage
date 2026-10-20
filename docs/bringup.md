@@ -214,5 +214,8 @@ that died belong here as much as the one that lived.
   capture (setup slack +0.76 ns at slow 0C, no hold violation in any
   corner), so either the SDC's chip delays are not the chip's, that
   analysis does not model a word every clock, or the fault is not in the
-  capture: none of these is checked. Not yet asked: how soon the crash
-  came, and whether garbage came first.
+  capture: none of these is checked. The crash comes at once, so the
+  fault is systematic, not marginal: consistent with a capture that
+  samples each word after it has gone, which a half-rate read survives
+  because the bus keeps the word until the next one, and a full-rate read
+  does not.
