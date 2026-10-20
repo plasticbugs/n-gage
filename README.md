@@ -13,8 +13,9 @@ A small C kernel (`sw/kernel`) stands in for the phone's EKA1 kernel and
 drivers.
 
 > **No firmware or games are included, and none ever will be.** You supply
-> your phone's firmware dump (`sym.rom`) and the games' memory cards, built
-> with `mkdrive.py` (below).
+> the phone's firmware (`sym.rom`) and the games' memory cards, built with
+> `mkdrive.py`: "What goes on the card", below, says where to get the
+> firmware and where each file goes.
 
 | part | implementation | verified by |
 |---|---|---|
@@ -74,12 +75,32 @@ not yet been tried on an adapter.
 
 ## What goes on the card
 
-`Assets/ngage/common/` takes three kinds of file
-(`pkg/pocket/Assets/ngage/common/README.txt`):
+Unzip the release onto the SD card root. Then everything else goes in one
+folder, next to the kernel:
 
-- `ngvm.bin`, the kernel, from the release;
-- `sym.rom`, your phone's firmware;
-- one `.img` per game, built from the game's files:
+```
+SD card
+└── Assets/
+    └── ngage/
+        └── common/
+            ├── ngvm.bin    the kernel, already there from the release zip
+            ├── sym.rom     the phone's firmware (the "BIOS")
+            ├── sonic.img   one card image per game
+            └── vcop.img    ...
+```
+
+**The firmware, `sym.rom`.** Dump it from your own N-Gage, or get
+`bios/Nokia/N-Gage/SYM.ROM` from the
+[retrobios](https://github.com/Abdess/retrobios) repository on GitHub. That
+file is byte-for-byte the firmware this core was built and tested on:
+
+- 18,612,224 bytes;
+- md5 `64a95a4a884cf4cc15a566b856603193`.
+
+Rename it to `sym.rom`, in lower case, and put it in
+`Assets/ngage/common/`. Other firmware versions have not been tried.
+
+**The games.** One `.img` per game, built from the game's files:
 
 ```sh
 python3 mkdrive.py --from vcop.zip --out vcop.img
