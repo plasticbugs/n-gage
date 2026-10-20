@@ -67,6 +67,119 @@ static s32 put_handle(u32 args, struct kobj *o, int towned)
     return KErrNone;
 }
 
+/* ---- a server being started -------------------------------------------------
+ * A client that cannot find its server starts it.  RPhCltServer::Connect
+ * creates PhoneServer.exe, raises it to EPriorityHigh, resumes it and waits
+ * for its signal; on the phone the new server takes its name at once.  Here
+ * the loader takes tens of milliseconds to create the process, and a second
+ * client that misses the name in that time starts a second copy.  The copy
+ * finds the name taken and panics (PhSrvFault 2), the client waiting on it
+ * panics after it (PhSrvTest 1), and on Sonic N the screen is never updated
+ * again.  So a miss is remembered against the name, and another thread that
+ * misses the same name meanwhile is answered when the server appears, or
+ * when the first attempt is over: its thread dead, or STARTING_US since its
+ * last miss. */
+#define STARTS_N     8
+#define WAITS_N      8
+#define STARTING_US  2000000u
+#define WAIT_POLL_US 5000u
+
+extern int u16_eq_fold(const u16 *, int, const u16 *, int);
+
+static struct { u16 name[NAME_MAX]; int n; u32 by; u64 since; } starts[STARTS_N];
+static struct { u16 name[NAME_MAX]; int n; u32 tid, args, status; int towned, on; } waits[WAITS_N];
+static struct ktimer wait_timer[WAITS_N];      /* kind 10: polls waits[secs] */
+
+static int start_live(int i)
+{
+    struct thread *b;
+    if (!starts[i].n) return 0;
+    if (now_us() - starts[i].since > STARTING_US || !(b = thread_by_id(starts[i].by)) || b->state == T_DEAD)
+        starts[i].n = 0;
+    return starts[i].n != 0;
+}
+
+static int start_find(const u16 *name, int n)
+{
+    for (int i = 0; i < STARTS_N; i++)
+        if (start_live(i) && u16_eq_fold(starts[i].name, starts[i].n, name, n)) return i;
+    return -1;
+}
+
+static void start_note(const u16 *name, int n, struct thread *t)
+{
+    int i = start_find(name, n);
+    if (i < 0)
+        for (i = 0; i < STARTS_N && start_live(i); i++) ;
+    if (i == STARTS_N || !n) return;            /* full: no record, as before */
+    memcpy(starts[i].name, name, 2 * n);
+    starts[i].n = n; starts[i].by = t->id; starts[i].since = now_us();
+}
+
+/* the session the thread asked for, or KErrNotFound, in its own process */
+static void wait_answer(int i, struct server *s)
+{
+    struct thread *t = thread_by_id(waits[i].tid);
+    if (t && t->state != T_DEAD) {
+        struct process *was = proc_mapped();
+        if (t->proc != was) proc_switch_in(t->proc);
+        s32 r = KErrNotFound;
+        if (s) {
+            struct session *ss = (struct session *)obj_new(O_SESSION, sizeof(struct session), t->proc);
+            ss->server = s;
+            ss->client = t;
+            obj_ref(&s->o);
+            u32 d = uread32(waits[i].args);
+            uwrite32(des_ptr(d), handle_make(t, &ss->o, waits[i].towned));
+            des_setlen(d, 4);
+            r = KErrNone;
+        }
+        kprintf("[ipc] thread %d: server ", t->id);
+        kputs16(waits[i].name, waits[i].n);
+        kprintf(s ? " started\n" : " not started\n");
+        request_complete(t, waits[i].status, r);
+        if (was && was != proc_mapped()) proc_switch_in(was);
+    }
+    if (wait_timer[i].queued) timer_dequeue(&wait_timer[i]);
+    waits[i].on = 0;
+}
+
+static int wait_add(struct thread *t, u32 args, u32 status, int towned, const u16 *name, int n, u32 by)
+{
+    for (int i = 0; i < WAITS_N; i++) {
+        if (waits[i].on) continue;
+        memcpy(waits[i].name, name, 2 * n);
+        waits[i].n = n; waits[i].tid = t->id; waits[i].args = args; waits[i].status = status;
+        waits[i].towned = towned; waits[i].on = 1;
+        wait_timer[i].kind = 10; wait_timer[i].secs = (u32)i; wait_timer[i].thread = 0;
+        timer_queue(&wait_timer[i], now_us() + WAIT_POLL_US);
+        kprintf("[ipc] thread %d waits for server ", t->id);
+        kputs16(name, n);
+        kprintf(", which thread %d is starting\n", by);
+        return 1;
+    }
+    return 0;
+}
+
+/* timer_tick: a wait's poll */
+void session_wait_tick(struct ktimer *k)
+{
+    int i = (int)k->secs;
+    if (!waits[i].on) return;
+    struct server *s = server_find(waits[i].name, waits[i].n);
+    if (s || start_find(waits[i].name, waits[i].n) < 0) wait_answer(i, s);
+    else timer_queue(k, now_us() + WAIT_POLL_US);
+}
+
+/* a server has taken the name: its record is over, and its waiters connect */
+static void start_done(const u16 *name, int n, struct server *s)
+{
+    for (int i = 0; i < STARTS_N; i++)
+        if (starts[i].n && u16_eq_fold(starts[i].name, starts[i].n, name, n)) starts[i].n = 0;
+    for (int i = 0; i < WAITS_N; i++)
+        if (waits[i].on && u16_eq_fold(waits[i].name, waits[i].n, name, n)) wait_answer(i, s);
+}
+
 /* A chunk's maximum is reported as asked, but no more than CHUNK_RESERVE_MAX
  * of addresses is reserved for one: programs ask for 32 MB heaps a thread at
  * a time (AppRun, FbServ, SysAp), which would fill chunk space with no RAM
@@ -126,6 +239,7 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
     u32 a0 = uread32(a), a1 = uread32(a + 4), a2 = uread32(a + 8), a3 = uread32(a + 12);
     u16 name[NAME_MAX];
     s32 r = KErrNone;
+    int deferred = 0;                           /* completed later: a waiting session */
     if (kflags & DBGF_EXEC) {
         kprintf("[exec]   executor %x (%x %x %x %x) stack:", attr, a0, a1, a2, a3);
         extern int uaddr_ok(u32, u32);
@@ -216,6 +330,7 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         s->thread = t;
         r = put_handle(a, &s->o, 1);
         if (kflags & DBGF_IPC) { kprintf("[ipc] server "); kputs16(name, n); kprintf("\n"); }
+        if (n) start_done(name, n, s);
         break;
     }
     case 0x16: {                                 /* create session          */
@@ -223,6 +338,12 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         int n = name_arg(a1, name);
         struct server *s = server_find(name, n);
         if (!s) {
+            /* another thread is starting it: wait for that (above) */
+            int i = n ? start_find(name, n) : -1;
+            if (i >= 0 && starts[i].by != t->id && wait_add(t, a, status, towned, name, n, starts[i].by)) {
+                deferred = 1; break;
+            }
+            if (n && (i < 0 || starts[i].by == t->id)) start_note(name, n, t);
             if (kflags & DBGF_IPC) { kprintf("[ipc] no server "); kputs16(name, n); kprintf("\n"); }
             if (kflags & DBGF_DUMP) thread_dump();
             r = KErrNotFound; break;
@@ -406,7 +527,7 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         kpanic("executor %x unimplemented (args %x %x %x %x) lr %p", attr, a0, a1, a2, a3, t->ctx.r[14]);
     }
     if (kflags & DBGF_EXEC) kprintf("[exec]   executor %x -> %d\n", sub, r);
-    request_complete(t, status, r);
+    if (!deferred) request_complete(t, status, r);
     return r;
 }
 

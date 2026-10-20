@@ -258,6 +258,11 @@ void timer_tick(void)
         struct ktimer *k = tq;
         tq = k->qnext;
         k->queued = 0;
+        if (k->kind == 10) {                        /* a session waiting for its server */
+            extern void session_wait_tick(struct ktimer *);
+            session_wait_tick(k);
+            continue;
+        }
         if (k->thread) request_complete(k->thread, k->status, KErrNone);
         k->thread = 0;
         if (k->kind == 9) obj_unref(&k->o);        /* User::After's own timer */

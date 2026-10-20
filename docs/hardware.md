@@ -278,6 +278,17 @@ share of cache misses, branch penalties and multi-cycle instructions;
     says 350, as `ekern`'s does, and nothing in the firmware sets 750. At
     350, the phone client's start-a-server-if-none window lasted a whole
     process load, and a second PhoneServer was started (PhSrvFault 2).
+    At 750 it still could be. On the RTL at the tested SDRAM pace, and in
+    the reference with `--trace 1`, a second client missed "Phone Server"
+    while the first one's copy was still being created and started its
+    own. The copy panicked (PhSrvFault 2), and its client after it
+    (PhSrvTest 1). On Sonic N the screen was then updated 4 times in 60 s.
+    The kernel now remembers a missed name for 2 s, or until the thread
+    that missed it dies. Another thread missing the same name in that time
+    waits, and connects when the server takes the name
+    (`sw/kernel/exec.c`, "a server being started"). Whether EKA1 closes
+    this window some other way, or the phone was simply fast enough, is
+    not known.
   - Whether the window server should be at 650 is unchecked.
 - The scheduler picks the least recently run of the highest-priority
   threads; EKA1 keeps a FIFO ready queue. They can differ with three or
