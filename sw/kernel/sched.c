@@ -21,6 +21,18 @@ static int need_resched = 1;             /* a thread may now outrank cur    */
 static u64 slice_end;
 static struct ktimer *tq;                /* sorted by expiry                */
 
+/* The phone's spare time.  A game that left the phone's CPU idle some of the
+ * time can leave NGVM's none, and every thread below it then waits for good:
+ * MediaServer finishes creating a stream on a thread at
+ * EPriorityAbsoluteVeryLow (100), which runs on EKA1 only when nothing else
+ * can.  So when neither the idle thread nor a lent slice has run for
+ * LEND_EVERY_US, the thread below the top that has waited longest gets
+ * LEND_US, whatever wakes meanwhile. */
+#define LEND_EVERY_US 50000
+#define LEND_US 2000
+static struct thread *lent;              /* holds the CPU until slice_end   */
+static u64 last_spare;                   /* when the threads below the top last could run */
+
 u64 now_us(void)
 {
     u32 lo = IO(IO_TIMER_US);
@@ -101,20 +113,35 @@ void schedule(void)
     if (best && cur && cur != best && runnable(cur) && cur != idle_thread &&
         cur->prio == best->prio && !slice_expired)
         best = cur;
+    u64 now = now_us();
+    if (cur == idle_thread) last_spare = now;
+    if (lent) {                         /* a lent slice runs out, or its thread waits */
+        if (lent == cur && runnable(cur) && !slice_expired) best = cur;
+        else { lent = 0; last_spare = now; }
+    } else if (best && now - last_spare >= LEND_EVERY_US) {
+        struct thread *s = 0;
+        for (struct kobj *o = obj_first(O_THREAD); o; o = o->next) {
+            struct thread *t = (struct thread *)o;
+            if (!runnable(t) || t == idle_thread || t->prio >= best->prio) continue;
+            if (!s || (s32)(t->run_stamp - s->run_stamp) < 0) s = t;
+        }
+        if (s) best = lent = s;
+        else last_spare = now;          /* nothing below the top is waiting */
+    }
     if (!best) best = idle_thread;
+    if (best == idle_thread) last_spare = now;
     if (best != cur || slice_expired) {
         slice_expired = 0;
-        slice_end = now_us() + SLICE_US;
+        slice_end = now + (best == lent ? LEND_US : SLICE_US);
         program_timer();
     }
     if (best != cur && (kflags & DBGF_SCHED)) {
         kprintf("[sched] -> ");
         kputs16(best->o.name, best->o.namelen);
-        kprintf(" (%d) pc %p\n", best->prio, best->ctx.pc);
+        kprintf(" (%d) pc %p%s\n", best->prio, best->ctx.pc, best == lent ? " lent" : "");
     }
     best->run_stamp = ++run_stamp;
     if (best != cur) {
-        u64 now = now_us();
         if (cur == idle_thread) idle_us += now - idle_since;
         if (best == idle_thread) idle_since = now;
     }
