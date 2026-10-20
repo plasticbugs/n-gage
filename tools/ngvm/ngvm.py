@@ -255,6 +255,8 @@ class Machine:
             return self.frames
         if off == IO_KEYS:
             return self.keys
+        if off == IO_KEYMAP:
+            return self.a.keymap
         if off == IO_AUDIO_LEVEL:
             return int(self.audio_fifo)
         if off == IO_AUDIO_RATE:
@@ -697,6 +699,9 @@ def main():
                     help="prefix each line the kernel prints with virtual time, as sim/run_system.sh does")
     ap.add_argument('--memtrace', help='FROM:SECONDS:FILE: record fetches and data accesses for a cache model')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
+    ap.add_argument('--keymap', type=lambda x: int(x, 16), default=0,
+                    help='(hex) IO_KEYMAP (ngvm_hw.h): 4 bits a button, A in 3:0 to R in 23:20, digit + 1, '
+                         'or 0 for the default; 3 puts A on key 2')
     a = ap.parse_args()
     m = Machine(a)
     sys.exit(m.run())

@@ -21,7 +21,7 @@
 //
 //   obj_sys/Vngvm_sys --rom SYM.ROM --kernel build/kernel/kernel.elf
 //       [--drive game.img] [--seconds S] [--no-uc] [--lat CYCLES]
-//       [--frames-to DIR --frame-every N] [--keys "S:MASK ..."]
+//       [--frames-to DIR --frame-every N] [--keys "S:MASK ..."] [--keymap HEX]
 //       [--watch-pc ADDR,ADDR,...]  (hex; prints when each retires, its first 20 times)
 #include <cstdio>
 #include <cstdlib>
@@ -106,6 +106,7 @@ struct Bench {
     std::vector<uint8_t> sdram, cram;               // the RTL's memory, at bus addresses
     uc_engine *uc = nullptr;
     bool use_uc = true;
+    bool keymap_seen = false;
     uint64_t cycles = 0, retired = 0, max_cycles = 0;
     uint32_t idle_pc = 0;
     uint64_t idle_retired = 0;
@@ -462,6 +463,10 @@ struct Bench {
                 printf("[watch] %08x at %.6f s\n", w->first, (double)cycles / CPU_HZ);
         }
         if (top->io_rd) io_reads.push_back({(uint32_t)top->io_rd_off * 4, top->io_rd_data});
+        if (top->io_rd && top->io_rd_off * 4 == IO_KEYMAP && !keymap_seen) {
+            keymap_seen = true;            // the menu's setting, as the kernel first reads it
+            printf("[keymap] IO_KEYMAP reads %06x at %.6f s\n", top->io_rd_data, (double)cycles / CPU_HZ);
+        }
         if (top->dbg_putc) {
             char c = (char)(top->dbg_data & 0xFF);
             if (c == 10) { printf("%s\n", con.c_str()); fflush(stdout); con.clear(); }
@@ -551,6 +556,7 @@ int main(int argc, char **argv)
     Verilated::commandArgs(argc, argv);
     const char *rom = nullptr, *kernel = "build/kernel/kernel.elf", *drive = nullptr;
     double seconds = 1.0;
+    uint32_t keymap = 0;
     Bench b;
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
@@ -566,6 +572,7 @@ int main(int argc, char **argv)
             for (char *t = strtok(argv[++i], ","); t; t = strtok(nullptr, ","))
                 b.watch[(uint32_t)strtoul(t, nullptr, 16) & ~1u] = 0;
         }
+        else if (a == "--keymap" && i + 1 < argc) keymap = (uint32_t)strtoul(argv[++i], nullptr, 16);  // IO_KEYMAP
         else if (a == "--keys" && i + 1 < argc) {
             // "S:MASK S:MASK ...": from S seconds, IO_KEYS reads MASK
             std::string s = argv[++i];
@@ -613,6 +620,7 @@ int main(int argc, char **argv)
     b.top->rom_size = (uint32_t)b.rom_size;
     b.top->drive_size = (uint32_t)b.drive_size;
     b.top->keys = 0;
+    b.top->keymap = keymap;
     b.top->vblank = 0;
     b.top->bus_done = 0;
     b.top->clk = 0; b.top->rst = 1;

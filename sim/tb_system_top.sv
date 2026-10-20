@@ -28,6 +28,7 @@ module tb_system_top #(
     input  logic        dl_active,
 
     input  logic [11:0] keys,
+    input  logic [23:0] keymap,         // IO_KEYMAP; 0, the default keys, unless set
     input  logic        rd_late,        // the menu's "SDRAM read late"
     input  logic        rd_fast,        // 0: its "SDRAM half-rate reads"
 
@@ -135,7 +136,7 @@ module tb_system_top #(
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
-        .keys(keys), .rom_size(rom_size), .drive_size(drive_size),
+        .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
         .rgb(rgb_c), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank),
         .pix_ce(pix_ce), .de(de),
         .snd(snd), .snd_tog(snd_tog),

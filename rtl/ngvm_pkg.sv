@@ -106,6 +106,7 @@ localparam logic [9:0] IO_LCD_CTRL    = 10'h00D;
 localparam logic [9:0] IO_LCD_FRAME   = 10'h00E;
 localparam logic [9:0] IO_LCD_SHOW    = 10'h00F;
 localparam logic [9:0] IO_KEYS        = 10'h010;
+localparam logic [9:0] IO_KEYMAP      = 10'h011;
 localparam logic [9:0] IO_AUDIO_DATA  = 10'h014;
 localparam logic [9:0] IO_AUDIO_LEVEL = 10'h015;
 localparam logic [9:0] IO_AUDIO_RATE  = 10'h016;

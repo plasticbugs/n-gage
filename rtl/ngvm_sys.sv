@@ -44,6 +44,7 @@ module ngvm_sys
     output logic         lcd_show_t,    // toggles: the LCD may copy the frame now
     input  logic         vblank,        // pulse in this domain: a frame starts
     input  logic  [11:0] keys,
+    input  logic  [23:0] keymap,
     input  logic  [31:0] rom_size,
     input  logic  [31:0] drive_size,
     output logic  [31:0] snd,
@@ -145,7 +146,7 @@ module ngvm_sys
         .irq(irq),
         .pt_we(pt_we), .pt_idx(pt_idx), .pt_data(pt_data), .win_id(win_id),
         .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show(lcd_show), .vblank(vblank),
-        .keys(keys), .rom_size(rom_size), .drive_size(drive_size),
+        .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data)
     );

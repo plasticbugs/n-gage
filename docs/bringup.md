@@ -105,6 +105,11 @@ run (56 s) instead, and the bench printed
 
 ## The panel
 
+Since 0.2.0 the menu has no entry for it: its place went to the six key
+sliders (Analogue's limit is 16 entries). To use it, put the entry back in
+`interact.json` (`"name": "Bring-up: panel"`, a check at 0xF2000000,
+value and bit `0x00000008`, mask `0xFFFFFFF7`, `"persist": false`).
+
 Menu → **Bring-up: panel**. Four rows of 32 squares along the bottom of
 the picture. Green is 1. Read each row from the end where row 0 shows
 `1010 1010`. The squares are 5 pixels wide (the picture is 176).
@@ -150,7 +155,9 @@ Row 1:
 | the Nokia logo, then nothing else for good | a server started twice at boot (`docs/hardware.md`, open questions): check `ngvm.bin`'s md5 above |
 
 Menu → **SDRAM read late**, **SDRAM slow bursts** and **SDRAM half-rate
-reads** change how the SDRAM is read. All three are off by default, and off
+reads** change how the SDRAM is read; since 0.2.0 they are out of the menu
+with the panel, and a build that needs them puts them back (0xF2000000,
+bits 4, 5 and 6, `target/pocket/core_top.sv`). All three are off by default, and off
 is the setting tested on the Pocket (fourth build on; log, 2026-10-19):
 each word caught three clocks after its READ, the clock the SDC's timing
 analysis checks (+0.76 ns of setup, slow 0C), and a burst's READs one a

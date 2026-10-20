@@ -14,6 +14,9 @@
 //                                  takes to finish anything in flight
 //   frame          96 MHz -> CPU   a toggle: NGVM's vblank, one pulse a frame
 //   keys           96 MHz -> CPU   two flops; each bit is a button on its own
+//   keymap         96 MHz -> CPU   two flops: set from the menu, so it holds
+//                                  still for seconds; a read across a change
+//                                  can mix the two settings for one press
 //   rom/drive size 96 MHz -> CPU   none: set by the load, before reset ends
 //   lcd_base, on   CPU -> 96 MHz   two flops, taken once a frame (ngvm_lcd.sv)
 //   show           CPU -> 96 MHz   a toggle: the D-cache has written back what
@@ -58,6 +61,7 @@ module ngage_core #(
     input  logic         l_done,
 
     input  logic  [11:0] keys,          // KEY_* (ngvm_hw.h), 1 = pressed
+    input  logic  [23:0] keymap,        // IO_KEYMAP (ngvm_hw.h); 0 = the default keys
     input  logic  [31:0] rom_size,
     input  logic  [31:0] drive_size,
 
@@ -102,6 +106,7 @@ module ngage_core #(
     logic         lcd_on, vb_c;
     logic         show_t;           // a toggle: never reset (ngvm_xbus.sv)
     logic  [11:0] keys_s0, keys_s1;
+    logic  [23:0] keymap_s0, keymap_s1;
     logic         dbg_putc, dbg_exit, dbg_hex;
     logic  [31:0] dbg_data;
     logic         rt_valid, rt_irq, rt_thumb, io_rd;
@@ -109,12 +114,13 @@ module ngage_core #(
     logic   [9:0] io_rd_off;
 
     always_ff @(posedge clk_cpu) begin keys_s0 <= keys; keys_s1 <= keys_s0; end
+    always_ff @(posedge clk_cpu) begin keymap_s0 <= keymap; keymap_s1 <= keymap_s0; end
 
     ngvm_sys #(.CPU_HZ(CPU_HZ)) u_sys (
         .clk(clk_cpu), .rst(rst_c),
         .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_waddr(bus_waddr), .bus_be(bus_be),
         .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata), .bus_cnt(bus_cnt),
-        .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show_t(show_t), .vblank(vb_c), .keys(keys_s1),
+        .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show_t(show_t), .vblank(vb_c), .keys(keys_s1), .keymap(keymap_s1),
         .rom_size(rom_size), .drive_size(drive_size),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data),

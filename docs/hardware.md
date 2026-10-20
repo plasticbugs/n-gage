@@ -194,7 +194,8 @@ register; what follows is behaviour the header cannot say.
 
 `IO_KEYS` holds Pocket buttons, 1 = pressed. The kernel turns them into
 Symbian scan codes (`EStdKey*`) and raw events for the window server. The
-mapping is the kernel's choice, not hardware's:
+mapping is the kernel's choice, not hardware's, and these are its
+defaults:
 
 | Pocket | phone | scan code |
 |---|---|---|
@@ -205,7 +206,14 @@ mapping is the kernel's choice, not hardware's:
 | L, R | left and right soft keys | 0xA4, 0xA5 |
 | select | # | 0x7F |
 
-The kernel reads `IO_KEYS` at each vblank (`sw/kernel/event.c`).
+`IO_KEYMAP` moves A, B, X, Y, L and R: 4 bits each, A in bits 3:0 to R in
+23:20, `d + 1` for digit key `d` (scan code `'0' + d`) and 0 for the
+default above. On the Pocket it is six menu sliders (0xF5000000 to
+0xF5000014, `target/pocket/core_top.sv`), 0-9 a digit and 10 the default;
+in the reference, `--keymap`. The kernel reads both registers at each
+vblank and keeps the set of phone keys held, so a phone key that two
+buttons hold goes up only when both are let go (`sw/kernel/event.c`);
+X and start, both OK, did otherwise before.
 
 ### Audio
 

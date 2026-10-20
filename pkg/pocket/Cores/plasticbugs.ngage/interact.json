@@ -57,48 +57,64 @@
         ]
       },
       {
-        "name": "Bring-up: panel",
-        "id": 90,
-        "type": "check",
+        "name": "Button A: key (10 = 5)",
+        "id": 80,
+        "type": "slider_u32",
         "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "value": "0x00000008",
-        "mask": "0xFFFFFFF7"
+        "persist": true,
+        "address": "0xF5000000",
+        "defaultval": 5,
+        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "SDRAM read late",
-        "id": 91,
-        "type": "check",
+        "name": "Button B: key (10 = 7)",
+        "id": 81,
+        "type": "slider_u32",
         "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "value": "0x00000010",
-        "mask": "0xFFFFFFEF"
+        "persist": true,
+        "address": "0xF5000004",
+        "defaultval": 7,
+        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "SDRAM slow bursts",
-        "id": 92,
-        "type": "check",
+        "name": "Button X: key (10 = OK)",
+        "id": 82,
+        "type": "slider_u32",
         "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "value": "0x00000020",
-        "mask": "0xFFFFFFDF"
+        "persist": true,
+        "address": "0xF5000008",
+        "defaultval": 10,
+        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "SDRAM half-rate reads",
-        "id": 93,
-        "type": "check",
+        "name": "Button Y: key (10 = 9)",
+        "id": 83,
+        "type": "slider_u32",
         "enabled": true,
-        "persist": false,
-        "address": "0xF2000000",
-        "defaultval": 0,
-        "value": "0x00000040",
-        "mask": "0xFFFFFFBF"
+        "persist": true,
+        "address": "0xF500000C",
+        "defaultval": 9,
+        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+      },
+      {
+        "name": "Button L: key (10 = soft)",
+        "id": 84,
+        "type": "slider_u32",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF5000010",
+        "defaultval": 10,
+        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+      },
+      {
+        "name": "Button R: key (10 = soft)",
+        "id": 85,
+        "type": "slider_u32",
+        "enabled": true,
+        "persist": true,
+        "address": "0xF5000014",
+        "defaultval": 10,
+        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
       },
       {
         "name": "Analogizer",

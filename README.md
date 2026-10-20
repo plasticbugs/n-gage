@@ -58,8 +58,25 @@ What is not implemented:
 
 - Pausing: the game runs on behind the Pocket's menu.
 - Saving, sleep, the link port.
-- The phone's own keypad layout. The Pocket's buttons map to the keys the
-  games use (`sw/kernel/event.c`).
+- The phone's whole keypad at once. The Pocket's buttons map to the keys
+  the games use (below), and the menu can move A, B, X, Y, L and R to
+  any digit key.
+
+## Controls
+
+| Pocket | phone |
+|---|---|
+| d-pad | joystick |
+| A, B | 5, 7 (the N-Gage's game keys) |
+| X, start | OK |
+| Y | 9 |
+| L, R | left and right soft keys |
+| select | # |
+
+The core's menu has a slider for each of A, B, X, Y, L and R. At 0 to 9
+the button is that digit key of the phone; at 10 it is as in the table.
+They start at 5, 7, 10, 9, 10 and 10, the table's own keys. A game that
+asks for, say, 2 to pause or 0 for its map can then have it on a button.
 
 ## Analogizer
 

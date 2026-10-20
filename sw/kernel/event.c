@@ -74,9 +74,12 @@ s32 event_exec(int idx, u32 a0, u32 a1)
     return KErrNotSupported;
 }
 
-/* The keys: IO_KEYS is read at each vblank and each change becomes a raw
- * key event with an N-Gage standard scan code (e32keys.h).  The game keys
- * of the phone are 5 and 7; the soft keys and the OK key run the menus. */
+/* The keys: IO_KEYS is read at each vblank, each button pressed holds a
+ * phone key, and each phone key that goes down or up becomes a raw key
+ * event with an N-Gage standard scan code (e32keys.h).  The game keys of
+ * the phone are 5 and 7; the soft keys and the OK key run the menus.  The
+ * menu can put A, B, X, Y, L or R on any digit key instead (IO_KEYMAP), so
+ * two buttons may hold one key: it goes up when the last is let go. */
 static const u8 scan[12] = {
     0x10, 0x11, 0x0E, 0x0F,     /* d-pad: EStdKey{Up,Down,Left,Right}Arrow */
     '5',  '7',                  /* A, B: the N-Gage's game keys            */
@@ -87,11 +90,34 @@ static const u8 scan[12] = {
 
 void keys_poll(void)
 {
-    static u32 was;
-    u32 now = IO(IO_KEYS) & 0xFFF, ch = now ^ was;
-    if (!ch) return;
-    for (int i = 0; i < 12; i++)
-        if (ch & (1u << i)) event_add(now & (1u << i) ? 3 : 4, scan[i], 0);  /* EKeyDown, EKeyUp */
-    was = now;
-    activity();
+    static u8 held[12];                       /* the phone keys down, distinct */
+    static int nheld;
+    u32 now = IO(IO_KEYS) & 0xFFF, map = IO(IO_KEYMAP);
+    u8 down[12];
+    int n = 0;
+    for (int i = 0; i < 12; i++) {
+        if (!(now & (1u << i))) continue;
+        u8 k = scan[i];
+        if (i >= 4 && i <= 9) {               /* A B X Y L R: 4 bits each, A first */
+            u32 f = (map >> (4 * (i - 4))) & 15;
+            if (f >= 1 && f <= 10) k = (u8)('0' + f - 1);
+        }
+        int j = 0;
+        while (j < n && down[j] != k) j++;
+        if (j == n) down[n++] = k;
+    }
+    int ch = 0;
+    for (int i = 0; i < nheld; i++) {         /* up: held before, not now */
+        int j = 0;
+        while (j < n && down[j] != held[i]) j++;
+        if (j == n) { event_add(4, held[i], 0); ch = 1; }            /* EKeyUp */
+    }
+    for (int j = 0; j < n; j++) {             /* down: held now, not before */
+        int i = 0;
+        while (i < nheld && held[i] != down[j]) i++;
+        if (i == nheld) { event_add(3, down[j], 0); ch = 1; }        /* EKeyDown */
+    }
+    for (int j = 0; j < n; j++) held[j] = down[j];
+    nheld = n;
+    if (ch) activity();
 }

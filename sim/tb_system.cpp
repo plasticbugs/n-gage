@@ -151,7 +151,7 @@ int main(int argc, char **argv)
 
     dut = new Vtb_system_top;
     t_sys = 0; t_cpu = 0.37;                       // the two clocks are unrelated in phase
-    dut->reset = 1; dut->dl_we = 0; dut->dl_active = 0; dut->keys = 0; dut->rd_fast = fastrd; dut->rd_late = late;
+    dut->reset = 1; dut->dl_we = 0; dut->dl_active = 0; dut->keys = 0; dut->keymap = 0; dut->rd_fast = fastrd; dut->rd_late = late;
     tick_sys(16);
     long t = 0; while (!dut->mem_ready && t++ < 200000) tick_sys(1);
     if (!dut->mem_ready) { printf("FAIL  the memory never came ready\n"); return 1; }
