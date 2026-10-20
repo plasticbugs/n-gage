@@ -303,6 +303,23 @@ for ever with its music playing. The launcher starts
 `Z:\System\Programs\BtServer.exe`, with no UIDs asked for, before the game.
 At 30 MIPS that delays a game's start by some 0.6 s.
 
+EikSrv's notifier server runs with no plugins. It looks for them in
+`Z:\System\Libs\EikSrv.dll\system\notifiers\`, because the kernel's
+`UserSvr::DllFileName` gives ROM code its whole path, where EKA1 gave the
+drive alone. EikSrv appends `\system\notifiers\` and `\System\Libs\` to a Z:
+name as it is, and cuts any other down to its drive first (0x5063bb6c,
+0x5063e576). With the drive alone the plugins load (AknNotifyPlugin,
+SecurityNotifier, btnotif, ...), and with them the phone's global notes over
+the game: "App. closed Main" for AudioServer's panic, and Startup's "Device
+start-up failed. Contact the retailer." So the path stays as it is. A
+request for an unknown notifier completes `KErrNone` with its reply
+untouched. The one reply a game was found to read is the keylock's.
+`RAknKeyLock::IsKeyLockEnabled` starts `KAknKeyLockNotifierUid`
+(0x100059B0) with reason 4 (inquire), and returns the reply's second word,
+which without a plugin is its own uninitialised stack. Atari Masterpieces
+Vol. 2 read "locked" there and closed at once. The kernel answers that
+inquiry itself, "not locked" (`sw/kernel/ipc.c`).
+
 Characters are the kernel's on EKA1: exec 0x4F-0x53 fold, collate, change
 case and give a character's category (`TChar::GetCategory`, behind
 estlib's `isalnum` and the rest of `ctype.h`). `sw/kernel/misc.c` answers

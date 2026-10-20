@@ -93,11 +93,45 @@ static void enqueue(struct server *s, struct message *m)
     s->queue_tail = m;
 }
 
+/* EikSrv's notifier server runs with no plugins: it looks for them in
+ * "Z:\System\Libs\EikSrv.dll\system\notifiers\", because NGVM's
+ * UserSvr::DllFileName gives ROM code its whole path where EKA1 gave the
+ * drive alone (EikSrv appends to a Z: name as it is, 0x5063bb6c).  With the
+ * drive alone the plugins load, and with them the phone's global notes:
+ * "App. closed" for AudioServer's panic and Startup's "Device start-up
+ * failed", over the game.  So the plugins stay out, a request for an
+ * unknown notifier completes KErrNone with its reply untouched -- and the
+ * one reply games read is the keylock's.  RAknKeyLock::IsKeyLockEnabled
+ * starts KAknKeyLockNotifierUid with reason 4 (inquire) and returns the
+ * reply's second word, its own uninitialised stack without a plugin:
+ * Atari Masterpieces Vol. 2 read "locked" there and closed at once.  The
+ * kernel answers that one itself: not locked. */
+#define KAknKeyLockNotifierUid 0x100059B0
+#define EStartNotifier         2
+
+static int keylock_inquiry(struct thread *t, struct session *s, s32 fn, u32 args, u32 status)
+{
+    extern int u16_eq_fold(const u16 *, int, const u16 *, int);
+    static const u16 name[] = u"Notifier";
+    struct server *sv = s->server;
+    if (fn != EStartNotifier || !args || !u16_eq_fold(sv->o.name, sv->o.namelen, name, 8)) return 0;
+    if (uread32(args) != KAknKeyLockNotifierUid) return 0;
+    u32 in = uread32(args + 4), out = uread32(args + 8);
+    if (des_len(in) < 4 || uread32(des_ptr(in)) != 4 || des_maxlen(out) < 8) return 0;
+    uwrite32(des_ptr(out), 4);                /* SAknKeyLockNotifierParams: iReason, */
+    uwrite32(des_ptr(out) + 4, 0);            /* iEnabled: no                          */
+    des_setlen(out, 8);
+    if (status) request_complete(t, status, KErrNone);
+    if (kflags & DBGF_IPC) kprintf("[ipc] keylock inquiry: not locked\n");
+    return 1;
+}
+
 int ipc_send(struct thread *t, struct session *s, s32 fn, u32 args, u32 status)
 {
     if (!s->server || s->server->o.refs <= 0 || !s->server->thread ||
         s->server->thread->state == T_DEAD)
         return KErrServerTerminated;
+    if (keylock_inquiry(t, s, fn, args, status)) return KErrNone;
     struct message *m = msg_alloc();
     m->function = fn;
     if (args) for (int i = 0; i < 4; i++) m->args[i] = uread32(args + 4 * i);
