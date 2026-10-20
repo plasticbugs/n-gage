@@ -36,6 +36,11 @@ pointer they relax is optimised away, so the paths were timed in one cycle
 and met. The second build takes the two lines out, and its reports name
 no constraint of ours as ignored.
 
+The kernel (`ngvm.bin`) changes without a new bitstream. The second
+build's first kernel, `2178dff0107e9a42f32bf0f745852c17`, lost a start-up
+race on Sonic N on the bench; the one to use with it is
+`c4369fba680bae31d19806a044f4d91c`.
+
 ## On the card
 
 `python3 package-pocket.py`, then `Cores/`, `Platforms/` and `Assets/` from
@@ -89,6 +94,15 @@ reading of when the title appears on hardware is worth writing down. If
 it is far from 32 s, the memories are slower or faster than the bench's
 models.
 
+Sonic N on the same bench (`artifacts/system/sonic74/`, a frame each
+second, so each time is good to a second): the Nokia logo at 8 s, the
+N-Gage logo at 19 s, its copyright at 23 s, SEGA at 27 s, Sonic Team at
+34 s, the intro's emerald at 37 s and Eggman at 39 s. With the second
+build's first kernel, the Nokia logo stayed on screen for the rest of the
+run (56 s) instead, and the bench printed
+`PANIC ... PhoneServer: PhSrvFault 2` at 15.4 s
+(`docs/hardware.md`, open questions).
+
 ## The panel
 
 Menu → **Bring-up: panel**. Four rows of 32 squares along the bottom of
@@ -133,6 +147,7 @@ Row 1:
 | picture wrong in a pattern | the SDRAM switches below, then the PLL phase (SDC, METHODOLOGY 5.20) |
 | a moving picture combed, or old above a line and new below it on every frame | the copy on `IO_LCD_SHOW` (`rtl/ngvm_lcd.sv`): a copy that tears once is expected, one that tears every frame is not |
 | menu restarts the game | `pause` has reached a reset; METHODOLOGY 5.5 |
+| the Nokia logo, then nothing else for good | a server started twice at boot (`docs/hardware.md`, open questions): check `ngvm.bin`'s md5 above |
 
 Menu → **SDRAM read late** and **SDRAM slow bursts** change how the SDRAM
 is read. Try each alone if the picture or the boot looks corrupt, and report
