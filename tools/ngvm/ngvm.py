@@ -137,6 +137,10 @@ class Machine:
         self.timer_hi_latch = 0
         self.lcd_base = 0
         self.lcd_ctrl = 0
+        self.lcd_shown = None          # the framebuffer as IO_LCD_SHOW last copied it
+        self.lcd_shows = 0
+        self.lcd_stale = 0             # frames the framebuffer has differed from it
+        self.lcd_stale_runs = []       # (virtual s, frames): those over 0.1 s
         self.frames = 0
         self.keys = 0
         self.key_steps = self.parse_keys(args.keys)
@@ -287,6 +291,10 @@ class Machine:
             self.lcd_base = value
         elif off == IO_LCD_CTRL:
             self.lcd_ctrl = value
+        elif off == IO_LCD_SHOW:
+            if self.lcd_base:
+                self.lcd_shown = bytes(self.uc.mem_read(self.lcd_base, LCD_W * LCD_H * 2))
+            self.lcd_shows += 1
         elif off == IO_AUDIO_DATA:
             self.audio.append(value)
             self.audio_fifo += 1
@@ -393,7 +401,8 @@ class Machine:
 
     # ---- the LCD --------------------------------------------------------------
     def frame_rgb(self):
-        raw = self.uc.mem_read(self.lcd_base, LCD_W * LCD_H * 2) if self.lcd_base else bytes(LCD_W * LCD_H * 2)
+        """What the LCD shows: the framebuffer as IO_LCD_SHOW last copied it."""
+        raw = self.lcd_shown or bytes(LCD_W * LCD_H * 2)
         rgb = bytearray(LCD_W * LCD_H * 3)
         for i, (p,) in enumerate(struct.iter_unpack('<H', raw)):
             rgb[i * 3] = ((p >> 8) & 15) * 17
@@ -427,6 +436,16 @@ class Machine:
         now = self.insns / self.mips / 1e6
         while self.key_steps and self.key_steps[0][0] <= now:
             self.keys = self.key_steps.pop(0)[1]
+        # a picture drawn and never shown: a program that expects the LCD to
+        # read the framebuffer by itself, which this one does not
+        if self.lcd_base and self.lcd_ctrl & 1:
+            live = bytes(self.uc.mem_read(self.lcd_base, LCD_W * LCD_H * 2))
+            if live != self.lcd_shown:
+                self.lcd_stale += 1
+            else:
+                if self.lcd_stale > 6:
+                    self.lcd_stale_runs.append((now - self.lcd_stale / 60, self.lcd_stale))
+                self.lcd_stale = 0
         if a.frames_to and a.frame_every and self.frames % a.frame_every == 0:
             os.makedirs(a.frames_to, exist_ok=True)
             pngio.write(os.path.join(a.frames_to, 'f%05d.png' % self.frames), LCD_W, LCD_H, self.frame_rgb())
@@ -566,6 +585,11 @@ class Machine:
             self.update_devices()
         dt = time.time() - t0
         self.report_load()
+        runs = self.lcd_stale_runs + ([(self.insns / self.mips / 1e6 - self.lcd_stale / 60, self.lcd_stale)]
+                                      if self.lcd_stale > 6 else [])
+        print('lcd: %d updates; the framebuffer differed from the picture shown for over 0.1 s %d times%s' % (
+            self.lcd_shows, len(runs),
+            ''.join(', %d frames from %.2f s' % (n, t) for t, n in sorted(runs, key=lambda r: -r[1])[:5])))
         if self.a.profile:
             self.report_profile()
         if self.a.wav:

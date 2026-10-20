@@ -286,6 +286,10 @@ static s32 audio_control(struct channel *c, int fn, u32 a1, u32 a2)
 /* ---- Lcd (lcd.ldd) ------------------------------------------------------ */
 static s32 lcd_control(struct channel *c, int fn, u32 a1, u32 a2)
 {
+    /* The window server's update, 30 times a second while anything moves,
+     * always lines 0-208 ({0xa, 0, 0xd0} at a1): what the phone sends to
+     * its display (docs/hardware.md) */
+    if (fn == 8194) { IO(IO_LCD_SHOW) = 1; return KErrNone; }
     kprintf("[lcd] control %d (%x %x) from ", fn, a1, a2);
     kputs16(cur->proc->o.name, cur->proc->o.namelen);
     kprintf("\n");

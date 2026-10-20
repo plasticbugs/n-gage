@@ -152,10 +152,21 @@ register; what follows is behaviour the header cannot say.
 ### LCD
 
 - 176 × 208 pixels, 16 bits each (`0x0RGB`, 4 bits per channel), at 60 Hz.
-- Rows are 176 halfwords, scanned from `IO_LCD_BASE`.
-- The firmware's own screen driver composes into a buffer whose address it
-  gives the LCD LDD (control 8194 in the logs). The kernel points
-  `IO_LCD_BASE` at it.
+- Rows are 176 halfwords, from `IO_LCD_BASE`.
+- The firmware's own screen driver composes into a buffer the kernel
+  allocates (`lcd_buffer`, `sw/kernel/misc.c`) and points `IO_LCD_BASE` at.
+- **The picture changes only when it is sent.** The phone's display keeps
+  its own copy, and the LCD LDD's control 8194 sends it the buffer, always
+  lines 0–208 (`{0xa, 0, 0xd0}` at its argument). The window server calls
+  it 30 times a second while anything moves; X-Forge games (Virtua Cop)
+  call it themselves after each frame they draw, 75–240 times a second at
+  100 MIPS. The kernel answers it with `IO_LCD_SHOW`: the D-cache writes
+  its dirty lines back, then the LCD copies the frame into its own memory
+  and shows that until the next.
+- Scanning the buffer itself, as the first flash did, shows drawing half
+  done. Over 70 s of each of the seven games (`ngvm.py`, with keys), the
+  buffer never differed from the picture last sent for more than 0.1 s,
+  but once, 117 ms, in Super Monkey Ball: nothing draws without sending.
 - There is no palette, no layer and no scaling: the scaler belongs to the
   Pocket side (`docs/core-design.md`).
 - `IO_LCD_FRAME` counts frames scanned out, for pacing.

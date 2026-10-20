@@ -34,6 +34,7 @@ module ngvm_sys
 
     output logic  [31:0] lcd_base,
     output logic         lcd_on,
+    output logic         lcd_show_t,    // toggles: the LCD may copy the frame now
     input  logic         vblank,        // pulse in this domain: a frame starts
     input  logic  [11:0] keys,
     input  logic  [31:0] rom_size,
@@ -102,13 +103,18 @@ module ngvm_sys
     logic  [9:0] io_off;
     logic [31:0] io_wdata, io_rdata;
 
+    // IO_LCD_SHOW: the D-cache writes its dirty lines back, then the LCD is
+    // told it may copy the framebuffer (ngvm_lcd.sv)
+    logic        lcd_show, cleaned;
+    always_ff @(posedge clk) if (cleaned) lcd_show_t <= !lcd_show_t;  // never reset (ngvm_xbus.sv)
+
     ngvm_dcache u_dc (
         .clk(clk), .rst(cpu_rst),
         .dc_req(dc_req), .dc_we(dc_we), .dc_addr(dc_addr), .dc_wdata(dc_wdata), .dc_be(dc_be),
         .dc_rdata(dc_rdata), .dc_ok(dc_ok), .dc_abort(dc_abort),
         .win_id(win_id),
         .io_req(io_req), .io_we(io_we), .io_off(io_off), .io_wdata(io_wdata), .io_rdata(io_rdata),
-        .clean(vblank), .inv_i(inv_i),
+        .clean(lcd_show), .cleaned(cleaned), .inv_i(inv_i),
         .m_req(d_req), .m_cmd(d_cmd), .m_va(d_va), .m_pa(d_pa), .m_be(d_be), .m_wline(d_wline),
         .m_done(d_done), .m_fault(d_fault), .m_fill_pa(d_fill_pa), .m_rline(rline)
     );
@@ -129,7 +135,7 @@ module ngvm_sys
         .io_req(io_req), .io_we(io_we), .io_off(io_off), .io_wdata(io_wdata), .io_rdata(io_rdata),
         .irq(irq),
         .pt_we(pt_we), .pt_idx(pt_idx), .pt_data(pt_data), .win_id(win_id),
-        .lcd_base(lcd_base), .lcd_on(lcd_on), .vblank(vblank),
+        .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show(lcd_show), .vblank(vblank),
         .keys(keys), .rom_size(rom_size), .drive_size(drive_size),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data)

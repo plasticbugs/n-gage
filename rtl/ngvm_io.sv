@@ -38,6 +38,7 @@ module ngvm_io
 
     output logic [31:0] lcd_base,
     output logic        lcd_on,
+    output logic        lcd_show,       // pulse: IO_LCD_SHOW was written
     input  logic        vblank,         // pulse, in this domain: a frame starts
 
     input  logic [11:0] keys,           // KEY_*, 1 = pressed
@@ -128,6 +129,7 @@ module ngvm_io
     wire fire = armed && us[31:0] - cmp < 32'h8000_0000;
     always_ff @(posedge clk) begin
         pt_we    <= 1'b0;
+        lcd_show <= 1'b0;
         dbg_putc <= 1'b0;
         dbg_exit <= 1'b0;
         dbg_hex  <= 1'b0;
@@ -144,6 +146,7 @@ module ngvm_io
             IO_IRQ_ENABLE: enable <= io_wdata;
             IO_LCD_BASE:   lcd_base <= io_wdata;
             IO_LCD_CTRL:   lcd_on <= io_wdata[0];
+            IO_LCD_SHOW:   lcd_show <= 1'b1;
             IO_AUDIO_RATE: a_rate <= io_wdata == 32'd0 ? 32'd8000 : io_wdata;
             IO_PT_INDEX:   begin pt_index <= io_wdata[14:0]; pt_index_ok <= io_wdata < 32'(PT_ENTRIES); end
             IO_PT_DATA:    begin pt_we <= pt_index_ok; pt_idx <= pt_index; pt_data <= io_wdata[15:0]; end

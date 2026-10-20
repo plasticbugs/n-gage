@@ -26,9 +26,10 @@
 //     a read of the same RAM through a cached address cannot pass it;
 //   * IO_CACHE_FLUSH: a walk that writes back every dirty line, forgets every
 //     line here and in the I-cache, and then completes the store.
-// And between requests, `clean` (the LCD's frame start) asks for a walk that
-// writes back every dirty line and keeps it, so the picture the LCD reads
-// from SDRAM is what the CPU has drawn.  A request arriving meanwhile waits.
+// And between requests, `clean` (a write to IO_LCD_SHOW) asks for a walk that
+// writes back every dirty line and keeps it, and `cleaned` pulses when the
+// last write-back is done, so the frame the LCD then copies from SDRAM is
+// what the CPU has drawn.  A request arriving meanwhile waits.
 //------------------------------------------------------------------------------
 `default_nettype none
 
@@ -57,6 +58,7 @@ module ngvm_dcache
     input  logic  [31:0] io_rdata,
 
     input  logic         clean,         // pulse: write back every dirty line
+    output logic         cleaned,       // pulse: done
     output logic         inv_i,         // pulse: a flush is done; the I-cache forgets too
 
     // the miss handler (ngvm_mmu): m_req is held until the answer is used
@@ -286,6 +288,7 @@ module ngvm_dcache
     endtask
 
     always_ff @(posedge clk) begin
+        cleaned <= 1'b0;
         // ---- taking a request: always, the CPU asks only when it may
         if (dc_req) begin
             r_v <= 1'b1; r_we <= dc_we; r_va <= dc_addr; r_wd <= dc_wdata; r_be <= dc_be;
@@ -384,6 +387,7 @@ module ngvm_dcache
                 else if (ws != 8'd255) ws <= ws + 8'd1;
                 else begin
                     // the walk is over
+                    cleaned <= clean_pend;
                     clean_pend <= 1'b0; walking <= 1'b0;
                     if (flushing) begin
                         val0 <= '0; val1 <= '0; dty0 <= '0; dty1 <= '0;
@@ -405,6 +409,7 @@ module ngvm_dcache
             st <= S_IDLE; r_v <= 1'b0; look <= 1'b0; byp_v <= 1'b0; wc_v <= 1'b0;
             val0 <= '0; val1 <= '0; dty0 <= '0; dty1 <= '0; lru <= '0;
             clean_pend <= 1'b0; flushing <= 1'b0; walking <= 1'b0; u_flt <= 1'b0;
+            cleaned <= 1'b0;
         end
     end
     assign inv_i = st == S_WALK && !dsome && ws == 8'd255 && flushing;

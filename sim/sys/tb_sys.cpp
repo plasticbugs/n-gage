@@ -12,7 +12,8 @@
 // The devices are the RTL's (ngvm_io.sv), with real time: CPU_HZ cycles are
 // a second.  Each value the RTL reads from a device is replayed to Unicorn's
 // read of it; IRQ entries are matched as in sim/cpu/tb_cpu.cpp.  The bench
-// pulses vblank at 60 Hz of cycles, which also starts the D-cache's clean.
+// pulses vblank at 60 Hz of cycles; the D-cache's clean is the kernel's
+// (IO_LCD_SHOW).
 //
 //   obj_sys/Vngvm_sys --rom SYM.ROM --kernel build/kernel/kernel.elf
 //       [--drive game.img] [--seconds S] [--no-uc] [--lat CYCLES]
@@ -321,10 +322,19 @@ struct Bench {
         return true;
     }
 
-    // the LCD as the gateware would scan it: from the bus memory, so only
-    // what the D-cache has written back shows
-    void dump_frame() {
+    // the LCD as the gateware shows it: the bus memory as it was when the
+    // D-cache had written back what IO_LCD_SHOW asked for (lcd_show_t)
+    std::vector<uint16_t> shown = std::vector<uint16_t>(LCD_W * LCD_H, 0);
+    bool show_d = false;
+    void take_frame() {
         uint32_t base = top->lcd_base;
+        if (base - NGVM_PHYS_BASE >= NGVM_RAM_SIZE) return;
+        for (int i = 0; i < LCD_W * LCD_H; i++) {
+            uint8_t *q = bus_at(base - NGVM_PHYS_BASE + i * 2);
+            shown[i] = q[0] | q[1] << 8;
+        }
+    }
+    void dump_frame() {
         char path[512];
         snprintf(path, sizeof path, "%s/f%05llu.ppm", frames_to, (unsigned long long)frames);
         FILE *f = fopen(path, "wb");
@@ -332,11 +342,7 @@ struct Bench {
         fprintf(f, "P6\n%d %d\n255\n", LCD_W, LCD_H);
         for (int y = 0; y < LCD_H; y++)
             for (int x = 0; x < LCD_W; x++) {
-                uint16_t p = 0;
-                if (base - NGVM_PHYS_BASE < NGVM_RAM_SIZE && top->lcd_on) {
-                    uint8_t *q = bus_at(base - NGVM_PHYS_BASE + (y * LCD_W + x) * 2);
-                    p = q[0] | q[1] << 8;
-                }
+                uint16_t p = top->lcd_on ? shown[y * LCD_W + x] : 0;
                 uint8_t rgb[3] = {(uint8_t)(((p >> 8) & 15) * 17), (uint8_t)(((p >> 4) & 15) * 17), (uint8_t)((p & 15) * 17)};
                 fwrite(rgb, 1, 3, f);
             }
@@ -386,6 +392,7 @@ struct Bench {
         }
 
         // frames, keys
+        if (top->lcd_show_t != show_d) { show_d = top->lcd_show_t; take_frame(); }
         top->vblank = 0;
         if (cycles >= next_frame) {
             next_frame += frame_period;

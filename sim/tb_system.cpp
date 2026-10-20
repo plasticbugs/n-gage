@@ -191,7 +191,7 @@ int main(int argc, char **argv)
     bool in_vblank = true, putc_d = false, exit_d = false;
     std::string line;
     size_t ki = 0;
-    uint64_t insns = 0, insns_mark = 0, cpu_mark = 0, fetch_run = 0, fetch_max = 0;
+    uint64_t insns = 0, insns_mark = 0, cpu_mark = 0, fetch_run = 0, fetch_max = 0, copies = 0, copies_mark = 0;
     std::vector<uint32_t> audio;                   // 48 kHz: 96 MHz / 2000
     uint64_t played = 0;
     bool snd_tog_d = dut->snd_tog;
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
         snd_tog_d = dut->snd_tog;
         if (sys_cycles == sc) continue;            // a CPU edge only: the picture did not move
         if (wav && (sys_cycles - sys0) % 2000 == 0) audio.push_back(dut->snd);
-        if (dut->lcd_busy) { if (++fetch_run > fetch_max) fetch_max = fetch_run; } else fetch_run = 0;
+        if (dut->lcd_busy) { if (!fetch_run) copies++; if (++fetch_run > fetch_max) fetch_max = fetch_run; } else fetch_run = 0;
         if (edge && dut->de && px < W * H) {
             frame[3 * px + 0] = (dut->rgb >> 16) & 0xff;
             frame[3 * px + 1] = (dut->rgb >> 8) & 0xff;
@@ -231,8 +231,10 @@ int main(int argc, char **argv)
             }
             if (frame_no % 30 == 0) {
                 double mips = (insns - insns_mark) * CPU_HZ / 1e6 / std::max<uint64_t>(1, cpu_cycles - cpu_mark);
-                printf("[%7.3f s] frame %d, pc %08x, %llu instructions, %.1f MIPS lately, line fetch at most %llu clocks\n",
-                       secs, frame_no, dut->dbg_pc, (unsigned long long)insns, mips, (unsigned long long)fetch_max);
+                printf("[%7.3f s] frame %d, pc %08x, %llu instructions, %.1f MIPS lately, %llu frames shown, a copy at most %llu clocks\n",
+                       secs, frame_no, dut->dbg_pc, (unsigned long long)insns, mips,
+                       (unsigned long long)(copies - copies_mark), (unsigned long long)fetch_max);
+                copies_mark = copies;
                 fflush(stdout);
                 insns_mark = insns; cpu_mark = cpu_cycles;
             }
@@ -250,9 +252,9 @@ int main(int argc, char **argv)
     int errs = dut->rootp->tb_system_top->chip__DOT__errors
              + dut->rootp->tb_system_top->cram0__DOT__errors
              + dut->rootp->tb_system_top->cram1__DOT__errors;
-    printf("%d frames in %.3f s of machine time; %llu instructions; the longest line fetch %llu of 6328 clocks; "
+    printf("%d frames in %.3f s of machine time; %llu instructions; %llu frames shown, the longest copy %llu clocks; "
            "%d memory protocol errors\n", frame_no, (sys_cycles - sys0) / MEM_HZ, (unsigned long long)insns,
-           (unsigned long long)fetch_max, errs);
+           (unsigned long long)copies, (unsigned long long)fetch_max, errs);
     delete dut;
     return errs ? 1 : 0;
 }

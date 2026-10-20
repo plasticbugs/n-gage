@@ -42,7 +42,7 @@ module tb_system_top #(
     output logic  [7:0] pchar,
     output logic [31:0] dbg_pc,
 
-    // for measurement: an instruction retiring (clk_cpu), the LCD fetching
+    // for measurement: an instruction retiring (clk_cpu), the LCD copying a frame
     output logic        retired,
     output logic        lcd_busy
 );
@@ -135,7 +135,7 @@ module tb_system_top #(
     assign dexit = u_core.dbg_exit;
     assign pchar = u_core.dbg_data[7:0];
     assign retired  = u_core.rt_valid;
-    assign lcd_busy = u_core.u_lcd.f_go;
+    assign lcd_busy = u_core.u_lcd.c_go;
 endmodule
 
 `default_nettype wire

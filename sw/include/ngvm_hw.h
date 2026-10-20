@@ -56,6 +56,7 @@
 #define IO_LCD_BASE       0x030  /* RW: framebuffer address, through NGVM_PHYS_BASE */
 #define IO_LCD_CTRL       0x034  /* RW: bit 0 display on                      */
 #define IO_LCD_FRAME      0x038  /* R: frames scanned out since reset         */
+#define IO_LCD_SHOW       0x03C  /* W: show the framebuffer as it is now     */
 #define IO_KEYS           0x040  /* R: KEY_* bits, 1 = pressed                */
 #define IO_AUDIO_DATA     0x050  /* W: one sample, L in 15:0, R in 31:16      */
 #define IO_AUDIO_LEVEL    0x054  /* R: samples waiting in the FIFO            */
@@ -86,10 +87,13 @@
 #define AUDIO_FIFO_N      1024
 
 /* The LCD: 176 x 208, 16 bits a pixel, 0x0RGB (4 bits per channel), rows
- * of 176 halfwords, scanned from IO_LCD_BASE.  60 frames a second.  The
- * gateware reads it from RAM, so IO_LCD_BASE is an address in the physical
- * alias over contiguous pages; the CPU may draw through any other mapping,
- * and the D-cache writes its dirty lines back at the start of each frame.
+ * of 176 halfwords at IO_LCD_BASE.  As on the phone, whose display keeps
+ * its own copy, the picture changes only when it is sent: a write to
+ * IO_LCD_SHOW makes the D-cache write its dirty lines back and then the
+ * LCD copy the framebuffer into its own memory, about a millisecond later,
+ * and it shows that copy at 60 frames a second until the next.  The
+ * gateware reads RAM, so IO_LCD_BASE is an address in the physical alias
+ * over contiguous pages; the CPU may draw through any other mapping.
  *
  * Caching (docs/core-design.md 4.2): everything is cached but the physical
  * alias, the drive and the devices.  Tags are virtual; the data window's

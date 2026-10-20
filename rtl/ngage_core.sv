@@ -15,6 +15,8 @@
 //   keys           96 MHz -> CPU   two flops; each bit is a button on its own
 //   rom/drive size 96 MHz -> CPU   none: set by the load, before reset ends
 //   lcd_base, on   CPU -> 96 MHz   two flops, taken once a frame (ngvm_lcd.sv)
+//   show           CPU -> 96 MHz   a toggle: the D-cache has written back what
+//                                  IO_LCD_SHOW is to show; the LCD copies it
 //   snd, snd_tog   CPU -> audio    the sample and a toggle, to core_top, which
 //                                  hands them to the audio clock
 //   dbg_*          CPU -> 96 MHz   a snapshot and a toggle, sixteen times a
@@ -92,6 +94,7 @@ module ngage_core #(
     logic [255:0] bus_wdata, bus_rdata;
     logic  [31:0] lcd_base;
     logic         lcd_on, vb_c;
+    logic         show_t;           // a toggle: never reset (ngvm_xbus.sv)
     logic  [11:0] keys_s0, keys_s1;
     logic         dbg_putc, dbg_exit, dbg_hex;
     logic  [31:0] dbg_data;
@@ -105,7 +108,7 @@ module ngage_core #(
         .clk(clk_cpu), .rst(rst_c),
         .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_be(bus_be),
         .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata),
-        .lcd_base(lcd_base), .lcd_on(lcd_on), .vblank(vb_c), .keys(keys_s1),
+        .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show_t(show_t), .vblank(vb_c), .keys(keys_s1),
         .rom_size(rom_size), .drive_size(drive_size),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data),
@@ -125,9 +128,15 @@ module ngage_core #(
 
     // ------------------------------------------------------------ the LCD
     logic frame, frame_t;          // toggles: never reset (ngvm_xbus.sv)
+    logic       show;
+    logic [2:0] show_s;
+    always_ff @(posedge clk) begin
+        show_s <= {show_s[1:0], show_t};
+        show   <= show_s[2] != show_s[1];
+    end
     ngvm_lcd u_lcd (
         .clk(clk), .rst(rst), .cen_pix(cen_pix),
-        .lcd_base(lcd_base), .lcd_on(lcd_on), .frame(frame),
+        .lcd_base(lcd_base), .lcd_on(lcd_on), .show(show), .frame(frame),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
         .rgb(rgb), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank), .de(de)
