@@ -20,7 +20,10 @@
 // original used nine column bits, 32 MB (NGVM needs RAM, ROM and KSEC, 56 MB).
 // BL=1 so a burst is a run of READ commands in an open row,
 // one every 2 clocks (`burst_slow` = 1 stretches that to the 5-clock spacing
-// the Punch-Out!! core used, selectable from the Pocket menu as a diagnostic).
+// the Punch-Out!! core used, selectable from the Pocket menu as a diagnostic;
+// `rd_fast` = 1 issues the READs one a clock, which NBA Jam's hardware found
+// unsound at its capture phase (METHODOLOGY 5.28): a menu choice until the
+// Pocket has settled it).  Burst WRITEs stay at one every 2 clocks.
 //------------------------------------------------------------------------------
 `default_nettype none
 
@@ -33,6 +36,7 @@ module sdram_ctrl #(
     input  logic        init,         // reset / (re)initialise the chip
     input  logic        rd_late,      // 1: capture read data at READ+4 (in-phase chip clock)
     input  logic        burst_slow,   // 1: one burst READ every 5 clocks instead of 2
+    input  logic        rd_fast,      // 1: one burst READ a clock (unless burst_slow)
     output logic        ready,        // init complete
 
     // chip
@@ -306,7 +310,7 @@ module sdram_ctrl #(
             S_BOPEN1: state <= S_BOPEN2;
             S_BOPEN2: state <= S_BREAD;
             S_BREAD: begin
-                // issue a READ (no auto precharge) every 2 or 5 clocks
+                // issue a READ (no auto precharge) every 1, 2 or 5 clocks
                 if (b_gap == 3'd0 && b_abort) begin
                     // cut short mid-chunk: no more READs; what was issued still lands
                     b_remain <= '0; b_aborted <= 1'b1;
@@ -326,7 +330,7 @@ module sdram_ctrl #(
                     b_issued <= b_issued + 10'd1;
                     b_remain <= b_remain - 10'd1;
                     b_chunk  <= b_chunk + 6'd1;
-                    b_gap    <= burst_slow ? 3'd4 : 3'd1;
+                    b_gap    <= burst_slow ? 3'd4 : rd_fast && !b_is_we ? 3'd0 : 3'd1;
                     // stop at: end of burst, end of chunk, end of SDRAM row
                     if (b_remain == 10'd1 || b_chunk == 6'(BURST_CHUNK - 10'd1) || b_next[10:1] == 10'h3ff) begin
                         state  <= S_BEND;

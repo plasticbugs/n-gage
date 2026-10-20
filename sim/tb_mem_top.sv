@@ -12,7 +12,7 @@ module tb_mem_top (
     input  logic         clk,
     input  logic         init,
     output logic         ready,
-    input  logic         rd_late, burst_slow,
+    input  logic         rd_late, burst_slow, rd_fast,
     input  logic         dl_we, input logic [26:0] dl_addr, input logic [7:0] dl_data,
     input  logic         dl_active,
     output logic  [31:0] rom_size, drive_size,
@@ -47,7 +47,7 @@ module tb_mem_top (
 
     ngage_mem dut (
         .clk(clk), .clk_sdram(clk), .init(init), .ready(ready),
-        .rd_late(rd_late), .burst_slow(burst_slow), .sram_slow(1'b0), .sram_slow_wr(1'b0),
+        .rd_late(rd_late), .burst_slow(burst_slow), .rd_fast(rd_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
         .rom_size(rom_size), .drive_size(drive_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),

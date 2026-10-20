@@ -28,6 +28,7 @@ module tb_system_top #(
     input  logic        dl_active,
 
     input  logic [11:0] keys,
+    input  logic        rd_fast,        // the menu's "SDRAM fast reads"
 
     output logic [23:0] rgb,
     output logic        de, pix_ce, vblank, hsync, vsync,
@@ -79,7 +80,7 @@ module tb_system_top #(
 
     ngage_mem u_mem (
         .clk(clk), .clk_sdram(clk), .init(mem_init), .ready(mem_ready),
-        .rd_late(1'b1), .burst_slow(1'b0), .sram_slow(1'b0), .sram_slow_wr(1'b0),
+        .rd_late(1'b1), .burst_slow(1'b0), .rd_fast(rd_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
         .rom_size(rom_size), .drive_size(drive_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),

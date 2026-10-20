@@ -874,9 +874,10 @@ module core_top
 
     //! Bring-up switches from the modifier word (the "Bring-up" entries of
     //! interact.json; take them off the menu for a release, leave them here):
-    //! bit 4 SDRAM read capture alternate, 5 slow bursts.
+    //! bit 4 SDRAM read capture alternate, 5 slow bursts, 6 fast burst reads.
     wire g_rd_late    = ~mod_sw0[4];
     wire g_burst_slow =  mod_sw0[5];
+    wire g_rd_fast    =  mod_sw0[6];
 
     // NGVM's bus and the LCD's line fetch, between the machine and the memories
     wire         m_req, m_done;
@@ -893,7 +894,8 @@ module core_top
 
     ngage_mem u_mem (
         .clk(clk_sys), .clk_sdram(clk_sdram), .init(mem_init), .ready(mem_ready),
-        .rd_late(g_rd_late), .burst_slow(g_burst_slow), .sram_slow(1'b0), .sram_slow_wr(1'b0),
+        .rd_late(g_rd_late), .burst_slow(g_burst_slow), .rd_fast(g_rd_fast),
+        .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_download),
         .rom_size(rom_size), .drive_size(drive_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_be(m_be), .m_wdata(m_wdata),

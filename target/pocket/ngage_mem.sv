@@ -33,6 +33,7 @@ module ngage_mem (
 
     input  logic         rd_late,       // SDRAM diagnostics, from the Pocket menu
     input  logic         burst_slow,
+    input  logic         rd_fast,
     input  logic         sram_slow,
     input  logic         sram_slow_wr,
 
@@ -279,7 +280,7 @@ module ngage_mem (
     // ------------------------------------------------------------- SDRAM
     sdram_ctrl #(.NCLI(NCLI)) u_sdram (
         .clk(clk), .clk_pin(clk_sdram), .init(init),
-        .rd_late(rd_late), .burst_slow(burst_slow), .ready(ready),
+        .rd_late(rd_late), .burst_slow(burst_slow), .rd_fast(rd_fast), .ready(ready),
         .SDRAM_DQ(SDRAM_DQ), .SDRAM_A(SDRAM_A),
         .SDRAM_DQML(SDRAM_DQML), .SDRAM_DQMH(SDRAM_DQMH), .SDRAM_BA(SDRAM_BA),
         .SDRAM_nCS(SDRAM_nCS), .SDRAM_nWE(SDRAM_nWE),
