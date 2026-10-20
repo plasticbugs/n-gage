@@ -14,7 +14,8 @@ A game zip as distributed holds the card's contents at its root
 The boot sector's boot-code area, which FAT never reads, carries the launch
 record the kernel reads (NGVM_LAUNCH_* in sw/include/ngvm_hw.h): the .app to
 run, from the `Path:` line of the card's ngagegamestarter.txt, else the
-card's only .app, else --app.
+card's only .app, else the only one the phone's menu would start (see
+find_app), else --app.
 """
 import argparse, os, struct, sys, time, zipfile
 
@@ -80,9 +81,25 @@ def find_app(tree):
             if c.is_dir:
                 walk(c, p)
             elif c.name.lower().endswith('.app'):
-                apps.append('E:' + p)
+                apps.append(('E:' + p, c, n))
     walk(tree, '')
-    return apps[0] if len(apps) == 1 else None
+    if len(apps) == 1:
+        return apps[0][0]
+    # Several: the Airplay ports (Tomb Raider, Tony Hawk's, Pandemonium) carry
+    # truncated stub .apps and a gsbapp.app shell beside the game.  The phone
+    # lists an .app by its .aif, and only a whole image runs.
+    menu = [p for p, n, d in apps if whole_app(n.data) and
+            any(c.lower() == n.name.lower()[:-4] + '.aif' for c in d.children)]
+    return menu[0] if len(menu) == 1 else None
+
+
+def whole_app(d):
+    """An application's E32 image (UIDs KDynamicLibraryUid, KUidApp) that
+    holds all the code its header declares."""
+    if len(d) < 0x7C:
+        return False
+    h = struct.unpack_from('<30I', d, 0)
+    return h[0] == 0x10000079 and h[1] == 0x100039CE and h[25] + h[12] <= len(d)
 
 
 def build(tree, size_mb, label, app=None):
