@@ -342,13 +342,21 @@ share of cache misses, branch penalties and multi-cycle instructions;
   threads; EKA1 keeps a FIFO ready queue. They can differ with three or
   more threads ready.
 - The scheduler lends the CPU, which EKA1 never does. After 50 ms with
-  neither the idle thread nor a lent slice run, the ready thread below
-  the top that has waited longest gets 2 ms (`LEND_US`,
-  `sw/kernel/sched.c`). NGVM is slower than the phone, and a game that
-  left the phone's CPU idle part of the time can leave NGVM's none: on
-  the RTL, Tony Hawk's Pro Skater ran not one instruction in the idle
-  loop from 30 s to 60 s. Every thread below the game then waits for
-  good. One of them is MediaServer's task thread, at
-  EPriorityAbsoluteVeryLow (100), which finishes creating a game's audio
-  stream; Tony Hawk and Pandemonium were silent. How much idle time the
-  phone had, and so how close 2 ms in 50 comes to it, is not known.
+  neither the idle thread nor a lent slice run, the ready thread at
+  priority 1-100 (EPriorityAbsoluteVeryLow and below) that has waited
+  longest, and is its process's highest ready thread, gets 2 ms
+  (`LEND_US`, `sw/kernel/sched.c`). NGVM is slower than the phone, and a
+  game that left the phone's CPU idle part of the time can leave NGVM's
+  none: on the RTL, Tony Hawk's Pro Skater ran not one instruction in
+  the idle loop from 30 s to 60 s. A thread the firmware runs only in
+  spare time then never runs. MediaServer's task thread is one, at
+  EPriorityAbsoluteVeryLow (100), and it finishes creating a game's audio
+  stream; Tony Hawk and Pandemonium were silent. Nothing above 100 is
+  lent, nor anything at 0: a first version lent to every thread below
+  the top, and so started the game's launcher (priority 0, `launch.c`)
+  during the boot. On the Pocket, Sonic N, Virtua Cop, Bomberman and
+  Worms then never got past the N-Gage logo; in the reference at 30 MIPS,
+  Sonic N had opened its window before the phone's splash screen, which
+  covered it for good.
+  How much idle time the phone had, and so how close 2 ms in 50 comes to
+  it, is not known.

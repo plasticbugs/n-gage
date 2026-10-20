@@ -22,14 +22,21 @@ static u64 slice_end;
 static struct ktimer *tq;                /* sorted by expiry                */
 
 /* The phone's spare time.  A game that left the phone's CPU idle some of the
- * time can leave NGVM's none, and every thread below it then waits for good:
- * MediaServer finishes creating a stream on a thread at
- * EPriorityAbsoluteVeryLow (100), which runs on EKA1 only when nothing else
- * can.  So when neither the idle thread nor a lent slice has run for
- * LEND_EVERY_US, the thread below the top that has waited longest gets
- * LEND_US, whatever wakes meanwhile. */
+ * time can leave NGVM's none, and a thread the firmware runs only in spare
+ * time then never runs: MediaServer finishes creating a stream on a thread
+ * at EPriorityAbsoluteVeryLow (100).  So when neither the idle thread nor a
+ * lent slice has run for LEND_EVERY_US, the ready thread at 1-LEND_PRIO that
+ * has waited longest gets LEND_US, whatever wakes meanwhile.
+ *
+ * Nothing above LEND_PRIO, nor at 0, is lent: there the time would run a
+ * thread while one EKA1 would run first is ready, and the order the
+ * firmware starts things in changes.  Lending to every thread below the top
+ * ran the game's launcher (launch.c, at 0) during the boot, and Sonic N
+ * opened its window before the phone's splash screen, which covered it for
+ * good. */
 #define LEND_EVERY_US 50000
 #define LEND_US 2000
+#define LEND_PRIO 100                   /* EPriorityAbsoluteVeryLow */
 static struct thread *lent;              /* holds the CPU until slice_end   */
 static u64 last_spare;                   /* when the threads below the top last could run */
 
@@ -119,10 +126,23 @@ void schedule(void)
         if (lent == cur && runnable(cur) && !slice_expired) best = cur;
         else { lent = 0; last_spare = now; }
     } else if (best && now - last_spare >= LEND_EVERY_US) {
+        /* and only to the highest ready thread of its process, so that one
+         * never runs while its own process has a thread EKA1 would run first */
+        static u32 pass;
+        pass++;
+        for (struct kobj *o = obj_first(O_THREAD); o; o = o->next) {
+            struct thread *t = (struct thread *)o;
+            if (!runnable(t) || t == idle_thread) continue;
+            if (t->proc->ready_pass != pass || t->prio > t->proc->ready_top) {
+                t->proc->ready_pass = pass;
+                t->proc->ready_top = t->prio;
+            }
+        }
         struct thread *s = 0;
         for (struct kobj *o = obj_first(O_THREAD); o; o = o->next) {
             struct thread *t = (struct thread *)o;
-            if (!runnable(t) || t == idle_thread || t->prio >= best->prio) continue;
+            if (!runnable(t) || t->prio < 1 || t->prio > LEND_PRIO ||
+                t->prio >= best->prio || t->prio < t->proc->ready_top) continue;
             if (!s || (s32)(t->run_stamp - s->run_stamp) < 0) s = t;
         }
         if (s) best = lent = s;

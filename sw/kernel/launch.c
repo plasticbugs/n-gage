@@ -102,6 +102,11 @@ void launch_poll(void)
     if (state != 2) { launch_due = ~0ull; return; }
     state = 3;
     launch_due = ~0ull;
+    /* At priority 0, as proc_new leaves it, the launcher runs only when the
+     * CPU is otherwise idle: the game starts once the boot has quietened, as
+     * a player would start it from the phone's menu.  The scheduler never
+     * lends it time (sched.c); started sooner, a game can draw before the
+     * phone's splash screen and stay under it. */
     struct process *p = proc_new(u"NGVMLaunch", 10);
     p->exit_type = 3;
     p->low = 1;                                    /* what it starts is the game */

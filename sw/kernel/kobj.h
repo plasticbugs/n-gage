@@ -128,6 +128,7 @@ struct process {
     struct logon *logons;
     int  owner_type;
     int  low;                         /* the game's: memory under NGVM_LOW_BASE */
+    int  ready_top; u32 ready_pass;   /* its highest ready thread, in a lend's scan */
 };
 
 /* ---- libraries (code images) -------------------------------------------- */
