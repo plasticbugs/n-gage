@@ -28,13 +28,17 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket.** The first flash (CPU at 64 MHz) boots and runs
-Sonic N into gameplay, with sound. Its picture combed during motion, its
-sound felt late and its frame rate was low. The second build makes a change
-for each: the picture is copied when the firmware updates the display, the
-audio FIFO is a quarter the size, and the CPU runs at 73.85 MHz. It meets
-timing on every corner but has not yet been seen on hardware.
-`docs/bringup.md` says what it should show, and logs what each build did.
+**It runs on the Pocket**, slowly: the first alpha is v0.1.0-alpha. The
+first flash (CPU at 64 MHz) boots and runs Sonic N into gameplay, with
+sound. Its picture combed during motion, its sound felt late and its frame
+rate was low. The second build makes a change for each: the picture is
+copied when the firmware updates the display, the audio FIFO is a quarter
+the size, and the CPU runs at 73.85 MHz. It runs games on the Pocket;
+whether the combing is gone is not yet reported. Its menu's SDRAM fast
+reads crash the games at once and stay off. The CPU delivers 19–25 MIPS
+on the Pocket's memories against the phone's roughly 45–50, most of the
+difference waiting on SDRAM. `docs/bringup.md` says what each build should
+show, and logs what each did.
 
 What is proven, and by what:
 
@@ -65,8 +69,8 @@ in the core's own menu (Analogizer, Analogizer Video, SNAC Adapter, SNAC
 Assignment, and H and V Position to centre the picture on the CRT); with
 "Analogizer" off, the default, the core is unchanged.  The Pocket
 powers the cartridge slot for this core: take any game cartridge out first.
-`docs/analogizer.md` has the modes and the controller assignments.  *(Say
-here whether it has been tried on an adapter.)*
+`docs/analogizer.md` has the modes and the controller assignments.  It has
+not yet been tried on an adapter.
 
 ## What goes on the card
 
