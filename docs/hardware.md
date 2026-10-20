@@ -283,6 +283,24 @@ launcher (`sw/kernel/launch.c`) publishes "no call" (`ESACallNone`, 0)
 itself, with the message `RSAVarChangeNotify::NotifySaVarChangeL` sends,
 before it starts the game.
 
+Characters are the kernel's on EKA1: exec 0x4F-0x53 fold, collate, change
+case and give a character's category (`TChar::GetCategory`, behind
+estlib's `isalnum` and the rest of `ctype.h`). `sw/kernel/misc.c` answers
+Latin-1 as the firmware's own tables do (euser's `TUnicode` data, read from
+SYM.ROM: all 256 codes agree). Above that it knows only what is no
+character: surrogates are Cs, private use Co, U+FFFE, U+FFFF and anything
+past 16 bits Cn, and a value past 16 bits maps to itself, as the firmware
+has them. Every other code above U+00FF is a letter (Lo), which the marks,
+digits, symbols and punctuation of other scripts and 7,827 unassigned codes
+are not. EOF is where this showed: `isalnum(-1)` asks for 0xFFFFFFFF's
+category, and while the kernel took that for U+FFFF and a letter, the Lua
+5.0 lexer in Requiem of Hell read past the end of a script whose last word
+ends the file (GameWorld.lua's `end`) into the stale rest of its 1 KB
+buffer. The script failed to compile, the game printed the error to
+stderr, and the console estlib opened for it (the process renamed STDOUT,
+a thread UI00) panicked with E32USER-CBase 46: back to the N-Gage logo at
+"Start New Game".
+
 **Not modelled, and what it costs:**
 
 - adspserver's MADI link to the DSP over Comm unit 0. AudioServer panics

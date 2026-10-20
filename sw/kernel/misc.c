@@ -15,28 +15,42 @@ static int upper(int c)
     return c;
 }
 
+/* TChar::TCategory, Symbian 6.1.  Latin-1 is as the firmware's own tables
+ * (euser's TUnicode) have it; above that, only what is not a character is. */
 static int category(int c)
 {
     if ((c >= 'A' && c <= 'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7)) return 0x00;    /* Lu */
-    if ((c >= 'a' && c <= 'z') || (c >= 0xDF && c <= 0xFF && c != 0xF7)) return 0x01;    /* Ll */
+    if ((c >= 'a' && c <= 'z') || (c >= 0xDF && c <= 0xFF && c != 0xF7) ||
+        c == 0xAA || c == 0xB5 || c == 0xBA) return 0x01;                                  /* Ll */
     if (c >= '0' && c <= '9') return 0x40;                                                  /* Nd */
+    if (c == 0xB2 || c == 0xB3 || c == 0xB9 || (c >= 0xBC && c <= 0xBE)) return 0x42;      /* No */
     if (c == ' ' || c == 0xA0) return 0x70;                                                 /* Zs */
     if (c < 0x20 || (c >= 0x7F && c < 0xA0)) return 0x80;                                  /* Cc */
     if (c == '+' || c == '<' || c == '=' || c == '>' || c == '|' || c == '~' || c == 0xAC || c == 0xB1 || c == 0xD7 || c == 0xF7) return 0x60;
     if (c == '$' || (c >= 0xA2 && c <= 0xA5)) return 0x61;                                  /* Sc */
     if (c == '^' || c == '`' || c == 0xA8 || c == 0xAF || c == 0xB4 || c == 0xB8) return 0x62;
     if (c == '_') return 0x50;
-    if (c == '-') return 0x51;
+    if (c == '-' || c == 0xAD) return 0x51;
     if (c == '(' || c == '[' || c == '{') return 0x52;
     if (c == ')' || c == ']' || c == '}') return 0x53;
-    if (c < 0x80) return 0x56;                                                             /* Po */
+    if (c == 0xAB) return 0x54;                                                             /* Pi */
+    if (c == 0xBB) return 0x55;                                                             /* Pf */
+    if (c < 0x80 || c == 0xA1 || c == 0xB7 || c == 0xBF) return 0x56;                       /* Po */
+    if (c >= 0xD800 && c <= 0xDFFF) return 0xF0;                                           /* Cs */
+    if (c >= 0xE000 && c <= 0xF8FF) return 0xF1;                                           /* Co */
+    if (c >= 0xFFFE) return 0xF2;                                                          /* Cn */
     if (c >= 0x100) return 0x10;                                                           /* Lo */
     return 0x63;                                                                           /* So */
 }
 
 s32 unicode_exec(int idx, u32 a0)
 {
-    int c = (int)(a0 & 0xFFFF);
+    /* Past 16 bits is no character: the firmware gives it Cn and maps it to
+     * itself.  EOF reaches here as 0xFFFFFFFF from estlib's ctype calls; as
+     * U+FFFF taken for a letter, isalnum(EOF) was true, and Lua's lexer read
+     * past the end of any script whose last word ends the file. */
+    if (a0 > 0xFFFF) return idx == 0x53 ? 0xF2 : (s32)a0;
+    int c = (int)a0;
     switch (idx) {
     case 0x4F: return lower(c);       /* Fold: case and nothing else here */
     case 0x50: return lower(c);       /* Collate                          */
