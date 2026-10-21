@@ -418,6 +418,16 @@ Busy MIPS out of a 100 MIPS virtual CPU:
 | Sonic N | 50 | 97 |
 | Virtua Cop | 93 | |
 
+Below some speed a game can starve its own active objects. X-Men Legends
+II's frame object waits `RTimer::After(40000)`, and at 30 MIPS a frame takes
+about 110 ms: the timer has always completed when a frame ends, and the
+active scheduler runs the frame again before the view-event handler. The
+view server's activation event (20.9 s) is never answered, and 20 s later
+it panics the game `ViewSrv 11`, back to the N-Gage logo. At 45 and
+60 MIPS there is no panic, and the game draws 1,125 and 1,195 screens in
+60 s against 360. Puyo Pop's sound (section 6) is the other game found to
+need more than the Pocket's ~29 MIPS.
+
 A boot with no game is busy for about 7 s, then idle. These are
 instructions, not cycles. On a real CPU, each one costs one cycle plus its
 share of cache misses, branch penalties and multi-cycle instructions;
