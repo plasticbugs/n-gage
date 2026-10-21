@@ -253,3 +253,12 @@ that died belong here as much as the one that lived.
   captured at READ+4, and are sound at READ+3, the capture the timing
   analysis checks. Not reported separately: the build at the menu's
   defaults, and read late on with fast reads off.
+- 2026-10-20, `5e6b6129cba9f0ba46bcd9ceb72e5aa4` (`bitstream.rbf_r`
+  `3abc5ef3b671449903455e69d1784251`, the key-map sliders) with kernel
+  `d8ff20df4fb8a6afbbf7156c702883b1` (a user's timer waits at least
+  1 ms), released as v0.2.0-alpha: Atari Masterpieces Vol. 1 and 2,
+  Rayman 3 and The Roots play well, and no regression was seen. Asphalt
+  Urban GT 2 freezes at startup; The Elder Scrolls Travels: Shadowkey
+  stays on the N-Gage logo; The Sims Bustin' Out stalls on its loading
+  screen; X-Men Legends II returns to the N-Gage logo partway through its
+  attract mode. All four fail in the reference emulator too.

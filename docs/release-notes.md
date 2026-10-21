@@ -1,7 +1,8 @@
 # N-Gage for Analogue Pocket — alpha
 
 An early test release. It boots the Nokia N-Gage's own firmware on the
-Pocket and runs games, but slowly, and much of it is untested on hardware.
+Pocket and runs games, but slower than the phone, and much of it is
+untested on hardware.
 
 This core does not rebuild the phone's board. It runs **NGVM**, a small
 machine with just enough of an ARM phone for the Symbian user side of your
@@ -30,9 +31,13 @@ dump and your own games.
 
    The game list (`Assets/ngage/plasticbugs.ngage/*.json`) names the `.img`
    each game expects. Add a JSON there for any other game.
-3. Loading takes a while: about 35 MB go through the Pocket's loader, and
-   the screen stays black until it is done. The phone then boots as it
+3. Loading takes a while: up to about 50 MB go through the Pocket's loader,
+   and the screen stays black until it is done. The phone then boots as it
    would, Nokia logo first.
+
+**Rebuild your `.img` files with this zip's `mkdrive.py`** if you made them
+for 0.1.0-alpha and the game is larger than 24 MB, or is Tomb Raider, Tony
+Hawk's Pro Skater or Pandemonium.
 
 ## Controls
 
@@ -46,37 +51,86 @@ dump and your own games.
 | Select | # |
 | Start | OK |
 
+The core's menu has a slider for each of A, B, X, Y, L and R: at 0 to 9
+the button is that digit key of the phone, at 10 it is as in the table.
+
+## New since 0.1.0-alpha
+
+- **Faster.** A cache miss now restarts the CPU on the word it missed, and
+  a dirty line is written back behind the fill. SDRAM reads at a word a
+  clock, which crashed 0.1.0-alpha's games, now capture at the right
+  clock and are the default. In simulation of the Pocket's hardware,
+  Sonic N's first 40 s run 1,347 million instructions against 1,083
+  million in 0.1.0-alpha (+24%), and show 578 frames against 337.
+- **Games up to 32 MB** (the whole drive the core has), such as Worms
+  World Party.
+- **Sound** in Puzzle Bobble VS, which a key click used to silence for good,
+  in Puyo Pop's attract mode and intro, and in Tony Hawk's Pro Skater and
+  Pandemonium, which never got their audio stream.
+  Tomb Raider's menus are silent; it speaks and plays its effects in the
+  game.
+- **More games start** (seen in the reference emulator): System Rush and
+  Xanadu Next, which load a program from the card or ask the phone's state;
+  Requiem of Hell, whose mixer runs on an exception; Colin McRae Rally 2005,
+  Tomb Raider, Tony Hawk's Pro Skater and Pandemonium, which keep their
+  pointers in 24 or 25 bits; Atari Masterpieces Vol. 2 and Rifts: Promise
+  of Power, which ask whether the keypad is locked.
+- **Atari Masterpieces Vol. 1 and Rayman 3** play: a game's shortest
+  timer waits now last at least 1 ms, as the phone's lasted until its next
+  tick. Waits that ended at once kept Atari on the N-Gage logo, and threw
+  Rayman back to it when a game was started.
+- **Ghost Recon** no longer locks up when a new profile is chosen: the
+  phone's Bluetooth server now runs, as on a phone. There is still no
+  radio behind it.
+- **Any digit key on any button**, from the menu.
+
 ## What to expect
 
-- **Seen on a Pocket:** Sonic N, from boot into gameplay with sound, on
-  the build before this one. This build has run games on the Pocket too.
-  What it was made to fix (a picture that combed in motion, late sound)
-  is not yet confirmed there.
-- **Tested in simulation only:** Virtua Cop reaches its title, and in the
-  reference emulator six of the seven games tried reach their menus or
-  play (Bomberman, Puyo Pop, Puzzle Bobble VS, Snakes, Sonic N, Super
-  Monkey Ball, Virtua Cop).
-- **Slow.** The CPU delivers about 19–25 million instructions a second,
-  where the phone managed roughly 45–50. The 3D games run at a lower frame
-  rate than on the phone.
+- **Seen on a Pocket:** with this build, Atari Masterpieces Vol. 1 and 2,
+  Rayman 3 and The Roots play well, with no regression seen elsewhere.
+  On the builds just before it: Colin McRae Rally 2005 plays perfectly,
+  Tony Hawk's Pro Skater and Ghost Recon play well, and Requiem of Hell
+  starts after a long pause. Sonic N played on 0.1.0-alpha.
+- **Tested in the reference emulator only:** of 54 games, 42 run for
+  45 s past the boot logos with a picture and sound, with A and X pressed
+  a few times from 30 s. Puzzle Bobble VS and Pandemonium reach their
+  menus too and start their sound later.
+- **Slower than the phone.** 3D games run at a lower frame rate than on
+  the phone, and Puyo Pop too slowly to keep its music (below).
 - **Sound** lags the picture by 32–64 ms.
 
 ## Known problems
 
-- **Leave Menu → SDRAM fast reads off.** It makes the games crash at once.
+- Reported from a Pocket with this build:
+  - Asphalt Urban GT 2 freezes at startup.
+  - The Elder Scrolls Travels: Shadowkey stays on the N-Gage logo.
+  - The Sims Bustin' Out stalls on its loading screen (the crowd of
+    people).
+  - X-Men Legends II returns to the N-Gage logo partway through its
+    attract mode.
+  - Puyo Pop has no music in the game; its attract mode and intro have
+    sound. It falls behind its music stream at this CPU's speed and
+    drops it for good.
+- In the reference emulator, not yet tried on a Pocket: Civilization,
+  One and Splinter Cell: Chaos Theory stop during startup, and Call of
+  Duty, Pocket Kingdom and the Payload trial do not get past their first
+  screens.
 - The game keeps running behind the Pocket's menu (no pause).
-- No saving, sleep or link port.
+- Saves last until the Pocket is switched off: nothing is written back to
+  the SD card. No sleep or link port.
 - Key clicks and the phone's tone player are silent. Game music and effects
   play.
-- Snakes' multiplayer needs Bluetooth and cannot start.
+- Bluetooth multiplayer (Snakes and others) has no radio and cannot start.
+- Warhammer 40,000: Glory in Death stops at its own splash screen: its copy
+  protection checks the phone it runs on.
 - The Analogizer adapter is supported but has not been tried on one.
 
 ## This build
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `42a6ceb0fc00f8e8a03dc8d806bd09cb` |
-| `Assets/ngage/common/ngvm.bin` | `c4369fba680bae31d19806a044f4d91c` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `3abc5ef3b671449903455e69d1784251` |
+| `Assets/ngage/common/ngvm.bin` | `d8ff20df4fb8a6afbbf7156c702883b1` |
 
 CPU at 73.85 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.
