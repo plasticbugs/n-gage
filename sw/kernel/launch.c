@@ -28,6 +28,13 @@
  * store: Shadowkey is answered KErrNotReady, shows an error and exits.  A
  * keeper thread holds a session from when the launcher starts.
  *
+ * The connection database the boot creates (EtelServer, C:\System\Data\
+ * Cdbv2.dat) is empty: the phone's ships with its records, and this ROM has
+ * no DefaultCdbv2.dat to copy.  Call of Duty's Arena client reads the Id of
+ * the first modem with Hidden=0 without asking whether there is one, and
+ * DBMS panics it (DBMS-server 3, no row).  The launcher adds one modem, the
+ * phone's own data port, when the table has none.
+ *
  * First the launcher says what the Phone application would: no call.  The
  * Phone app publishes the System Agent's current-call state once its call
  * engine is up, which needs the modem, so here it is never published and
@@ -41,6 +48,18 @@
 #define EUSER_PROCESS_RESUME   953      /* RProcess::Resume()                                */
 #define EUSER_SEND_RECEIVE     972      /* RSessionBase::SendReceive(TInt, TAny*) const      */
 #define EUSER_WAIT_ANY         1209     /* User::WaitForAnyRequest()                         */
+#define EUSER_TRAP_CLEANUP     746      /* CTrapCleanup::New()                               */
+#define EUSER_LEAVE_IF_ERROR   627      /* User::LeaveIfError(TInt)                          */
+#define EUSER_PUSHL            858      /* CleanupStack::PushL(CBase*)                       */
+#define EUSER_POP_DESTROY      825      /* CleanupStack::PopAndDestroy(TInt)                 */
+#define EUSER_TRAP             1148     /* TTrap::Trap(TInt&)                                */
+#define EUSER_UNTRAP           1164     /* TTrap::UnTrap()                                   */
+#define CDB_NEWL               27       /* CCommsDatabase::NewL(TCommDbDatabaseType)         */
+#define CDB_OPEN_TABLE         31       /* CCommsDatabaseBase::OpenTableLC(const TDesC&)     */
+#define CDB_FIRST              18       /* CCommsDbTableView::GotoFirstRecord()              */
+#define CDB_INSERT             22       /* CCommsDbTableView::InsertRecord(TUint32&)         */
+#define CDB_WRITE_TEXT         76       /* CCommsDbTableView::WriteTextL(const TDesC&, const TDesC16&) */
+#define CDB_PUT                37       /* CCommsDbTableView::PutRecordChanges(TBool, TBool) */
 #define MSGS_CONNECT           33       /* RMsvServerSession::Connect(RFs&), which never reads the RFs */
 #define SYSAGT_CONNECT         20       /* RSystemAgentBase::Connect()                       */
 #define SA_SET_STATE           9        /* the message RSAVarChangeNotify::NotifySaVarChangeL sends */
@@ -55,8 +74,16 @@ static const char *const needs[] = { "Windowserver", "Fontbitmapserver", "AppLis
 static u16 exe[] = u"Z:\\System\\Programs\\AppRun.exe";
 static u16 bt[] = u"Z:\\System\\Programs\\BtServer.exe";
 static u16 app[NGVM_LAUNCH_MAX];
-static struct { u32 len, ptr; } d_exe, d_app, d_bt, d_none;   /* TPtrC16: length | EPtrC << 28, pointer */
+struct ptrc { u32 len, ptr; };                  /* TPtrC16: length | EPtrC << 28, pointer */
+static struct ptrc d_exe, d_app, d_bt, d_none;
 static u32 f_create, f_resume, f_close, f_send, f_sa_connect, f_wait_any, f_msv_connect;
+static u32 f_trap_cleanup, f_leave_if, f_pushl, f_pop_destroy, f_trap, f_untrap;
+static u32 f_cdb_new, f_cdb_open, f_cdb_first, f_cdb_insert, f_cdb_write, f_cdb_put;
+static const u16 *const modem[][2] = {             /* the record: column, value */
+    { u"Name", u"Data port" }, { u"PortName", u"DATAPORT::0" }, { u"CSYName", u"DATAPORT" },
+    { u"TSYName", u"PHONETSY" }, { 0, 0 } };
+
+static u32 dll_export(const struct rom_image *im, int ord) { return im ? uread32(im->export_dir + 4 * (ord - 1)) : 0; }
 u64 launch_due = ~0ull;
 static int state;                                /* 0 none, 1 waiting, 2 settling, 3 done */
 
@@ -74,11 +101,22 @@ void launch_init(void)
     f_resume = euser_export(EUSER_PROCESS_RESUME);
     f_close = euser_export(EUSER_HANDLE_CLOSE);
     f_send = euser_export(EUSER_SEND_RECEIVE);
-    const struct rom_image *sa = rom_image("\\System\\Libs\\Sysagt.dll");
-    if (sa) f_sa_connect = uread32(sa->export_dir + 4 * (SYSAGT_CONNECT - 1));
+    f_sa_connect = dll_export(rom_image("\\System\\Libs\\Sysagt.dll"), SYSAGT_CONNECT);
     f_wait_any = euser_export(EUSER_WAIT_ANY);
-    const struct rom_image *msgs = rom_image("\\System\\Libs\\Msgs.dll");
-    if (msgs) f_msv_connect = uread32(msgs->export_dir + 4 * (MSGS_CONNECT - 1));
+    f_msv_connect = dll_export(rom_image("\\System\\Libs\\Msgs.dll"), MSGS_CONNECT);
+    f_trap_cleanup = euser_export(EUSER_TRAP_CLEANUP);
+    f_leave_if = euser_export(EUSER_LEAVE_IF_ERROR);
+    f_pushl = euser_export(EUSER_PUSHL);
+    f_pop_destroy = euser_export(EUSER_POP_DESTROY);
+    f_trap = euser_export(EUSER_TRAP);
+    f_untrap = euser_export(EUSER_UNTRAP);
+    const struct rom_image *cdb = rom_image("\\System\\Libs\\Commdb.dll");
+    f_cdb_new = dll_export(cdb, CDB_NEWL);
+    f_cdb_open = dll_export(cdb, CDB_OPEN_TABLE);
+    f_cdb_first = dll_export(cdb, CDB_FIRST);
+    f_cdb_insert = dll_export(cdb, CDB_INSERT);
+    f_cdb_write = dll_export(cdb, CDB_WRITE_TEXT);
+    f_cdb_put = dll_export(cdb, CDB_PUT);
     kprintf("[launch] will run ");
     kputs16(app, n);
     kprintf("\n");
@@ -86,9 +124,56 @@ void launch_init(void)
     launch_due = 0;
 }
 
+static void ptrc(struct ptrc *d, const u16 *s)
+{
+    u32 n = 0;
+    while (s[n]) n++;
+    d->len = n | 1u << 28;
+    d->ptr = (u32)s;
+}
+
+/* Runs in user mode, under a trap: CommDb's calls leave, and the L calls
+ * push onto the cleanup stack.  A modem when the table has none. */
+static void add_modem(void)
+{
+    struct ptrc t, v;
+    u32 *db = ((u32 *(*)(int))f_cdb_new)(0);       /* EDatabaseTypeUnspecified: as it is */
+    ((void (*)(u32 *))f_pushl)(db);
+    ptrc(&t, u"Modem");
+    u32 *view = ((u32 *(*)(u32 *, struct ptrc *))f_cdb_open)(db, &t);
+    if (((s32 (*)(u32 *))f_cdb_first)(view) == KErrNotFound) {
+        u32 id;
+        ((s32 (*)(s32))f_leave_if)(((s32 (*)(u32 *, u32 *))f_cdb_insert)(view, &id));
+        for (int i = 0; modem[i][0]; i++) {
+            ptrc(&t, modem[i][0]);
+            ptrc(&v, modem[i][1]);
+            ((void (*)(u32 *, struct ptrc *, struct ptrc *))f_cdb_write)(view, &t, &v);
+        }
+        ((s32 (*)(s32))f_leave_if)(((s32 (*)(u32 *, int, int))f_cdb_put)(view, 0, 0));   /* not hidden */
+    }
+    ((void (*)(int))f_pop_destroy)(2);
+}
+
+/* TRAP(r, fn()): TTrap::Trap returns 0, and again 1 when fn leaves, with r
+ * the leave's code.  Nothing but r is used after the second return. */
+static __attribute__((noinline)) s32 trapped(void (*fn)(void))
+{
+    u32 trap[19];                                  /* TTrap: iState[16], iNext, iResult, iHandler */
+    volatile s32 r = 0;
+    if (((s32 (*)(u32 *, volatile s32 *))f_trap)(trap, &r) == 0) {
+        fn();
+        ((void (*)(void))f_untrap)();
+    }
+    return r;
+}
+
 /* Runs in user mode, as the launcher thread's function. */
 static s32 launcher(u32 unused)
 {
+    if (f_cdb_new && ((void *(*)(void))f_trap_cleanup)()) {
+        s32 r = trapped(add_modem);
+        kprintf("[launch] CommDb modem: %d\n", r);
+    }
     u32 sa[2] = { 0, 0 };                          /* RSAVarChangeNotify: an RSessionBase */
     if (f_sa_connect && ((s32 (*)(u32 *))f_sa_connect)(sa) == KErrNone) {
         u32 set[2] = { KUidCurrentCall, ESACallNone };

@@ -339,6 +339,15 @@ exited, leaving the N-Gage logo. The launcher holds a session
 at 11.4 s, with a thread of its own at the boot's priority, and its process
 stays. Shadowkey then plays its intro.
 
+The connection database (CommDb, `C:\System\Data\Cdbv2.dat`) is made at
+boot by EtelServer, and made empty: this ROM has no `DefaultCdbv2.dat` to
+copy, and a phone's C: comes with its records. Call of Duty's Arena client
+reads the Id of the first modem with Hidden=0 without asking whether there
+is one, and DBMS panics it (`DBMS-server 3`, no row) at 18.8 s. The
+launcher adds one modem when the table has none, the phone's own data port
+(PortName `DATAPORT::0`, CSY `DATAPORT`, TSY `PHONETSY`), with CommDb's own
+calls under a trap, at 16.1 s.
+
 EikSrv's notifier server runs with no plugins. It looks for them in
 `Z:\System\Libs\EikSrv.dll\system\notifiers\`, because the kernel's
 `UserSvr::DllFileName` gives ROM code its whole path, where EKA1 gave the
