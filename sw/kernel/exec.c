@@ -52,6 +52,27 @@ void trace_stack(u32 sp)
 }
 
 /* ---- the executor ----------------------------------------------------------- */
+/* RDebug::ReadMemory (8) and WriteMemory (9): len bytes between a thread's
+ * memory and a descriptor.  Asphalt Urban GT 2 decrypts its own code with
+ * WriteMemory, 0x1C0 bytes at a time from cwivenc.dat, and calls it at once;
+ * answered KErrNotSupported, it ran the ciphertext.  Chunk space is the same
+ * in every process, the data window only the caller's own. */
+static s32 debug_memory(struct thread *me, u32 op, u32 tid, u32 addr, u32 des, s32 len)
+{
+    struct thread *t = thread_by_id(tid);
+    u32 end;
+    if (!t || t->state == T_DEAD) return KErrNotFound;
+    if (addr - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE) end = NGVM_CHUNK_BASE + NGVM_CHUNK_SIZE;
+    else if (addr - NGVM_DATA_BASE < NGVM_DATA_SIZE && t->proc == me->proc) end = NGVM_DATA_BASE + NGVM_DATA_SIZE;
+    else return KErrNotSupported;
+    if (len < 0 || (u32)len > end - addr) return KErrArgument;
+    if (op == 8) return des_write8(des, (const u8 *)addr, len);
+    if (len > des_len(des)) len = des_len(des);
+    ucopy_to(addr, (const void *)des_ptr(des), (u32)len);
+    IO(IO_CACHE_FLUSH) = 1;                  /* code, written as data */
+    return KErrNone;
+}
+
 static s32 name_arg(u32 d, u16 *buf)
 {
     if (d == 0xFFFF0000u || d == 0) return 0;
@@ -994,7 +1015,9 @@ void exec_dispatch(struct ctx *c, u32 n)
             kputdes16(ARG(1));
             kprintf("\n");
             r = KErrNone;
-        } else r = KErrNotSupported;
+        } else if (uread32(ARG(0)) == 8 || uread32(ARG(0)) == 9)
+            r = debug_memory(me, uread32(ARG(0)), uread32(ARG(0) + 4), ARG(1), ARG(2), (s32)ARG(3));
+        else r = KErrNotSupported;
         break;
     case 0x0C: case 0x0D: case 0x0E: {              /* channel request, cancel, control */
         extern s32 chan_exec(int, u32, u32, u32, u32);

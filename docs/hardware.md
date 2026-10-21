@@ -362,6 +362,13 @@ stderr, and the console estlib opened for it (the process renamed STDOUT,
 a thread UI00) panicked with E32USER-CBase 46: back to the N-Gage logo at
 "Start New Game".
 
+`RDebug::ReadMemory` and `WriteMemory` (exec 0x97, opcodes 8 and 9) read
+and write a thread's memory: chunk space for any thread, the data window
+for the caller's own process. Asphalt Urban GT 2 decrypts its code with
+`WriteMemory`, 0x1C0 bytes at a time from `cwivenc.dat`, and calls it at
+once. Answered `KErrNotSupported`, it ran the ciphertext, which is no code
+in either state.
+
 **Not modelled, and what it costs:**
 
 - adspserver's MADI link to the DSP over Comm unit 0. AudioServer panics
@@ -369,6 +376,10 @@ a thread UI00) panicked with E32USER-CBase 46: back to the N-Gage logo at
   tones are ended at once, above). No game's music or effects go this way.
 - Bluetooth HCI. Snakes' multiplayer cannot start; single player runs.
 - The radio side, SIM, telephony, the camera, IrDA and USB.
+- The memory card's own interface (`MmcIf`): the drive is an image, with no
+  card behind it to identify. Opened, it is absent (`KErrNotFound`).
+  Asphalt Urban GT 2's copy protection asks there for the card it was
+  installed on, and stops (an unmapped read, 22.7 s at 30 MIPS).
 
 ## 9. CPU load, measured
 

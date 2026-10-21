@@ -246,7 +246,10 @@ static void bt_cancel(struct channel *c, u32 mask)
 
 /* ---- devices this phone does not have ------------------------------------
  * Comm (ecomm.ldd), the serial ports C32 opens for IrDA and the cable: with
- * no physical driver for a unit, EKA1's channel create fails KErrNotFound. */
+ * no physical driver for a unit, EKA1's channel create fails KErrNotFound.
+ * MmcIf, the memory card's own interface (its identity registers), which
+ * Asphalt Urban GT 2's copy protection opens: the drive here is an image,
+ * with no card behind it to identify. */
 static s32 absent_open(struct channel *c)
 {
     kprintf("[chan] ");
@@ -586,6 +589,7 @@ static const struct devmodel models[] = {
     { "adspctrl", 0, mute_control, mute_request, mute_cancel },
     { "Audioldd", 0, audio_control, mute_request, mute_cancel },
     { "Comm", absent_open, 0, 0, 0 },
+    { "MmcIf", absent_open, 0, 0, 0 },
     { "bt_driver", 0, mute_control, bt_request, bt_cancel },
     { "HelperDrv", 0, helper_control, helper_request, 0 },
     { 0 }
