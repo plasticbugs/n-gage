@@ -365,6 +365,13 @@ void thread_exit(struct thread *t, int type, s32 reason, const u16 *cat, int cat
         kprintf(": ");
         kputs16(cat, catlen);
         kprintf(" %d\n", reason);
+        if (t == cur) {                 /* its own: from where */
+            u32 sp = t->ctx.r[13];
+            kprintf("  pc %p lr %p sp %p:", t->ctx.pc, t->ctx.r[14], sp);
+            for (int i = 0; i < 24 && sp >= t->stack_base && sp + 4 * i < t->stack_base + t->stack_size; i++)
+                kprintf(" %x", *(u32 *)(sp + 4 * i));
+            kprintf("\n");
+        }
     }
     extern void notify_changes(u32 flags);
     notify_changes(0x04);               /* EChangesThreadDeath */
