@@ -262,3 +262,12 @@ that died belong here as much as the one that lived.
   stays on the N-Gage logo; The Sims Bustin' Out stalls on its loading
   screen; X-Men Legends II returns to the N-Gage logo partway through its
   attract mode. All four fail in the reference emulator too.
+- 2026-10-20, the same bitstream (`bitstream.rbf_r`
+  `3abc5ef3b671449903455e69d1784251`) with kernel
+  `273a9af95aa31434479aadba9b8d106e` (e5f617f: the message-server keeper,
+  a page above a first thread's stack, RDebug memory, MmcIf absent, a
+  modem in the connection database, a made-up IMEI and IMSI), released as
+  v0.3.0-alpha: The Sims Bustin' Out plays well, Call of Duty works but
+  slowly, Pocket Kingdom plays well. The Elder Scrolls Travels: Shadowkey
+  now shows its Nokia copyright screen, then returns to the N-Gage logo.
+  Puzzle Bobble VS: sound still missing, though the game itself has sound.

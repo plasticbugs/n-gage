@@ -35,6 +35,10 @@ dump and your own games.
    and the screen stays black until it is done. The phone then boots as it
    would, Nokia logo first.
 
+**From 0.2.0-alpha,** only `ngvm.bin` has changed: the bitstream is the
+same. Copying the whole zip over is fine too; your `sym.rom` and `.img`
+files are not in it.
+
 **Rebuild your `.img` files with this zip's `mkdrive.py`** if you made them
 for 0.1.0-alpha and the game is larger than 24 MB, or is Tomb Raider, Tony
 Hawk's Pro Skater or Pandemonium.
@@ -54,75 +58,74 @@ Hawk's Pro Skater or Pandemonium.
 The core's menu has a slider for each of A, B, X, Y, L and R: at 0 to 9
 the button is that digit key of the phone, at 10 it is as in the table.
 
-## New since 0.1.0-alpha
+## New since 0.2.0-alpha
 
-- **Faster.** A cache miss now restarts the CPU on the word it missed, and
-  a dirty line is written back behind the fill. SDRAM reads at a word a
-  clock, which crashed 0.1.0-alpha's games, now capture at the right
-  clock and are the default. In simulation of the Pocket's hardware,
-  Sonic N's first 40 s run 1,347 million instructions against 1,083
-  million in 0.1.0-alpha (+24%), and show 578 frames against 337.
-- **Games up to 32 MB** (the whole drive the core has), such as Worms
-  World Party.
-- **Sound** in Puzzle Bobble VS, which a key click used to silence for good,
-  in Puyo Pop's attract mode and intro, and in Tony Hawk's Pro Skater and
-  Pandemonium, which never got their audio stream.
-  Tomb Raider's menus are silent; it speaks and plays its effects in the
-  game.
-- **More games start** (seen in the reference emulator): System Rush and
-  Xanadu Next, which load a program from the card or ask the phone's state;
-  Requiem of Hell, whose mixer runs on an exception; Colin McRae Rally 2005,
-  Tomb Raider, Tony Hawk's Pro Skater and Pandemonium, which keep their
-  pointers in 24 or 25 bits; Atari Masterpieces Vol. 2 and Rifts: Promise
-  of Power, which ask whether the keypad is locked.
-- **Atari Masterpieces Vol. 1 and Rayman 3** play: a game's shortest
-  timer waits now last at least 1 ms, as the phone's lasted until its next
-  tick. Waits that ended at once kept Atari on the N-Gage logo, and threw
-  Rayman back to it when a game was started.
-- **Ghost Recon** no longer locks up when a new profile is chosen: the
-  phone's Bluetooth server now runs, as on a phone. There is still no
-  radio behind it.
-- **Any digit key on any button**, from the menu.
+The phone's software side only; the gateware is 0.2.0-alpha's.
+
+- **The Sims Bustin' Out** gets past its loading screen and plays. It
+  saves from near the top of its stack and copies past it; a phone has
+  memory there, and now so does this one.
+- **Call of Duty** plays, slowly. It needed three things a phone has: a
+  message server that stays up, a modem record in the phone's connection
+  settings, and an identity for the phone and its SIM.
+- **Pocket Kingdom: Own the World** plays. It asks for the phone's and
+  the SIM's identity, and waited for ever for an answer.
+- **The phone has a made-up identity:** IMEI `001010124628312` and IMSI
+  `001010123456789`, from the number ranges kept for test equipment, so
+  they belong to no real phone or SIM. Games that read them get these.
+  They cannot stand in for a particular phone: a game tied to the phone it
+  was installed on will not accept them.
+- **The Elder Scrolls Travels: Shadowkey** now gets past the N-Gage logo
+  to its own Nokia copyright screen (it then stops; below).
+- **Asphalt Urban GT 2** gets further: it decrypts its own code, which used
+  to fail. It then stops at its copy protection (below).
 
 ## What to expect
 
-- **Seen on a Pocket:** with this build, Atari Masterpieces Vol. 1 and 2,
-  Rayman 3 and The Roots play well, with no regression seen elsewhere.
-  On the builds just before it: Colin McRae Rally 2005 plays perfectly,
-  Tony Hawk's Pro Skater and Ghost Recon play well, and Requiem of Hell
-  starts after a long pause. Sonic N played on 0.1.0-alpha.
-- **Tested in the reference emulator only:** of 54 games, 42 run for
-  45 s past the boot logos with a picture and sound, with A and X pressed
-  a few times from 30 s. Puzzle Bobble VS and Pandemonium reach their
-  menus too and start their sound later.
+- **Seen on a Pocket:** with this build, The Sims Bustin' Out and Pocket
+  Kingdom play well, and Call of Duty plays slowly. With 0.2.0-alpha's
+  build, which this one changes only for the games above: Atari
+  Masterpieces Vol. 1 and 2, Rayman 3 and The Roots play well; on the
+  builds before it, Colin McRae Rally 2005 plays perfectly, Tony Hawk's
+  Pro Skater and Ghost Recon play well, and Requiem of Hell starts after
+  a long pause. Sonic N played on 0.1.0-alpha.
+- **Tested in the reference emulator only:** of 54 games, 46 run for
+  45 s past the boot logos with a picture and sound (42 with 0.2.0-alpha),
+  with A and X pressed a few times from 30 s. Puzzle Bobble VS and
+  Pandemonium reach their menus too and start their sound later.
 - **Slower than the phone.** 3D games run at a lower frame rate than on
   the phone, and Puyo Pop too slowly to keep its music (below).
 - **Sound** lags the picture by 32–64 ms.
+- **Games take some 0.3 s longer to start:** the phone's connection
+  settings are written at boot.
 
 ## Known problems
 
 - Reported from a Pocket with this build:
-  - Asphalt Urban GT 2 freezes at startup.
-  - The Elder Scrolls Travels: Shadowkey stays on the N-Gage logo.
-  - The Sims Bustin' Out stalls on its loading screen (the crowd of
-    people).
+  - The Elder Scrolls Travels: Shadowkey returns to the N-Gage logo after
+    its Nokia copyright screen.
+  - Puzzle Bobble VS: sound is still missing, though the game itself has
+    sound.
+- Reported from a Pocket with 0.2.0-alpha, and unchanged here:
   - X-Men Legends II returns to the N-Gage logo partway through its
-    attract mode.
+    attract mode. It needs a faster CPU: in the reference emulator it
+    plays at 45 MIPS, and at this core's speed it starves its own view
+    events until the phone's view server gives up on it.
   - Puyo Pop has no music in the game; its attract mode and intro have
     sound. It falls behind its music stream at this CPU's speed and
     drops it for good.
-- In the reference emulator, not yet tried on a Pocket: Civilization,
-  One and Splinter Cell: Chaos Theory stop during startup, and Call of
-  Duty, Pocket Kingdom and the Payload trial do not get past their first
-  screens.
+- Copy protection that checks the memory card the game was installed on
+  stops Asphalt Urban GT 2, Warhammer 40,000: Glory in Death and One:
+  the card here is an image, with nothing behind it to identify.
+- In the reference emulator, not yet tried on a Pocket: Civilization and
+  Splinter Cell: Chaos Theory stop during startup, and the Payload trial
+  does not get past its first screens.
 - The game keeps running behind the Pocket's menu (no pause).
 - Saves last until the Pocket is switched off: nothing is written back to
   the SD card. No sleep or link port.
 - Key clicks and the phone's tone player are silent. Game music and effects
   play.
 - Bluetooth multiplayer (Snakes and others) has no radio and cannot start.
-- Warhammer 40,000: Glory in Death stops at its own splash screen: its copy
-  protection checks the phone it runs on.
 - The Analogizer adapter is supported but has not been tried on one.
 
 ## This build
@@ -130,7 +133,7 @@ the button is that digit key of the phone, at 10 it is as in the table.
 | file | md5 |
 |---|---|
 | `Cores/plasticbugs.ngage/bitstream.rbf_r` | `3abc5ef3b671449903455e69d1784251` |
-| `Assets/ngage/common/ngvm.bin` | `d8ff20df4fb8a6afbbf7156c702883b1` |
+| `Assets/ngage/common/ngvm.bin` | `273a9af95aa31434479aadba9b8d106e` |
 
 CPU at 73.85 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.

@@ -30,15 +30,16 @@ drivers.
 ## Status
 
 **It runs on the Pocket**, slower than the phone: the current alpha is
-v0.2.0-alpha. The first flash (CPU at 64 MHz) booted and ran Sonic N into
+v0.3.0-alpha. The first flash (CPU at 64 MHz) booted and ran Sonic N into
 gameplay, with sound. Since then the CPU runs at 73.85 MHz, the picture is
 copied when the firmware updates the display, the audio FIFO holds
 32–64 ms, a cache miss restarts the CPU on the word it missed, and SDRAM
 reads come at a word a clock. In simulation of the Pocket's hardware,
 Sonic N's first 40 s run 1,347 million instructions against 1,083 million
 in v0.1.0-alpha. On the Pocket, Colin McRae Rally 2005, Tony Hawk's Pro
-Skater, Ghost Recon, Atari Masterpieces Vol. 1 and 2, Rayman 3 and The
-Roots play; `docs/release-notes.md` lists what does not.
+Skater, Ghost Recon, Atari Masterpieces Vol. 1 and 2, Rayman 3, The
+Roots, The Sims Bustin' Out, Pocket Kingdom and (slowly) Call of Duty
+play; `docs/release-notes.md` lists what does not.
 `docs/bringup.md` says what each build should show, and logs what each did.
 
 What is proven, and by what:
