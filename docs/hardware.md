@@ -163,6 +163,16 @@ register; what follows is behaviour the header cannot say.
 - The kernel arms it for the earliest of three things: the end of the
   20 ms time slice, the next timer-queue expiry, and a pending launch
   (`sw/kernel/sched.c`).
+- A user's `RTimer::After`, `At` or `User::After` ends no sooner than
+  1 ms after it is asked, and otherwise when asked (`user_expiry`). EKA1
+  ended a short wait at its next 1/64 s tick (the 15,625 µs HAL reports as
+  `TickPeriod`), so the threads below the waiter ran meanwhile. To the
+  microsecond, Atari Masterpieces Vol. 1 polled with `After(1)` 807 times
+  a second and never let the threads it waited on run, and Rayman 3, with
+  `After(0)`, starved the view server until it panicked `ViewSrv 11`. The
+  tick itself costs frames: Virtua Cop waits `After(1000)` between frames,
+  and at 30 MIPS, rounded to the tick, it drew 24% fewer of them in 45 s
+  (Ashen 30%, Colin McRae 32%, whose threads wait `After(0)`).
 - `IO_IRQ_STATUS`: writing 1s clears.
 - `IRQ_VBLANK` is set at the start of each LCD frame.
 - `IRQ_AUDIO` is a level: the FIFO is at or below half full.

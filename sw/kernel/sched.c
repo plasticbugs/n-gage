@@ -282,6 +282,23 @@ void timer_queue(struct ktimer *k, u64 when)
     program_timer();
 }
 
+/* When a user's timer ends.  EKA1 served RTimer::After and At and
+ * User::After from its 1/64 s tick, so a short wait ended at the next tick
+ * and the threads below the waiter ran meanwhile.  To the microsecond,
+ * After(0) and After(1) ended at once: Atari Masterpieces Vol. 1 polled with
+ * After(1) 807 times a second, Rayman 3 with After(0), the threads they
+ * waited on never ran, and on the RTL, whose timer is exact, both hung (the
+ * reference's timer fires at its slice's end, 0.67 ms late at 30 MIPS, and
+ * let them through).  A millisecond is room enough for those threads.  The
+ * tick itself would be more than games can spare on a CPU slower than the
+ * phone's: Virtua Cop waits After(1000) between frames, and rounded to the
+ * tick it drew a quarter fewer of them. */
+u64 user_expiry(u64 when)
+{
+    u64 soonest = now_us() + MIN_WAIT_US;
+    return when < soonest ? soonest : when;
+}
+
 /* User activity: keys, and User::ResetInactivityTime.  Inactivity timers
  * count from the last of it. */
 u64 last_activity;

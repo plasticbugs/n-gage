@@ -253,6 +253,8 @@ void thread_signal(struct thread *t, int n);
 void request_complete(struct thread *t, u32 status, s32 value);
 u64  now_us(void);
 void timer_queue(struct ktimer *k, u64 when);
+#define MIN_WAIT_US 1000              /* the shortest wait a user's timer gives   */
+u64  user_expiry(u64 when);           /* a user's wait, at least MIN_WAIT_US      */
 void timer_dequeue(struct ktimer *k);
 void timer_tick(void);
 void activity(void);                  /* user activity: inactivity timers restart */

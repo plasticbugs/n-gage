@@ -806,7 +806,7 @@ void exec_dispatch(struct ctx *c, u32 n)
         k->thread = me;
         k->status = ARG(0);
         k->kind = 0;
-        timer_queue(k, when);
+        timer_queue(k, user_expiry(when));
         break;
     }
     /* requests */
@@ -822,7 +822,7 @@ void exec_dispatch(struct ctx *c, u32 n)
         k->thread = me;
         k->status = ARG(1);
         k->kind = 9;
-        timer_queue(k, now_us() + (u32)ARG(0));
+        timer_queue(k, user_expiry(now_us() + (u32)ARG(0)));
         break;
     }
     /* characters */
