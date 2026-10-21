@@ -318,10 +318,25 @@ static s32 lcd_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
  * ever (MediaServer waited on ETel, and the game on MediaServer).
  *
  * A few get a real answer, because something reads it.  Accessory mode
- * (resource 0x1C): none.  Energy management (0x17), which Nokia.dsy turns
- * into the System Agent's charger (0x100052C9) and battery (0x100052D3)
- * states: without the charger's, Xanadu Next exits at start and System Rush
- * stops after its first screens.  Each reply is status 1 (ok), a count of
+ * (resource 0x1C): none.  The phone's and the SIM's identities, which Call
+ * of Duty reads (RBasicGsmPhone::GetGsmPhoneId, RAdvGsmPhone::
+ * GetSubscriberId): as unknown services, PHONETSY never completed them and
+ * the game waited for ever; answered "no number" and "no SIM", the game
+ * faulted.  So they are made up, each from a range kept for test
+ * equipment, which no real phone or SIM has: IMEI 001010124628312 (TAC
+ * 00101012, Luhn check digit 2), IMSI 001010123456789 (the test network,
+ * MCC 001, MNC 01).  Phone info (0x1B) serial number (0x00) is answered
+ * 0x01, status 0 (ok), one subblock 0x41 (IMEI, plain): length 20, a
+ * filler, 16 characters with the NUL.  SIM (0x09) read IMSI (0x1D, 0x2D) is
+ * answered 0x1E, 0x2D, status 1 (ok), then EF_IMSI: a length, 8, and the
+ * digits in BCD, the first in the high half of a byte whose low half is 9
+ * (odd parity).  The layouts are ofono's isimodem drivers'; PHONETSY gave
+ * the game the IMEI as sent.
+ *
+ * Energy management (0x17), which Nokia.dsy turns into the System Agent's
+ * charger (0x100052C9) and battery (0x100052D3) states: without the
+ * charger's, Xanadu Next exits at start and System Rush stops after its
+ * first screens.  Each energy reply is status 1 (ok), a count of
  * subblocks, then subblocks of id, length, data.  0x08 is answered by 0x09
  * with subblock 0x13, byte 2 the charger: 1 not connected (2-4 connected,
  * 5 not charging); 0x0A by 0x0B with subblock 0x16, byte 3 the battery
@@ -329,7 +344,7 @@ static s32 lcd_request(struct channel *c, int fn, u32 st, u32 a1, u32 a2)
  * (0x50fc7d88 in SYM.ROM); not checked against a phone. */
 #define ISI_REPLIES 32
 #define ISI_LEN 14                            /* a reply with four bytes of body */
-#define ISI_MAX 16                            /* the longest NGVM sends */
+#define ISI_MAX 32                            /* the longest NGVM sends */
 static struct { struct channel *c; u32 seq; u8 m[ISI_MAX]; u8 len; } isi_q[ISI_REPLIES];
 static u32 isi_seq;                           /* queued messages go out in order */
 static struct { struct channel *c; struct thread *t; u32 st, buf; } isi_rx[16];
@@ -532,6 +547,19 @@ static s32 nos_control(struct channel *c, int fn, u32 a1, u32 a2)
         isi_q[q].len = ISI_LEN;
         if (m[3] == 0x1C && m[9] == 0x10) {   /* accessory mode: PHONETSY reads one byte */
             r[9] = 0x11; r[10] = 0; r[11] = 0;     /* 0: no accessory */
+        }
+        if (m[3] == 0x1B && m[9] == 0x00) {   /* phone info: a serial number, the IMEI */
+            static const char imei[16] = "001010124628312";   /* made up, above */
+            r[5] = 32 - 6; isi_q[q].len = 32;
+            r[9] = 0x01; r[10] = 0; r[11] = 1;     /* status ok, one subblock */
+            r[12] = 0x41; r[13] = 20; r[14] = 0; r[15] = 16;   /* IMEI plain: 16 characters */
+            memcpy(r + 16, imei, 16);
+        }
+        if (m[3] == 0x09 && m[9] == 0x1D && m[10] == 0x2D) {   /* SIM: read the IMSI */
+            static const u8 imsi[9] = { 8, 0x09, 0x10, 0x10, 0x10, 0x32, 0x54, 0x76, 0x98 };   /* 001010123456789, made up */
+            r[5] = 24 - 6; isi_q[q].len = 24;
+            r[9] = 0x1E; r[10] = 0x2D; r[11] = 0x01;   /* SIM_SERV_OK */
+            memcpy(r + 12, imsi, 9); r[21] = r[22] = r[23] = 0;
         }
         if (m[3] == 0x17 && m[9] == 0x08) {   /* energy management: the charger */
             r[5] = 16 - 6; isi_q[q].len = 16;

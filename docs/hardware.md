@@ -298,8 +298,9 @@ Taken from the boot traces (`ngvm.py --trace 1`) on all seven cards.
   exits at start and System Rush stops after its first screens. Snakes
   lost its music with it, until the current-call state below was
   published too.
-  Accessory mode (`0x1C`) is answered "none", and any other service
-  "service not identified";
+  Accessory mode (`0x1C`) is answered "none". The phone's identity and
+  the SIM's are made up (below). Any other service is answered "service
+  not identified";
 - the mute and vibra controls;
 - every other channel any boot opens, with its minimum answer: open and
   never complete, or complete with `KErrNotSupported`.
@@ -314,6 +315,30 @@ once the charger reply moved the boot's timing. So the
 launcher (`sw/kernel/launch.c`) publishes "no call" (`ESACallNone`, 0)
 itself, with the message `RSAVarChangeNotify::NotifySaVarChangeL` sends,
 before it starts the game.
+
+Call of Duty reads the phone's identity (`RBasicGsmPhone::GetGsmPhoneId`,
+the IMEI) and the SIM's (`RAdvGsmPhone::GetSubscriberId`, the IMSI) at
+19.5 s. Answered as unknown services, PHONETSY never completed either, and
+the game waited on a black screen for ever; answered "no number" and "no
+SIM", it faulted on an unmapped read in its own code (19.4 s). So both
+are made up, each from a range kept for test equipment, which no real
+phone or SIM has:
+
+- IMEI `001010124628312`: TAC `00101012`, serial `462831`, Luhn check
+  digit 2. Phone info (`0x1B`) serial number (`0x00`, `0x41` IMEI plain)
+  is answered `0x01`, status 0 (ok), one subblock `0x41`: length 20, a
+  filler, then 16 characters with the NUL.
+- IMSI `001010123456789`: the test network, MCC 001, MNC 01. SIM (`0x09`)
+  read IMSI (`0x1D`, `0x2D`) is answered `0x1E`, `0x2D`, status 1 (ok),
+  then EF_IMSI: a length (8) and the digits in BCD, the first in the high
+  half of a byte whose low half is 9.
+
+The layouts are those of ofono's isimodem drivers. Checked at the game:
+`GetGsmPhoneId` completes and it is given `001010124628312`;
+`GetSubscriberId` completes with `001010123456789`. The game then plays
+its logos, intro and first mission briefing (45 s at 30 MIPS). A game that
+binds itself to the phone it was installed on would not be satisfied by
+these; they stand in for a phone and a SIM that are always there.
 
 The Starter's list (`Starter_Arm.RSC`) has a second half that waits for
 the same idle state: FaxModem, NcnList, Satsvr, CalenSvr, clknitzmdls,
