@@ -41,8 +41,14 @@ struct thread *thread_create(struct process *p, u32 func, u32 ptr, u32 stack, u3
     t->exit_type = 3;
     if (stack < 0x1000) stack = 0x1000;
     stack = (stack + NGVM_PAGE_SIZE - 1) & ~(NGVM_PAGE_SIZE - 1);
-    t->stack_base = vm_reserve_for(p->low, stack);
-    if (!t->stack_base || vm_commit(t->stack_base, stack)) kpanic("no memory for a %u-byte stack", stack);
+    /* A process's first thread has a page above its stack's top.  On the
+     * phone there is memory there: The Sims Bustin' Out saves with an
+     * fwrite of 8 KB from 0x164 bytes under its stack's top, and saved; with
+     * nothing mapped above, it faulted and stopped on its loading screen.
+     * One 16 KB page a process. */
+    u32 above = first ? NGVM_PAGE_SIZE : 0;
+    t->stack_base = vm_reserve_for(p->low, stack + above);
+    if (!t->stack_base || vm_commit(t->stack_base, stack + above)) kpanic("no memory for a %u-byte stack", stack);
     t->stack_size = stack;
     t->first_in_process = first;
     t->heap = heap;

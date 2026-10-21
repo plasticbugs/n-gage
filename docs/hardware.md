@@ -369,6 +369,12 @@ for the caller's own process. Asphalt Urban GT 2 decrypts its code with
 once. Answered `KErrNotSupported`, it ran the ciphertext, which is no code
 in either state.
 
+A process's first thread has a 16 KB page mapped above its stack's top.
+The Sims Bustin' Out saves with an `fwrite` of 8 KB from 0x164 bytes under
+its stack's top; with nothing mapped above, the copy faulted at
+`0x00830000` at 29 s and the game stopped on its loading screen. With the
+page it reaches "Press 5 to start" (60 s at 30 MIPS).
+
 **Not modelled, and what it costs:**
 
 - adspserver's MADI link to the DSP over Comm unit 0. AudioServer panics
