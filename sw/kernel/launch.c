@@ -20,6 +20,14 @@
  * loader refuses (KErrNotSupported) and the game waits for ever.  The
  * launcher starts it, as the Starter would have, before the game.
  *
+ * The message server stays up, as the phone's SMS watcher and NcnList (the
+ * Starter's second half again) keep it, each with a session open for good.
+ * Here the watcher finds no SMS stack and closes its session, Sysamob and
+ * MailInit exit, and the server, with no session left, exits at 17 s.  A
+ * game's CMsvSession then starts it again and asks before it has loaded its
+ * store: Shadowkey is answered KErrNotReady, shows an error and exits.  A
+ * keeper thread holds a session from when the launcher starts.
+ *
  * First the launcher says what the Phone application would: no call.  The
  * Phone app publishes the System Agent's current-call state once its call
  * engine is up, which needs the modem, so here it is never published and
@@ -32,6 +40,8 @@
 #define EUSER_PROCESS_CREATE   292      /* RProcess::Create(const TDesC&, const TDesC&, TOwnerType) */
 #define EUSER_PROCESS_RESUME   953      /* RProcess::Resume()                                */
 #define EUSER_SEND_RECEIVE     972      /* RSessionBase::SendReceive(TInt, TAny*) const      */
+#define EUSER_WAIT_ANY         1209     /* User::WaitForAnyRequest()                         */
+#define MSGS_CONNECT           33       /* RMsvServerSession::Connect(RFs&), which never reads the RFs */
 #define SYSAGT_CONNECT         20       /* RSystemAgentBase::Connect()                       */
 #define SA_SET_STATE           9        /* the message RSAVarChangeNotify::NotifySaVarChangeL sends */
 #define KUidCurrentCall        0x100052CB
@@ -46,7 +56,7 @@ static u16 exe[] = u"Z:\\System\\Programs\\AppRun.exe";
 static u16 bt[] = u"Z:\\System\\Programs\\BtServer.exe";
 static u16 app[NGVM_LAUNCH_MAX];
 static struct { u32 len, ptr; } d_exe, d_app, d_bt, d_none;   /* TPtrC16: length | EPtrC << 28, pointer */
-static u32 f_create, f_resume, f_close, f_send, f_sa_connect;
+static u32 f_create, f_resume, f_close, f_send, f_sa_connect, f_wait_any, f_msv_connect;
 u64 launch_due = ~0ull;
 static int state;                                /* 0 none, 1 waiting, 2 settling, 3 done */
 
@@ -66,6 +76,9 @@ void launch_init(void)
     f_send = euser_export(EUSER_SEND_RECEIVE);
     const struct rom_image *sa = rom_image("\\System\\Libs\\Sysagt.dll");
     if (sa) f_sa_connect = uread32(sa->export_dir + 4 * (SYSAGT_CONNECT - 1));
+    f_wait_any = euser_export(EUSER_WAIT_ANY);
+    const struct rom_image *msgs = rom_image("\\System\\Libs\\Msgs.dll");
+    if (msgs) f_msv_connect = uread32(msgs->export_dir + 4 * (MSGS_CONNECT - 1));
     kprintf("[launch] will run ");
     kputs16(app, n);
     kprintf("\n");
@@ -91,8 +104,20 @@ static s32 launcher(u32 unused)
     if (r == KErrNone) {
         ((void (*)(u32 *))f_resume)(&proc);
         ((void (*)(u32 *))f_close)(&proc);
+        for (;;) ((void (*)(void))f_wait_any)();   /* the process stays, and the keeper's session */
     }
     return r;
+}
+
+/* Runs in user mode: a message-server session, held while the phone runs.
+ * RMsvServerSession is a session handle, a word, and its buffer's pointer;
+ * Msgs.dll has no static data, so it is called where it lies in the ROM. */
+static s32 keeper(u32 unused)
+{
+    u32 msv[8] = { 0 };
+    s32 r = ((s32 (*)(u32 *))f_msv_connect)(msv);
+    if (r != KErrNone) return r;
+    for (;;) ((void (*)(void))f_wait_any)();
 }
 
 static int servers_up(void)
@@ -129,5 +154,12 @@ void launch_poll(void)
     struct thread *t = thread_create(p, (u32)launcher, 0, 0x2000, 0, 0x1000, 0x10000, 1);
     obj_set_name_a(&t->o, "Main");
     thread_resume(t);
+    if (f_msv_connect) {                           /* at once, while the boot's server is up */
+        struct thread *k = thread_create(p, (u32)keeper, 0, 0x2000, 0, 0x2000, 0x10000, 0);
+        obj_set_name_a(&k->o, "MsvKeeper");
+        k->prio_rel = 350;                         /* absolute, as the boot's own */
+        thread_reprioritise(k);
+        thread_resume(k);
+    }
     kprintf("[launch] starting AppRun\n");
 }

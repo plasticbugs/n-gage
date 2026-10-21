@@ -327,6 +327,18 @@ for ever with its music playing. The launcher starts
 `Z:\System\Programs\BtServer.exe`, with no UIDs asked for, before the game.
 At 30 MIPS that delays a game's start by some 0.6 s.
 
+The message server lives because someone holds a session to it: on the
+phone, the watcher's SMS plugin and NcnList (the second half again). Here
+the watcher finds no SMS stack and closes its session at 14.7 s, Sysamob
+and MailInit exit at 17.1 s, and MSexe, with no session left, exits with
+them. A game's `CMsvSession` starts it again: Shadowkey connected at
+19.4 s and asked `SetReceiveEntryEvents` (49) before the new server had
+loaded its store, was answered `KErrNotReady`, showed an error note and
+exited, leaving the N-Gage logo. The launcher holds a session
+(`RMsvServerSession::Connect`, Msgs.dll ordinal 33) from when it starts,
+at 11.4 s, with a thread of its own at the boot's priority, and its process
+stays. Shadowkey then plays its intro.
+
 EikSrv's notifier server runs with no plugins. It looks for them in
 `Z:\System\Libs\EikSrv.dll\system\notifiers\`, because the kernel's
 `UserSvr::DllFileName` gives ROM code its whole path, where EKA1 gave the
