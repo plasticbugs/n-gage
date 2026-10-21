@@ -35,9 +35,9 @@ dump and your own games.
    and the screen stays black until it is done. The phone then boots as it
    would, Nokia logo first.
 
-**From 0.2.0-alpha,** only `ngvm.bin` has changed: the bitstream is the
-same. Copying the whole zip over is fine too; your `sym.rom` and `.img`
-files are not in it.
+**From 0.3.0-alpha or 0.2.0-alpha,** only `ngvm.bin` has changed: the
+bitstream is the same. Copying the whole zip over is fine too; your
+`sym.rom` and `.img` files are not in it.
 
 **Rebuild your `.img` files with this zip's `mkdrive.py`** if you made them
 for 0.1.0-alpha and the game is larger than 24 MB, or is Tomb Raider, Tony
@@ -58,9 +58,20 @@ Hawk's Pro Skater or Pandemonium.
 The core's menu has a slider for each of A, B, X, Y, L and R: at 0 to 9
 the button is that digit key of the phone, at 10 it is as in the table.
 
-## New since 0.2.0-alpha
+## New since 0.3.0-alpha
 
 The phone's software side only; the gateware is 0.2.0-alpha's.
+
+- **The Elder Scrolls Travels: Shadowkey** plays. After its Nokia
+  copyright screen it used to return to the N-Gage logo: it times its
+  frames by the milliseconds between two readings of the clock, and read
+  to the microsecond, two readings could differ by less than one, so it
+  divided by zero. The clock a game reads now moves once a tick (1/64 s),
+  as on the phone.
+- **Call of Duty** uses the same timing and could crash the same way. It
+  did in a simulation of the core, though not on a Pocket.
+
+## New in 0.3.0-alpha
 
 - **The Sims Bustin' Out** gets past its loading screen and plays. It
   saves from near the top of its stack and copies past it; a phone has
@@ -75,24 +86,29 @@ The phone's software side only; the gateware is 0.2.0-alpha's.
   they belong to no real phone or SIM. Games that read them get these.
   They cannot stand in for a particular phone: a game tied to the phone it
   was installed on will not accept them.
-- **The Elder Scrolls Travels: Shadowkey** now gets past the N-Gage logo
-  to its own Nokia copyright screen (it then stops; below).
+- **The Elder Scrolls Travels: Shadowkey** got past the N-Gage logo to
+  its own Nokia copyright screen (and stopped there; fixed above).
 - **Asphalt Urban GT 2** gets further: it decrypts its own code, which used
   to fail. It then stops at its copy protection (below).
 
 ## What to expect
 
-- **Seen on a Pocket:** with this build, The Sims Bustin' Out and Pocket
-  Kingdom play well, and Call of Duty plays slowly. With 0.2.0-alpha's
-  build, which this one changes only for the games above: Atari
-  Masterpieces Vol. 1 and 2, Rayman 3 and The Roots play well; on the
-  builds before it, Colin McRae Rally 2005 plays perfectly, Tony Hawk's
-  Pro Skater and Ghost Recon play well, and Requiem of Hell starts after
-  a long pause. Sonic N played on 0.1.0-alpha.
+- **Seen on a Pocket:** with this build, The Elder Scrolls Travels:
+  Shadowkey and The Sims Bustin' Out boot and play, and Call of Duty
+  plays slowly. With 0.3.0-alpha's build, Pocket Kingdom plays well.
+  With 0.2.0-alpha's build (the later ones change it only for the games
+  above), Atari Masterpieces Vol. 1 and 2, Rayman 3 and The Roots play
+  well; on the builds before it, Colin McRae Rally 2005 plays perfectly,
+  Tony Hawk's Pro Skater and Ghost Recon play well, and Requiem of Hell
+  starts after a long pause. Sonic N played on 0.1.0-alpha.
 - **Tested in the reference emulator only:** of 54 games, 46 run for
-  45 s past the boot logos with a picture and sound (42 with 0.2.0-alpha),
-  with A and X pressed a few times from 30 s. Puzzle Bobble VS and
-  Pandemonium reach their menus too and start their sound later.
+  45 s past the boot logos with a picture and sound (46 with 0.3.0-alpha,
+  42 with 0.2.0-alpha), with A and X pressed a few times from 30 s.
+  Puzzle Bobble VS and Pandemonium reach their menus too and start their
+  sound later.
+- **The Sims Bustin' Out may run a little slower** than with 0.3.0-alpha:
+  it paces itself by the clock above, and in the reference emulator it
+  drew 11% fewer screens in its first 45 s. Not measured on a Pocket.
 - **Slower than the phone.** 3D games run at a lower frame rate than on
   the phone, and Puyo Pop too slowly to keep its music (below).
 - **Sound** lags the picture by 32–64 ms.
@@ -101,11 +117,8 @@ The phone's software side only; the gateware is 0.2.0-alpha's.
 
 ## Known problems
 
-- Reported from a Pocket with this build:
-  - The Elder Scrolls Travels: Shadowkey returns to the N-Gage logo after
-    its Nokia copyright screen.
-  - Puzzle Bobble VS: sound is still missing, though the game itself has
-    sound.
+- Reported from a Pocket with 0.3.0-alpha, and unchanged here: Puzzle
+  Bobble VS has no sound, though the game itself has sound.
 - Reported from a Pocket with 0.2.0-alpha, and unchanged here:
   - X-Men Legends II returns to the N-Gage logo partway through its
     attract mode. It needs a faster CPU: in the reference emulator it
@@ -133,7 +146,7 @@ The phone's software side only; the gateware is 0.2.0-alpha's.
 | file | md5 |
 |---|---|
 | `Cores/plasticbugs.ngage/bitstream.rbf_r` | `3abc5ef3b671449903455e69d1784251` |
-| `Assets/ngage/common/ngvm.bin` | `273a9af95aa31434479aadba9b8d106e` |
+| `Assets/ngage/common/ngvm.bin` | `62f62252cdcf5a6cf0ec632009744e74` |
 
 CPU at 73.85 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.
