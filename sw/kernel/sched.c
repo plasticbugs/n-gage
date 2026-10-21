@@ -454,7 +454,8 @@ void thread_dump(void)
         kputs16(t->proc->o.name, t->proc->o.namelen);
         kprintf("::");
         kputs16(t->o.name, t->o.namelen);
-        kprintf(" %c prio %d req %d pc %p lr %p:", st[t->state], t->prio, t->reqsem, t->ctx.pc, t->ctx.r[14]);
+        kprintf(" %c prio %d req %d pc %p lr %p sp %p stack %p+%x:", st[t->state], t->prio, t->reqsem,
+                t->ctx.pc, t->ctx.r[14], t->ctx.r[13], t->stack_base, t->stack_size);
         stack_scan(t, 10);
     }
 }
