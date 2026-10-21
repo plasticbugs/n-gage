@@ -271,3 +271,13 @@ that died belong here as much as the one that lived.
   slowly, Pocket Kingdom plays well. The Elder Scrolls Travels: Shadowkey
   now shows its Nokia copyright screen, then returns to the N-Gage logo.
   Puzzle Bobble VS: sound still missing, though the game itself has sound.
+- 2026-10-21, the same bitstream (`bitstream.rbf_r`
+  `3abc5ef3b671449903455e69d1784251`) with kernel
+  `62f62252cdcf5a6cf0ec632009744e74` (48eb662: the time a thread reads
+  moves once a tick): The Elder Scrolls Travels: Shadowkey boots and
+  plays; The Sims Bustin' Out boots and plays; Call of Duty still plays.
+  This confirms the cause found in the reference emulator: Shadowkey
+  divided its frame count by the milliseconds between two time readings
+  that differed by less than one (USER-EXEC 3). Not reported: whether The
+  Sims runs slower (the reference drew 11% fewer screens), or any other
+  game on this kernel.
