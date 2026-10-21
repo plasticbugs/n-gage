@@ -900,8 +900,15 @@ void exec_dispatch(struct ctx *c, u32 n)
     case 0x6C: r = (s32)me->heap; break;
     case 0x6D: r = (s32)me->heap; me->heap = ARG(0); break;
     case 0x6E: {                                    /* time now (TTime*, offset*) */
+        /* EKA1's clock moves once a tick, so a time read that has moved has
+         * moved by 15,625 us at least.  Shadowkey and Call of Duty divide
+         * the frames they drew by the ms between two readings that differ:
+         * read to the us, those could differ by less than 1 ms, and they
+         * divided by zero (USER-EXEC 3; Shadowkey on the Pocket, Call of
+         * Duty on the RTL).  RTimer::At still counts to the us. */
         extern u64 home_time_us(void);
         u64 tt = home_time_us();
+        tt -= tt % 15625;
         uwrite32(ARG(0), (u32)tt);
         uwrite32(ARG(0) + 4, (u32)(tt >> 32));
         if (ARG(1)) uwrite32(ARG(1), 0);

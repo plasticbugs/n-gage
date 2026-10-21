@@ -173,6 +173,18 @@ register; what follows is behaviour the header cannot say.
   tick itself costs frames: Virtua Cop waits `After(1000)` between frames,
   and at 30 MIPS, rounded to the tick, it drew 24% fewer of them in 45 s
   (Ashen 30%, Colin McRae 32%, whose threads wait `After(0)`).
+- The time a thread reads (`User::UniversalTime`, `HomeTime`) moves once
+  a tick, 15,625 µs, as EKA1's did; `RTimer::At` still counts to the
+  microsecond. Call of Duty and Shadowkey (one engine, nGEN) divide the
+  frames drawn by the milliseconds between two readings that differ: read
+  to the microsecond, two readings could differ by less than 1 ms, and
+  the game divided by zero (`__divsi3` raises `EExcIntegerDivideByZero`,
+  and EUser panics it `USER-EXEC 3`). Shadowkey did so after its Nokia
+  copyright screen on the Pocket and at 35.6 s in the reference with
+  0.2 ms slices; Call of Duty on the RTL at 23 s, not on the Pocket.
+  Read by the tick, Shadowkey plays its story intro, and at 30 MIPS The
+  Sims draws 11% fewer screens in 45 s, which paces itself by this
+  clock.
 - `IO_IRQ_STATUS`: writing 1s clears.
 - `IRQ_VBLANK` is set at the start of each LCD frame.
 - `IRQ_AUDIO` is a level: the FIFO is at or below half full.
