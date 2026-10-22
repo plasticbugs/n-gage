@@ -93,7 +93,7 @@ module ngvm_sys
 
     logic        i_req, i_done, i_fault;
     logic [31:0] i_va;
-    logic        d_req, d_done, d_fault, d_wb;
+    logic        d_req, d_done, d_fault, d_wb, d_xok, d_wbrdy;
     logic  [3:0] i_words, d_words;
     logic  [1:0] d_cmd;
     logic [31:0] d_va;
@@ -126,15 +126,15 @@ module ngvm_sys
         .io_req(io_req), .io_we(io_we), .io_off(io_off), .io_wdata(io_wdata), .io_rdata(io_rdata),
         .clean(lcd_show), .cleaned(cleaned), .inv_i(inv_i),
         .m_req(d_req), .m_cmd(d_cmd), .m_wb(d_wb), .m_va(d_va), .m_pa(d_pa), .m_be(d_be), .m_wline(d_wline),
-        .m_done(d_done), .m_fault(d_fault), .m_fill_pa(d_fill_pa), .m_rline(rline), .m_words(d_words)
+        .m_done(d_done), .m_fault(d_fault), .m_fill_pa(d_fill_pa), .m_xok(d_xok), .m_wbrdy(d_wbrdy), .m_rline(rline), .m_words(d_words)
     );
 
     ngvm_mmu u_mmu (
         .clk(clk), .rst(rst), .ready(mmu_ready),
         .pt_we(pt_we), .pt_idx(pt_idx), .pt_data(pt_data),
         .i_req(i_req), .i_va(i_va), .i_done(i_done), .i_fault(i_fault),
-        .d_req(d_req), .d_cmd(d_cmd), .d_wb(d_wb), .d_va(d_va), .d_pa(d_pa), .d_be(d_be), .d_wline(d_wline),
-        .d_done(d_done), .d_fault(d_fault), .d_fill_pa(d_fill_pa),
+        .d_req(d_req), .d_cmd(d_cmd), .d_wb(d_wb), .d_wbrdy(d_wbrdy), .d_va(d_va), .d_pa(d_pa), .d_be(d_be), .d_wline(d_wline),
+        .d_done(d_done), .d_fault(d_fault), .d_fill_pa(d_fill_pa), .d_xok(d_xok),
         .rline(rline), .i_words(i_words), .d_words(d_words),
         .bus_req(bus_req), .bus_cmd(bus_cmd), .bus_addr(bus_addr), .bus_waddr(bus_waddr), .bus_be(bus_be),
         .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata), .bus_cnt(bus_cnt)

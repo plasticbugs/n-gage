@@ -42,7 +42,8 @@ module ngvm_mmu
     // the D-cache: fills, write-backs, uncached loads, its combining buffer (MC_*)
     input  logic         d_req,
     input  logic   [1:0] d_cmd,
-    input  logic         d_wb,          // MC_FILL: write d_wline back to d_pa first
+    input  logic         d_wb,          // MC_FILL: write d_wline back to d_pa's line, after
+    input  logic         d_wbrdy,       // d_wline is whole (the D-cache reads it during the fill)
     input  logic  [31:0] d_va,
     input  logic  [26:0] d_pa,
     input  logic  [31:0] d_be,
@@ -50,6 +51,7 @@ module ngvm_mmu
     output logic         d_done,
     output logic         d_fault,
     output logic  [26:0] d_fill_pa,
+    output logic         d_xok,         // a D-cache request is on the bus: translated, no fault
 
     output logic [255:0] rline,         // the answer to either, from the bus
     output logic   [3:0] i_words,       // words of a fill's line in rline, 0-8
@@ -103,7 +105,10 @@ module ngvm_mmu
 
     assign pt_ra   = pt_index_of(va);
     assign rline   = bus_rdata;
-    assign bus_req = st == S_BUS;
+    // A fill's victim must be whole before the bus is asked: the memory side
+    // takes the fields when it takes the request (ngvm_xbus.sv), and the
+    // D-cache reads the victim out while the address is translated.
+    assign bus_req = st == S_BUS && !(wb && !d_wbrdy);
     assign bus_be  = cmd == MC_WCB ? d_be : 32'hFFFF_FFFF;
     assign bus_wdata = d_wline;
     always_comb begin
@@ -128,6 +133,7 @@ module ngvm_mmu
     assign i_fault   = fault;
     assign d_fault   = fault;
     assign d_fill_pa = bus_addr;
+    assign d_xok     = st == S_BUS && who_d;
 
     always_ff @(posedge clk) begin
         case (st)
