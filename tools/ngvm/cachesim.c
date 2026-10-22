@@ -6,9 +6,9 @@
  *
  * Each group of five numbers is one configuration (bytes, bytes, bytes,
  * ways, ways).  Virtually tagged, LRU, write-back and write-allocate for
- * data; addresses at NGVM_IO_BASE and above are uncached.  The trace keeps
- * the I and D streams apart, so their interleaving (and SDRAM contention
- * between them) is not modelled -- only miss and write-back counts.
+ * data; addresses at NGVM_IO_BASE and above are uncached.  The trace
+ * (NGVMTRACE2) has the fetches and the data accesses in the order they came,
+ * but only miss and write-back counts are modelled here, not time.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,12 +70,14 @@ int main(int argc, char **argv)
     if (!f) { perror(argv[1]); return 1; }
     char hdr[256];
     unsigned long long insns, nb, nd;
-    if (!fgets(hdr, sizeof hdr, f) || sscanf(hdr, "NGVMTRACE insns=%llu blocks=%llu data=%llu", &insns, &nb, &nd) != 3) {
-        fprintf(stderr, "%s: not a memtrace\n", argv[1]);
+    if (!fgets(hdr, sizeof hdr, f) || sscanf(hdr, "NGVMTRACE2 insns=%llu blocks=%llu data=%llu", &insns, &nb, &nd) != 3) {
+        fprintf(stderr, "%s: not a memtrace (NGVMTRACE2)\n", argv[1]);
         return 1;
     }
-    uint32_t *blk = malloc(nb * 8), *dat = malloc(nd * 4);
-    if (fread(blk, 8, nb, f) != nb || fread(dat, 4, nd, f) != nd) { fprintf(stderr, "short trace\n"); return 1; }
+    /* u32 pairs: a block (addr, 0x80000000 | bytes), a data access (addr, size << 1 | write) */
+    uint64_t n = nb + nd;
+    uint32_t *tr = malloc(n * 8);
+    if (fread(tr, 8, n, f) != n) { fprintf(stderr, "short trace\n"); return 1; }
     printf("%llu instructions, %llu blocks, %llu data accesses (%.2f a instruction)\n",
            insns, nb, nd, (double)nd / insns);
     printf("%7s %7s %5s %5s | %9s %9s %9s | per 1000 instructions\n", "I", "D", "line", "ways", "I miss%", "D miss%", "D wb%");
@@ -89,15 +91,16 @@ int main(int argc, char **argv)
          * a line are free, as they are for a fetch unit that reads a line
          * once; but count instruction words for the rate */
         uint64_t fetch_lines = 0;
-        for (uint64_t b = 0; b < nb; b++) {
-            uint32_t a = blk[2 * b], n = blk[2 * b + 1];
-            if (!n) n = 2;
-            for (uint32_t l = a >> ic.lshift; l <= (a + n - 1) >> ic.lshift; l++) {
+        for (uint64_t j = 0; j < n; j++) {
+            uint32_t a = tr[2 * j], info = tr[2 * j + 1];
+            if (!(info & 0x80000000u)) { caccess(&dc, a, info & 1); continue; }
+            uint32_t bytes = info & 0xFFFF;
+            if (!bytes) bytes = 2;
+            for (uint32_t l = a >> ic.lshift; l <= (a + bytes - 1) >> ic.lshift; l++) {
                 caccess(&ic, l << ic.lshift, 0);
                 fetch_lines++;
             }
         }
-        for (uint64_t d = 0; d < nd; d++) caccess(&dc, dat[d] & ~1u, dat[d] & 1);
         printf("%7u %7u %5u %2u/%-2u | %8.2f%% %8.2f%% %8.2f%% | I %.2f  D %.2f  wb %.2f\n",
                is, ds, ln, iw, dw,
                100.0 * ic.miss / ic.acc, 100.0 * dc.miss / dc.acc, 100.0 * dc.wb / dc.acc,

@@ -455,7 +455,7 @@ class Machine:
 
     def update_devices(self):
         t = self.now_us()
-        if self.timer_cmp is not None and (t & 0xFFFFFFFF) - self.timer_cmp < 0x80000000:
+        if self.timer_cmp is not None and ((t - self.timer_cmp) & 0xFFFFFFFF) < 0x80000000:
             self.irq_status |= IRQ_TIMER
             self.timer_cmp = None
         f = self.insns // self.frame_period_insns()
@@ -576,35 +576,40 @@ class Machine:
         from romsyms import Syms
         syms = Syms(self.a.rom)
         total = sum(self.pc_hist.values()) or 1
-        by_name = {}
+        by_name, by_kind = {}, {}
         for pc, k in self.pc_hist.items():
             if NGVM_ROM_BASE <= pc < NGVM_ROM_BASE + NGVM_ROM_MAX:
                 name = syms.name(pc)
                 name = re.sub(r'\+0x[0-9a-f]+$', '', name)
+                kind = 'ROM'
             elif pc < NGVM_KERN_SIZE:
                 below = [(a, n) for n, a in self.syms.items() if a <= pc]
                 name = 'kernel!' + (max(below)[1] if below else '?')
+                kind = 'kernel'
             else:
                 name = 'RAM %08x' % (pc & ~0xFFF)
+                kind = 'RAM'
             by_name[name] = by_name.get(name, 0) + k
+            by_kind[kind] = by_kind.get(kind, 0) + k
+        print('profile: %d samples; %s' % (total, ', '.join('%s %.1f%%' % (n, 100.0 * k / total)
+                                                         for n, k in sorted(by_kind.items(), key=lambda x: -x[1]))))
         for name, k in sorted(by_name.items(), key=lambda x: -x[1])[:25]:
             print('profile: %5.1f%%  %s' % (100.0 * k / total, name))
 
     # --memtrace FROM:SECONDS:FILE: every instruction fetch (as basic blocks)
-    # and every data access over that window of virtual time, for a cache
-    # model (tools/ngvm/cachesim.py).  FILE gets a header line, then the
-    # blocks as (addr, bytes) u32 pairs, then the data accesses as u32
-    # (addr & ~1) | write -- byte addresses, so bit 0 is free only because
-    # the model works in lines; the access size is not kept.
+    # and every data access over that window of virtual time, in the order
+    # they came, for a cache model (tools/ngvm/cachesim.c).  FILE gets a
+    # header line, then u32 pairs: a fetched block as (addr, 0x80000000 |
+    # bytes), a data access as (addr, size << 1 | write).
     def memtrace_step(self):
         mt, uc = self.mt, self.uc
         if mt['hooks'] is None and self.insns >= mt['from']:
-            mt['blocks'], mt['data'], mt['insns0'] = array.array('I'), array.array('I'), self.insns
-            b, d = mt['blocks'], mt['data']
+            mt['trace'], mt['insns0'] = array.array('I'), self.insns
+            tr = mt['trace']
             mt['hooks'] = [
-                uc.hook_add(UC_HOOK_BLOCK, lambda u, a, n, _: b.extend((a, n))),
-                uc.hook_add(UC_HOOK_MEM_READ, lambda u, t, a, n, v, _: d.append(a & ~1)),
-                uc.hook_add(UC_HOOK_MEM_WRITE, lambda u, t, a, n, v, _: d.append((a & ~1) | 1)),
+                uc.hook_add(UC_HOOK_BLOCK, lambda u, a, n, _: tr.extend((a, 0x80000000 | n))),
+                uc.hook_add(UC_HOOK_MEM_READ, lambda u, t, a, n, v, _: tr.extend((a, n << 1))),
+                uc.hook_add(UC_HOOK_MEM_WRITE, lambda u, t, a, n, v, _: tr.extend((a, n << 1 | 1))),
             ]
             # hooks are compiled into translated code: what was translated
             # before them would run unseen
@@ -612,13 +617,14 @@ class Machine:
         elif mt['hooks'] and self.insns >= mt['to']:
             for h in mt['hooks']:
                 uc.hook_del(h)
+            tr = mt['trace']
+            nb = sum(1 for i in range(1, len(tr), 2) if tr[i] & 0x80000000)
+            nd = len(tr) // 2 - nb
             with open(mt['path'], 'wb') as f:
-                f.write(b'NGVMTRACE insns=%d blocks=%d data=%d\n' % (
-                    self.insns - mt['insns0'], len(mt['blocks']) // 2, len(mt['data'])))
-                mt['blocks'].tofile(f)
-                mt['data'].tofile(f)
+                f.write(b'NGVMTRACE2 insns=%d blocks=%d data=%d\n' % (self.insns - mt['insns0'], nb, nd))
+                tr.tofile(f)
             print('[memtrace] %d insns, %d blocks, %d data accesses -> %s' % (
-                self.insns - mt['insns0'], len(mt['blocks']) // 2, len(mt['data']), mt['path']))
+                self.insns - mt['insns0'], nb, nd, mt['path']))
             self.mt = None
 
     def run(self):
@@ -656,7 +662,7 @@ class Machine:
             self.slice_us = n / self.mips / 1e6
             self.insns += n
             pc = uc.reg_read(UC_ARM_REG_PC)
-            if self.a.profile and pc != self.idle_pc:
+            if self.a.profile is not None and pc != self.idle_pc and self.insns >= self.a.profile * self.mips * 1e6:
                 self.pc_hist[pc & ~1] = self.pc_hist.get(pc & ~1, 0) + 1
             self.update_devices()
         dt = time.time() - t0
@@ -666,7 +672,7 @@ class Machine:
         print('lcd: %d updates; the framebuffer differed from the picture shown for over 0.1 s %d times%s' % (
             self.lcd_shows, len(runs),
             ''.join(', %d frames from %.2f s' % (n, t) for t, n in sorted(runs, key=lambda r: -r[1])[:5])))
-        if self.a.profile:
+        if self.a.profile is not None:
             self.report_profile()
         if self.a.wav:
             self.write_wav(self.a.wav)
@@ -693,7 +699,8 @@ def main():
     ap.add_argument('--fault-va', help='(hex) at a fault, report the page table around this address')
     ap.add_argument('--frames-to')
     ap.add_argument('--frame-every', type=int, default=0)
-    ap.add_argument('--profile', action='store_true', help='sample where the CPU spends its time')
+    ap.add_argument('--profile', nargs='?', type=float, const=0.0, default=None, metavar='FROM',
+                    help='sample where the CPU spends its time (from virtual second FROM)')
     ap.add_argument('--wav', help='write what the audio FIFO was given to this WAV file')
     ap.add_argument('--stamp', action='store_true',
                     help="prefix each line the kernel prints with virtual time, as sim/run_system.sh does")
