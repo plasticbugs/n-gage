@@ -77,7 +77,38 @@ reset:
     b   ctx_restore
 .endm
 
-swi_entry:   SAVE EXC_SWI, 0
+/* The execs that need no context, the short way: no context saved, no
+ * scheduler (exec.c, exec_fast).  3D games call them some 20,000 times a
+ * second, and the whole way in and out was most of the kernel's time.
+ * Like every exec (exec.c), each returns to the user's lr, in that lr's
+ * state; any other SWI goes the whole way. */
+swi_entry:
+    stmfd sp!, {r0-r3, r12, lr}
+    mrs r12, spsr
+    tst r12, #0x20
+    ldrneh r3, [lr, #-2]            @ Thumb: SWI's 8-bit number
+    andne r3, r3, #0xFF
+    ldreq r3, [lr, #-4]             @ ARM: its 24-bit number
+    biceq r3, r3, #0xFF000000
+    bl  exec_fast                   @ r0-r2 the arguments, r3 the number
+    cmp r1, #0                      @ -> r0 the answer, r1 1; or r1 0
+    beq 1f
+    sub sp, sp, #4
+    stmia sp, {lr}^                 @ the user's lr
+    nop
+    ldr r12, [sp], #4
+    mrs r1, spsr
+    bic r1, r1, #0x20
+    tst r12, #1
+    orrne r1, r1, #0x20
+    msr spsr_cxsf, r1
+    bic lr, r12, #1
+    add sp, sp, #4                  @ r0 is the answer
+    ldmfd sp!, {r1-r3, r12}
+    add sp, sp, #4
+    movs pc, lr
+1:  ldmfd sp!, {r0-r3, r12, lr}
+    SAVE EXC_SWI, 0
 irq_entry:   SAVE EXC_IRQ, 4
 undef_entry: SAVE EXC_UNDEF, 4      @ lr points past the instruction (ARM)
 pabt_entry:  SAVE EXC_PABT, 4

@@ -648,6 +648,61 @@ void exc_restore(struct ctx *c)
 }
 
 /* ---- dispatch ------------------------------------------------------------------- */
+/* Dll::Tls: the running thread's pointer for a DLL's handle, or 0.  The key
+ * found moves to the front: a game asks for the same one or two thousands
+ * of times a frame, and the search was most of the call. */
+u32 dll_tls(u32 key)
+{
+    struct thread *t = cur;
+    for (int i = 0; i < MAX_TLS; i++)
+        if (t->tls[i].key == key) {
+            u32 p = t->tls[i].ptr;
+            if (i) { t->tls[i] = t->tls[0]; t->tls[0].key = key; t->tls[0].ptr = p; }
+            return p;
+        }
+    return 0;
+}
+
+/* The execs swi_entry (start.S) answers without saving a context: none
+ * sleeps, wakes a thread or switches one, so there is nothing for the
+ * scheduler to do after them.  3D games call them some 20,000 times a
+ * second, Dll::Tls 15,000 of those, and the whole way in and out (the
+ * context, exec_dispatch, the scheduler) was most of the kernel's time.
+ * Called with nothing saved, so like any AAPCS function it uses only r0-r3,
+ * r12 and lr.  Returns 1 << 32 | the answer, or 0: go the whole way.  Each
+ * case is exec_dispatch's, which keeps them for its own callers. */
+u64 exec_fast(u32 a0, u32 a1, u32 a2, u32 n)
+{
+    struct thread *me = cur;
+    u32 r;
+    (void)a2;
+    if (kflags & DBGF_EXEC) return 0;               /* traced there */
+    switch (n & 0x003FFFFF) {
+    case 0x80: r = dll_tls(a0); break;
+    case 0x70: r = (u32)(now_us() / 15625); break;
+    case 0x83:                                      /* HAL get: TickPeriod   */
+        if (a0 != 10) return 0;
+        uwrite32(a1, 15625); r = KErrNone; break;
+    case 0x6C: r = me->heap; break;
+    case 0x72:                                      /* TTrap::Trap: push     */
+        uwrite32(a0 + 0x40, me->trap_frame);
+        uwrite32(a0 + 0x48, me->trap_handler);
+        me->trap_frame = a0;
+        r = me->trap_handler; break;
+    case 0x73:                                      /* pop                   */
+        r = me->trap_frame;
+        if (r) me->trap_frame = uread32(r + 0x40);
+        break;
+    case 0x74: r = me->active_scheduler; break;
+    case 0x81: r = me->trap_handler; break;
+    case 0x8D: r = uread32(a0); uwrite32(a0, r + 1); break;
+    case 0x8E: r = uread32(a0); uwrite32(a0, r - 1); break;
+    case 0x32: { struct thread *t = thr(a0); r = t ? t->id : (u32)KErrBadHandle; break; }
+    default: return 0;
+    }
+    return (u64)1 << 32 | r;
+}
+
 void exec_dispatch(struct ctx *c, u32 n)
 {
     u32 idx = n & 0x003FFFFF;
@@ -931,11 +986,7 @@ void exec_dispatch(struct ctx *c, u32 n)
     }
     case 0x74: r = (s32)me->active_scheduler; break;
     case 0x75: me->active_scheduler = ARG(0); break;
-    case 0x80: {                                    /* DllTls(handle)        */
-        r = 0;
-        for (int i = 0; i < MAX_TLS; i++) if (me->tls[i].key == ARG(0)) { r = (s32)me->tls[i].ptr; break; }
-        break;
-    }
+    case 0x80: r = (s32)dll_tls(ARG(0)); break;     /* DllTls(handle)        */
     case 0x81: r = (s32)me->trap_handler; break;
     case 0x82: r = (s32)me->trap_handler; me->trap_handler = ARG(0); break;
     case 0x8D: { s32 v = (s32)uread32(ARG(0)); uwrite32(ARG(0), v + 1); r = v; break; }
