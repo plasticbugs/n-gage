@@ -23,6 +23,7 @@
 //       [--drive game.img] [--seconds S] [--no-uc] [--lat CYCLES]
 //       [--frames-to DIR --frame-every N] [--keys "S:MASK ..."] [--keymap HEX]
 //       [--watch-pc ADDR,ADDR,...]  (hex; prints when each retires, its first 20 times)
+//       [--profile FROM]  (where the cycles go from FROM seconds, the idle loop's apart)
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -143,6 +144,64 @@ struct Bench {
     bool have_next = false;
     uint64_t mismatches = 0;
     bool failed = false;
+
+    // --profile: what each cycle saw, as sim/cpu/tb_cpu.cpp tallies it, with
+    // the stalls the caches cause split out; charged to the busy or the idle
+    // side when the next instruction retires
+    enum { P_RETIRE, P_UOP, P_EMPTY, P_EMPTY_IF, P_F2MISS, P_SWAIT, P_SW_LOAD, P_SW_SHIFT, P_SW_MUL,
+           P_SW_SHREG, P_SW_RRX, P_MUL, P_MHOLD,
+           P_DRED, P_ARED_BR, P_ARED_BX, P_ARED_EXC, P_ARED_OTHER, P_MRED, P_WRED, P_N };
+    uint64_t prof_from = UINT64_MAX, prof_pend[P_N] = {}, prof_busy[P_N] = {}, prof_cyc[2] = {};
+    void profile() {
+        auto *c = top->rootp->ngvm_sys->u_cpu;
+        if (top->rt_valid && !top->rt_irq) prof_pend[P_RETIRE]++;
+        if (c->d2_issue && !c->d2_last) prof_pend[P_UOP]++;
+        if (!c->a_valid) {
+            prof_pend[P_EMPTY]++;
+            if (!c->s_valid && !c->d2_valid && c->ib_n == 0) prof_pend[P_EMPTY_IF]++;
+        }
+        if (c->f2_miss) prof_pend[P_F2MISS]++;
+        if (c->s_valid && c->s_stall && c->a_free) {
+            prof_pend[P_SWAIT]++;
+            for (int k = 0; k < 5; k++) if (c->s_why >> k & 1) prof_pend[P_SW_LOAD + k]++;
+        }
+        if (c->a_busy) prof_pend[P_MUL]++;
+        if (c->m_hold) prof_pend[P_MHOLD]++;
+        if (c->w_redirect) prof_pend[P_WRED]++;
+        else if (c->m_redirect) prof_pend[P_MRED]++;
+        else if (c->a_redirect) {
+            switch (c->a_kind) {
+            case 7:  prof_pend[P_ARED_BR]++; break;
+            case 8:  prof_pend[P_ARED_BX]++; break;
+            case 11: prof_pend[P_ARED_EXC]++; break;
+            default: prof_pend[P_ARED_OTHER]++; break;
+            }
+        } else if (c->d_redirect) prof_pend[P_DRED]++;
+        pend_cyc++;
+    }
+    uint64_t pend_cyc = 0;
+    void charge(bool idle) {
+        prof_cyc[idle] += pend_cyc; pend_cyc = 0;
+        if (!idle) for (int i = 0; i < P_N; i++) prof_busy[i] += prof_pend[i];
+        memset(prof_pend, 0, sizeof prof_pend);
+    }
+    void print_profile() {
+        static const char *name[P_N] = {
+            "instructions retired", "extra uops (LDM/STM, SWP, long multiply)", "A empty",
+            "  ... with S, D2 and the buffer empty too", "F2 waits on the I-cache", "S waits on an operand",
+            "  ... a load's value", "  ... a result in A, to shift", "  ... a result in A, to multiply",
+            "  ... a shift by register's extra cycle", "  ... an RRX behind a flag write", "A waits on the multiplier",
+            "M waits on memory", "D2 redirects (B, BL, Thumb BL pair)", "A redirects: conditional B",
+            "A redirects: BX", "A redirects: exceptions", "A redirects: other (MSR)",
+            "M redirects (ALU to PC, BL suffix)", "W redirects (load to PC)" };
+        printf("profile from %.2f s: %llu busy cycles, %llu idle; by what each cycle saw (they overlap; redirects are events):\n",
+               (double)prof_from / CPU_HZ, (unsigned long long)prof_cyc[0], (unsigned long long)prof_cyc[1]);
+        for (int i = 0; i < P_N; i++)
+            printf("  %-42s %12llu  %6.3f per instruction\n", name[i], (unsigned long long)prof_busy[i],
+                   prof_busy[P_RETIRE] ? (double)prof_busy[i] / prof_busy[P_RETIRE] : 0.0);
+        if (prof_busy[P_RETIRE])
+            printf("  CPI (busy) %.3f\n", (double)prof_cyc[0] / prof_busy[P_RETIRE]);
+    }
     bool bl_merged = false;
 
     Bench() : sdram(0x4000000), cram(0x2000000) {}
@@ -425,6 +484,7 @@ struct Bench {
     // D-cache had written back what IO_LCD_SHOW asked for (lcd_show_t)
     std::vector<uint16_t> shown = std::vector<uint16_t>(LCD_W * LCD_H, 0);
     bool show_d = false;
+    uint64_t shows = 0;                      // IO_LCD_SHOWs taken: the game's screen updates
     // the audio FIFO's output: samples played, those not silent, the first of them
     bool snd_d = false;
     uint64_t snd_n = 0, snd_loud = 0, snd_first = 0;
@@ -522,7 +582,7 @@ struct Bench {
         top->bus_cnt = bus_cnt;
 
         // frames, keys
-        if (top->lcd_show_t != show_d) { show_d = top->lcd_show_t; take_frame(); }
+        if (top->lcd_show_t != show_d) { show_d = top->lcd_show_t; take_frame(); shows++; }
         if (top->snd_tog != snd_d) {
             snd_d = top->snd_tog;
             snd_n++;
@@ -540,6 +600,10 @@ struct Bench {
             keys.erase(keys.begin());
         }
 
+        if (cycles >= prof_from) {
+            profile();
+            if (rt && !r.irq) charge(r.pc == idle_pc);
+        }
         if (rt) {
             if (!retire(r)) { failed = true; return false; }
             if (!r.irq && r.pc == idle_pc) idle_retired++;
@@ -565,6 +629,7 @@ int main(int argc, char **argv)
         else if (a == "--drive" && i + 1 < argc) drive = argv[++i];
         else if (a == "--seconds" && i + 1 < argc) seconds = atof(argv[++i]);
         else if (a == "--no-uc") b.use_uc = false;
+        else if (a == "--profile" && i + 1 < argc) b.prof_from = (uint64_t)(atof(argv[++i]) * CPU_HZ);
         else if (a == "--lat" && i + 1 < argc) { b.lat_line = atoi(argv[++i]); b.lat_word = b.lat_line / 2 + 1; }
         else if (a == "--frames-to" && i + 1 < argc) b.frames_to = argv[++i];
         else if (a == "--frame-every" && i + 1 < argc) b.frame_every = atoi(argv[++i]);
@@ -635,10 +700,10 @@ int main(int argc, char **argv)
         if (b.cycles >= b.max_cycles) break;
         if (b.cycles - last_report >= 50000000) {
             last_report = b.cycles;
-            fprintf(stderr, "[%.2f s: %llu instructions, %llu line reads, %llu line writes, %llu word reads]\n",
-                    (double)b.cycles / CPU_HZ, (unsigned long long)b.retired,
+            fprintf(stderr, "[%.2f s: %llu instructions (%llu idle), %llu line reads, %llu line writes, %llu word reads, %llu screen updates]\n",
+                    (double)b.cycles / CPU_HZ, (unsigned long long)b.retired, (unsigned long long)b.idle_retired,
                     (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1],
-                    (unsigned long long)b.nbus[2]);
+                    (unsigned long long)b.nbus[2], (unsigned long long)b.shows);
         }
         if (b.cycles > 100000 && b.hist.empty()) { fprintf(stderr, "nothing retires\n"); return 1; }
     }
@@ -654,6 +719,7 @@ int main(int argc, char **argv)
     if (Bench::n_invalid)
         printf("%llu user-mode MOVS pc / LDM ^ met, run by the RTL as plain writes to pc\n", Bench::n_invalid);
     for (auto &w : b.watch) printf("[watch] %08x retired %llu times\n", w.first, (unsigned long long)w.second);
+    if (b.prof_from != UINT64_MAX) b.print_profile();
     printf("audio: %llu samples played, %llu not silent", (unsigned long long)b.snd_n, (unsigned long long)b.snd_loud);
     if (b.snd_loud) printf(", the first at %.3f s", (double)b.snd_first / CPU_HZ);
     printf("\n");

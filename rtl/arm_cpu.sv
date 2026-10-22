@@ -79,6 +79,13 @@ module arm_cpu
         endcase
     endfunction
 
+    // The SPSR of the mode CPSR is in, a cycle behind both: its mux on the
+    // mode bits was the slowest way into A's result at 80 MHz.  A cycle is
+    // enough because every change of mode redirects, and an SPSR write
+    // (MSR) holds a reader of it in S until the write is a cycle old.
+    logic [31:0] spsr_cur;
+    always_ff @(posedge clk) spsr_cur <= spsr_of(cpsr[4:0]);
+
     function automatic logic cond_ok(input logic [3:0] c, input logic [31:0] psr);
         logic n, z, cf, v;
         n = psr[31]; z = psr[30]; cf = psr[29]; v = psr[28];
@@ -184,6 +191,9 @@ module arm_cpu
     logic  [1:0] bc;
     logic [31:0] ras [0:7];                     // return addresses, as LR holds them
     logic  [2:0] ras_sp;                        // pushes less pops, mod 8: the top is ras_sp - 1
+    logic        rfix_v;                        // a redirect's push, written a cycle late
+    logic  [2:0] rfix_base;
+    logic [31:0] rfix_link;
 
     logic [31:0] f1_seq, f1_pnext, f1_pc_n;
     logic        f1_thumb_n, f1_tagm, f1_hit, any_redirect;
@@ -250,10 +260,37 @@ module arm_cpu
         return l;
     endfunction
 
+    // The register list of an LDM/STM and its figures, for every buffer
+    // entry beside the ring, so that D1's read of the ring comes after them:
+    // the read, the Thumb half and the priority encoder in a row were the
+    // slowest way to d2_ixl at 80 MHz.  Thumb's list comes from the raw
+    // halfword (PUSH and POP add LR or PC), not through the expansion.  An
+    // LDM/STM ^ without PC in the list moves user-bank registers.  (Don't
+    // care for anything else.)
+    logic  [3:0] ls_low  [0:IB-1];              // the lowest register in the list
+    logic  [4:0] ls_ix   [0:IB-1];              // ... its register-file index
+    logic  [4:0] ls_cnt  [0:IB-1];              // how many the list holds
+    logic        ls_more [0:IB-1];              // two or more
+    logic [15:0] ls_rest [0:IB-1];              // the list without the lowest
+    logic  [4:0] ls_mode [0:IB-1];              // the mode its registers are in
+    genvar gi;
+    generate
+        for (gi = 0; gi < IB; gi = gi + 1) begin : g_ls
+            wire [15:0] h  = ib[gi].pc[1] ? ib[gi].word[31:16] : ib[gi].word[15:0];
+            wire        pu = h[15:9] == 7'b1011_010;
+            wire        po = h[15:9] == 7'b1011_110;
+            wire [15:0] l  = ib[gi].thumb ? {po && h[8], pu && h[8], 6'd0, h[7:0]} : ib[gi].word[15:0];
+            assign ls_mode[gi] = !ib[gi].thumb && ib[gi].word[22] && !(ib[gi].word[20] && ib[gi].word[15])
+                               ? M_USR : cpsr[4:0];
+            assign ls_low[gi]  = lowest(l);
+            assign ls_ix[gi]   = phys(lowest(l), ls_mode[gi]);
+            assign ls_cnt[gi]  = popcount16(l);
+            assign ls_more[gi] = two_or_more(l);
+            assign ls_rest[gi] = l & (l - 16'd1);
+        end
+    endgenerate
+
     logic d1_plain, d1_ub, d1_blp, d1_lsm, d1_swp, d1_mlal;
-    logic [4:0] d1_lmode;
-    // LDM/STM ^ without PC in the list: the user bank
-    assign d1_lmode = (d1_arm[22] && !(d1_arm[20] && d1_arm[15])) ? M_USR : cpsr[4:0];
     always_comb begin
         d1_plain = !d1.abt && !(d1.thumb && (t_und || t_bl)) && d1_arm[31:28] != 4'hF;
         d1_ub    = d1_plain && d1_arm[31:25] == 7'b1110_101;                 // B, BL always
@@ -263,6 +300,24 @@ module arm_cpu
                    && d1_arm[11:4] == 8'b0000_1001;
         d1_mlal  = d1_plain && d1_arm[27:23] == 5'b00001 && d1_arm[7:4] == 4'b1001 && d1_arm[21];
     end
+
+    // the operand ports of the first step (see D2's ra_pc..sel_c); Quartus
+    // keeps only these outputs of this decoder
+    logic        d1_ra_pc, d1_rb_pc, d1_rc_pc, d1_sel_a_rd, d1_sel_b_31;
+    logic  [2:0] d1_sel_c;
+    uop_t        d1_u_x;
+    logic        d1_more_x;
+    logic [15:0] d1_rem_x;
+    arm_decode u_dec1 (
+        .instr(d1_arm), .thumb(d1.thumb), .thumb_raw(d1_half),
+        .imm_ovr_en(d1.thumb && t_imm_en), .imm_ovr(t_imm),
+        .bl_suffix(d1.thumb && t_bl), .t_und(d1.thumb && t_und), .pabt(d1.abt),
+        .pc(d1.pc), .pc_op(d1_pc_op), .mode(cpsr[4:0]),
+        .step(2'd0), .rem(16'd0), .k(5'd0), .lreg(ls_low[ib_r]), .nregs(ls_cnt[ib_r]),
+        .u(d1_u_x), .ra_pc(d1_ra_pc), .rb_pc(d1_rb_pc), .rc_pc(d1_rc_pc),
+        .more(d1_more_x), .rem_next(d1_rem_x),
+        .sel_a_rd(d1_sel_a_rd), .sel_b_31(d1_sel_b_31), .sel_c(d1_sel_c)
+    );
 
     // ============================================================ D2
     logic        d2_valid, d2_thumb, d2_abt;
@@ -274,6 +329,7 @@ module arm_cpu
     logic  [3:0] d2_lreg;                       // the register this LDM/STM step moves
     logic  [4:0] d2_nregs;                      // ... and how many the list holds
     logic        d2_lmore;                      // ... and whether another step follows
+    logic [15:0] d2_rest;                       // ... and the list after this step
     logic  [4:0] d2_mode;                       // the mode D2 decodes in: CPSR's as the uop arrived
     logic  [4:0] d2_lmode;                      // ... and the LDM/STM register's: user for ^ without PC
     logic  [4:0] d2_ixn, d2_ixm, d2_ixs, d2_ixd, d2_ixl;   // register-file indices, from D1
@@ -291,10 +347,10 @@ module arm_cpu
     assign d2_first = d2_step == 2'd0 && d2_k == 5'd0;
 
     uop_t        dec_u;
-    logic        ra_pc, rb_pc, rc_pc, dec_more;
+    logic        dec_ra_pc, dec_rb_pc, dec_rc_pc, dec_more;
     logic [15:0] dec_rem_next, d2_rem_cur;
-    logic        sel_a_rd, sel_b_31;
-    logic  [2:0] sel_c;
+    logic        dec_sel_a_rd, dec_sel_b_31;
+    logic  [2:0] dec_sel_c;
     assign d2_rem_cur = d2_first ? d2_arm[15:0] : d2_rem;
     arm_decode u_dec (
         .instr(d2_arm), .thumb(d2_thumb), .thumb_raw(d2_half),
@@ -302,10 +358,24 @@ module arm_cpu
         .bl_suffix(d2_bl), .t_und(d2_und), .pabt(d2_abt),
         .pc(d2_pc), .pc_op(d2_pc_op), .mode(d2_mode),
         .step(d2_step), .rem(d2_rem_cur), .k(d2_k), .lreg(d2_lreg), .nregs(d2_nregs),
-        .u(dec_u), .ra_pc(ra_pc), .rb_pc(rb_pc), .rc_pc(rc_pc),
+        .u(dec_u), .ra_pc(dec_ra_pc), .rb_pc(dec_rb_pc), .rc_pc(dec_rc_pc),
         .more(dec_more), .rem_next(dec_rem_next),
-        .sel_a_rd(sel_a_rd), .sel_b_31(sel_b_31), .sel_c(sel_c)
+        .sel_a_rd(dec_sel_a_rd), .sel_b_31(dec_sel_b_31), .sel_c(dec_sel_c)
     );
+
+    // Which port each operand reads, and whether it is R15, in flops: D1
+    // decodes them for the first step (u_dec1) and D2 moves them for the
+    // rest, as it moves the step registers.  Through D2's decoder, from the
+    // step registers to the operand muxes, they were the slowest way into
+    // s_u.c at 80 MHz.  They are what the decoder says (asserted below).
+    logic        ra_pc, rb_pc, rc_pc, sel_a_rd, sel_b_31;
+    logic  [2:0] sel_c;
+`ifdef VERILATOR
+    always_ff @(posedge clk)
+        if (!rst && d2_valid && {ra_pc, rb_pc, rc_pc, sel_a_rd, sel_b_31, sel_c}
+                             != {dec_ra_pc, dec_rb_pc, dec_rc_pc, dec_sel_a_rd, dec_sel_b_31, dec_sel_c})
+            $error("arm_cpu: D2's operand ports disagree with the decoder at %08x", d2_pc);
+`endif
 
     // the last step, from registers rather than through the decoder
     logic d2_more;
@@ -446,26 +516,42 @@ module arm_cpu
             if (d1_take_nk) begin
                 d2_red_done <= 1'b0; d2_step <= 2'd0; d2_k <= 5'd0;
             end else if (d2_issue_nk && !d2_last) begin
+                {ra_pc, rb_pc, rc_pc, sel_a_rd, sel_b_31} <= '0;
                 if (d2_lsm) begin
-                    d2_k <= d2_k + 5'd1; d2_rem <= dec_rem_next; d2_lreg <= lowest(dec_rem_next);
-                    d2_ixl <= phys(lowest(dec_rem_next), d2_lmode);
-                    d2_lmore <= two_or_more(dec_rem_next);
-                end else d2_step <= d2_step + 2'd1;
+                    d2_k <= d2_k + 5'd1; d2_rem <= dec_rem_next; d2_lreg <= lowest(d2_rest);
+                    d2_ixl <= phys(lowest(d2_rest), d2_lmode);
+                    d2_lmore <= two_or_more(d2_rest);
+                    d2_rest <= d2_rest & (d2_rest - 16'd1);
+                    rc_pc <= !d2_arm[20] && lowest(d2_rest) == 4'd15;    // STM: the next register
+                    sel_c <= d2_arm[20] ? SC_RS : SC_RL;
+                end else begin
+                    d2_step <= d2_step + 2'd1;
+                    if (d2_swp) begin                                    // store Rm, then move r31
+                        sel_b_31 <= d2_step == 2'd1;
+                        sel_c <= d2_step == 2'd0 ? SC_RM : SC_RS;
+                    end else begin                                       // UMLAL/SMLAL: add RdHi:RdLo
+                        sel_a_rd <= 1'b1;
+                        sel_c <= SC_RN;
+                    end
+                end
             end
         end
         if (d1_take_nk) begin
-            d2_lreg <= lowest(d1_arm[15:0]);
-            d2_nregs <= popcount16(d1_arm[15:0]);
-            d2_lmore <= two_or_more(d1_arm[15:0]);
+            {ra_pc, rb_pc, rc_pc, sel_a_rd, sel_b_31, sel_c}
+                <= {d1_ra_pc, d1_rb_pc, d1_rc_pc, d1_sel_a_rd, d1_sel_b_31, d1_sel_c};
+            d2_lreg <= ls_low[ib_r];
+            d2_nregs <= ls_cnt[ib_r];
+            d2_lmore <= ls_more[ib_r];
+            d2_rest <= ls_rest[ib_r];
             d2_ptaken <= pr_d1.ptaken; d2_pnext <= pr_d1.pnext; d2_ptagm <= pr_d1.ptagm;
             d2_pctr <= pr_d1.pctr; d2_psp <= pr_d1.psp;
             d2_mode <= cpsr[4:0];
-            d2_lmode <= d1_lmode;
+            d2_lmode <= ls_mode[ib_r];
             d2_ixn <= phys(d1_arm[19:16], cpsr[4:0]);
             d2_ixm <= phys(d1_arm[3:0], cpsr[4:0]);
             d2_ixs <= phys(d1_arm[11:8], cpsr[4:0]);
             d2_ixd <= phys(d1_arm[15:12], cpsr[4:0]);
-            d2_ixl <= phys(lowest(d1_arm[15:0]), d1_lmode);
+            d2_ixl <= ls_ix[ib_r];
             d2_pc <= d1.pc; d2_thumb <= d1.thumb; d2_abt <= d1.abt;
             d2_link <= d1.pc + (d1.thumb ? 32'd3 : 32'd4);
             d2_arm <= d1_arm; d2_half <= d1_half; d2_pc_op <= d1_pc_op;
@@ -478,6 +564,8 @@ module arm_cpu
 
     // ============================================================ F/buffer sequencing
     always_ff @(posedge clk) begin
+        rfix_v <= !rst && any_redirect && fix_push;
+        rfix_base <= fix_base; rfix_link <= fix_link;
         if (rst) begin
             f1_pc <= 32'd0; f1_thumb <= 1'b0;
             f2_valid <= 1'b0; f2_pc <= 32'd0; f2_thumb <= 1'b0;
@@ -496,14 +584,20 @@ module arm_cpu
             end
             // the return stack: repaired by a redirect, rewound when F2's
             // fetch is asked again, else moved by what F1 predicts
-            if (any_redirect) begin
-                ras_sp <= fix_sp;
-                if (fix_push) ras[fix_base] <= fix_link;
-            end else if (f2_miss) ras_sp <= f2_psp;
-            else if (f1_go && f1_hit && bq.kind == BK_CALL) begin
-                ras[ras_sp] <= {f1_seq[31:1], f1_thumb};
-                ras_sp <= ras_sp + 3'd1;
-            end else if (f1_go && f1_hit && bq.kind == BK_RET) ras_sp <= ras_sp - 3'd1;
+            if (any_redirect) ras_sp <= fix_sp;
+            else if (f2_miss) ras_sp <= f2_psp;
+            else if (f1_go && f1_hit && bq.kind == BK_CALL) ras_sp <= ras_sp + 3'd1;
+            else if (f1_go && f1_hit && bq.kind == BK_RET) ras_sp <= ras_sp - 3'd1;
+            // Its entries wait on nothing that waits on the D-cache's hit:
+            // that hit, through M's stall into every redirect and on to the
+            // enables of all 256 flops here, was 191 of the 200 slowest paths
+            // at 73.85 MHz.  F1 writes its push whether or not a redirect or
+            // a refetch discards it, which can only put a wrong-path address
+            // where a later return predicts from (every prediction is
+            // checked); a redirect's own push is written a cycle late, from
+            // flops, after anything F1 writes.
+            if (f1_go && f1_hit && bq.kind == BK_CALL) ras[ras_sp] <= {f1_seq[31:1], f1_thumb};
+            if (rfix_v) ras[rfix_base] <= rfix_link;
             if (kill_f) begin
                 ib_n <= 3'd0; ib_w <= 2'd0; ib_r <= 2'd0;
             end else begin
@@ -526,9 +620,11 @@ module arm_cpu
     uop_t        a_u;
     logic [31:0] a_link;                        // a_u.pc's return address, for the stack's repair
     logic        m_valid, m_exec, m_mem;
+    logic        m_vx, m_ldx;                   // valid and executed; ... and a load (flops, for the stall)
     uop_t        m_u;
     logic [31:0] m_ra, m_rb;
     logic        w_valid, w_exec;
+    logic        w_vx, w_ldpc;                  // valid and executed; ... and a load to PC
     uop_t        w_u;
     logic [31:0] w_ra, w_rb;
 
@@ -544,10 +640,10 @@ module arm_cpu
 
     function automatic logic [31:0] sfwd(input tag_t t, input logic en, input logic [31:0] v);
         if (!en) return v;
-        if (m_valid && m_exec && t.m_wa && m_u.kind != K_LOAD) return m_ra;
-        if (m_valid && m_exec && t.m_wb) return m_rb;
-        if (w_valid && w_exec && t.w_wa) return w_ra;
-        if (w_valid && w_exec && t.w_wb) return w_rb;
+        if (m_vx && t.m_wa && !m_ldx) return m_ra;
+        if (m_vx && t.m_wb) return m_rb;
+        if (w_vx && t.w_wa) return w_ra;
+        if (w_vx && t.w_wb) return w_rb;
         return v;
     endfunction
 
@@ -559,7 +655,7 @@ module arm_cpu
         return a_valid && a_u.kind == K_LOAD && t.a_wa;
     endfunction
     function automatic logic load_in_m(input tag_t t);
-        return m_valid && m_exec && m_u.kind == K_LOAD && t.m_wa;
+        return m_ldx && t.m_wa;
     endfunction
 
     // where A finds an operand S could not
@@ -574,6 +670,7 @@ module arm_cpu
 
     logic [31:0] sa, sb, sc;
     logic        s_blate, s_clate, s_rrx, s_cpass, s_stall, s_adv;
+    logic        s_psrrd;                       // S's uop reads the SPSR (MRS, MSR, a restore)
     logic        a_free, a_wflags;
     always_comb begin
         sa = sfwd(s_ta, s_u.ra_rd, s_u.a);
@@ -590,11 +687,31 @@ module arm_cpu
                               : (s_u.sh_reg ? s_u.c[7:0] == 8'd0 : (s_u.sh_typ == 2'd0 && s_u.sh_amt == 5'd0));
         s_stall = s_valid && (
               (s_u.ra_rd && load_in_a(s_ta))
+           || (s_psrrd && a_wflags)
            || (s_u.rb_rd && (s_blate ? load_in_a(s_tb) : (in_a(s_tb) || load_in_m(s_tb))))
            || (s_u.rc_rd && (s_clate ? load_in_a(s_tc) : (in_a(s_tc) || load_in_m(s_tc))))
            || (s_rrx && a_wflags)
            || (s_u.sh_reg && !s_amt_ok));
     end
+`ifdef VERILATOR
+    // for the bench's profile: why S waits.  0 a load's value, 1 a result
+    // in A needed shifted, 2 ... by the multiplier, 3 a shift by register's
+    // extra cycle, 4 an RRX or an SPSR read behind a PSR write
+    logic [4:0] s_why /* verilator public */;
+    always_comb begin
+        s_why = 5'd0;
+        s_why[0] = (s_u.ra_rd && load_in_a(s_ta))
+                || (s_u.rb_rd && (load_in_a(s_tb) || (!s_blate && load_in_m(s_tb))))
+                || (s_u.rc_rd && (load_in_a(s_tc) || (!s_clate && load_in_m(s_tc))));
+        s_why[1] = (s_u.kind != K_MUL && s_u.kind != K_MULL)
+                && ((s_u.rb_rd && !s_blate && in_a(s_tb) && !load_in_a(s_tb))
+                 || (s_u.rc_rd && !s_clate && in_a(s_tc) && !load_in_a(s_tc)));
+        s_why[2] = (s_u.kind == K_MUL || s_u.kind == K_MULL)
+                && ((s_u.rb_rd && in_a(s_tb) && !load_in_a(s_tb)) || (s_u.rc_rd && in_a(s_tc) && !load_in_a(s_tc)));
+        s_why[3] = s_u.sh_reg && !s_amt_ok;
+        s_why[4] = (s_rrx || s_psrrd) && a_wflags;
+    end
+`endif
     assign s_adv     = s_valid && !s_stall && a_free && !kill_s;
     assign s_free    = !s_valid || s_adv;
     assign s_free_nk = !s_valid || (!s_stall && a_free);
@@ -681,10 +798,12 @@ module arm_cpu
     logic        a_mred;                    // redirect from M next cycle: ALU to PC, BL suffix
     logic [31:0] a_mtarget;
     logic        a_mthumb;
-    logic        a_brtaken;                     // a branch or BX in A, taken
+    logic        a_brtaken;                     // a branch, BX or return by load in A, taken
+    logic        a_ldret;                       // a return by load: LDM/POP with pc, not ^
+    assign a_ldret = a_u.kind == K_LOAD && a_u.wa_pc && a_u.br_ret && !a_u.restore;
 
     always_comb begin
-        a_spsr_cur = spsr_of(cpsr[4:0]);
+        a_spsr_cur = spsr_cur;
         a_pass   = cond_ok(a_u.cond, cpsr);
         a_cpsr_n = cpsr;
         a_ra = alu_res; a_rb = 32'd0;
@@ -798,7 +917,7 @@ module arm_cpu
             a_wa_en = 1'b0; a_wb_en = 1'b0; a_mem = 1'b0;
         end
         // F1 went to a target here, but no branch was taken: refetch what follows
-        a_brtaken = a_pass && (a_u.kind == K_BRANCH || a_u.kind == K_BX);
+        a_brtaken = a_pass && (a_u.kind == K_BRANCH || a_u.kind == K_BX || a_ldret);
         if (a_u.p_taken && !a_brtaken && a_u.kind != K_EXC) begin
             a_redirect = 1'b1;
             a_target = a_u.pc + (a_u.thumb ? 32'd2 : 32'd4);
@@ -807,16 +926,25 @@ module arm_cpu
         a_redirect = a_redirect && a_commit;
     end
 
-    // a load to PC in M redirects from W next cycle; nothing behind it commits
+    // A load to PC in M may redirect from W next cycle -- unless it is a
+    // return the fetch predicted and the word loaded is where it went -- so
+    // nothing behind it commits: A holds for that cycle, and W's redirect
+    // kills what it holds or the hold ends.
     logic m_pcload;
-    assign m_pcload = m_valid && m_exec && m_u.kind == K_LOAD && m_u.wa_pc;
+    assign m_pcload = m_ldx && m_u.wa_pc;
 
     logic m_hold, m_dabt_take;
-    assign a_adv    = a_valid && !m_hold && !a_busy;
-    assign a_commit = a_adv && !kill_a && !m_pcload;
+    assign a_adv    = a_valid && !m_hold && !a_busy && !m_pcload;
+    assign a_commit = a_adv && !kill_a;
     // free only while M moves too: a uop entering A may be told to find a
     // load's value in W next cycle, so the load must get there
-    assign a_free   = !m_hold && (!a_valid || !a_busy);
+    assign a_free   = !m_hold && !m_pcload && (!a_valid || !a_busy);
+`ifdef VERILATOR
+    always_ff @(posedge clk)
+        if (!rst && a_commit && (a_u.restore || ((a_u.kind == K_MRS || a_u.kind == K_MSR) && a_u.psr_spsr))
+            && spsr_cur != spsr_of(cpsr[4:0]))
+            $error("arm_cpu: a stale SPSR read at %08x", a_u.pc);
+`endif
 
     // S's tags for next cycle.  Then A holds S's uop if A is free now, else
     // its own; M holds A's unless M is held; W holds M's.  (A clears a
@@ -888,7 +1016,7 @@ module arm_cpu
         if (rst) begin
             cpsr <= 32'h0000_00D3;
             spsr_fiq <= 32'd0; spsr_svc <= 32'd0; spsr_abt <= 32'd0; spsr_irq <= 32'd0; spsr_und <= 32'd0;
-            s_valid <= 1'b0; s_dred <= 1'b0; s_amt_ok <= 1'b0; s_u <= '0;
+            s_valid <= 1'b0; s_dred <= 1'b0; s_amt_ok <= 1'b0; s_u <= '0; s_psrrd <= 1'b0;
             s_ta <= '0; s_tb <= '0; s_tc <= '0;
             a_valid <= 1'b0; a_dred <= 1'b0; a_u <= '0;
             a_op2 <= 32'd0; a_op2_c <= 1'b0; a_cpass <= 1'b0; a_blate <= 1'b0;
@@ -916,10 +1044,9 @@ module arm_cpu
                 spsr_abt <= cpsr;
             end
 
-            // ---- S -> A; behind a load to PC that W is about to follow,
-            // nothing stays in A
-            if (kill_s || m_pcload) a_valid <= 1'b0;
-            else if (a_free)        a_valid <= s_adv;
+            // ---- S -> A
+            if (kill_s)        a_valid <= 1'b0;
+            else if (a_free)   a_valid <= s_adv;
             if (a_free) begin
                 a_u <= s_u;
                 a_link <= s_u.pc + (s_u.thumb ? 32'd3 : 32'd4);
@@ -945,6 +1072,7 @@ module arm_cpu
             if (s_free_nk) begin
                 s_u <= d2_u;
                 s_dred <= !d2_inject && (d2_ub || d2_bls) && !d2_ptaken;
+                s_psrrd <= ((d2_u.kind == K_MRS || d2_u.kind == K_MSR) && d2_u.psr_spsr) || d2_u.restore;
                 s_amt_ok <= 1'b0;
                 s_ta <= d2_ta; s_tb <= d2_tb; s_tc <= d2_tc;
             end else begin
@@ -960,7 +1088,7 @@ module arm_cpu
 
     // ============================================================ M
     logic [31:0] m_addr, m_cpsr, m_ld, m_tgt;
-    logic        m_red, m_tth;
+    logic        m_red, m_tth, m_pok;
     always_comb begin
         m_hold = m_valid && m_mem && !dc_ok;
         // load alignment
@@ -976,6 +1104,13 @@ module arm_cpu
             default: m_ld = (dc_rdata >> {m_addr[1:0], 3'b000}) | (dc_rdata << (6'd32 - {1'b0, m_addr[1:0], 3'b000}));
         endcase
         if (m_addr[1:0] == 2'd0 && m_u.msize == 2'd2) m_ld = dc_rdata;
+        // a return by load that the fetch predicted: is the word loaded the
+        // address it went to?  (ARMv4T does not interwork on a load, so the
+        // state is the load's own.)  Compared from the cache's word, beside
+        // the alignment, so that W's redirect starts at a flop.
+        m_pok = m_u.p_taken && m_u.br_ret && m_u.lsm && !m_u.restore && m_addr[1:0] == 2'd0
+             && dc_rdata[31:2] == m_u.p_next[31:2] && m_u.p_next[0] == m_u.thumb
+             && (m_u.thumb ? dc_rdata[1] == m_u.p_next[1] : !m_u.p_next[1]);
         m_dabt_take = m_valid && m_mem && dc_ok && dc_abort && !w_redirect;
         m_redirect  = !w_redirect && ((m_valid && m_red) || m_dabt_take);
         m_tthumb    = m_dabt_take ? 1'b0 : m_tth;
@@ -986,11 +1121,13 @@ module arm_cpu
         if (rst) begin
             m_valid <= 1'b0; m_exec <= 1'b0; m_mem <= 1'b0; m_u <= '0;
             m_ra <= 32'd0; m_rb <= 32'd0; m_addr <= 32'd0; m_cpsr <= 32'd0;
-            m_red <= 1'b0; m_tgt <= 32'd0; m_tth <= 1'b0;
+            m_red <= 1'b0; m_tgt <= 32'd0; m_tth <= 1'b0; m_vx <= 1'b0; m_ldx <= 1'b0;
         end else if (w_redirect) begin
-            m_valid <= 1'b0; m_red <= 1'b0;
+            m_valid <= 1'b0; m_red <= 1'b0; m_vx <= 1'b0; m_ldx <= 1'b0;
         end else if (!m_hold) begin
             m_valid <= a_commit;
+            m_vx  <= a_commit && a_pass;
+            m_ldx <= a_commit && a_pass && a_u.kind == K_LOAD;
             m_u <= a_u;
             m_u.wa_en <= a_wa_en; m_u.wa <= a_wa; m_u.wb_en <= a_wb_en;
             m_exec <= a_pass;
@@ -1005,13 +1142,18 @@ module arm_cpu
 
     // ============================================================ W
     logic [31:0] w_cpsr;
+    logic        w_pok;                         // a return by load, predicted right
     always_ff @(posedge clk) begin
         if (rst) begin
             w_valid <= 1'b0; w_exec <= 1'b0; w_u <= '0; w_ra <= 32'd0; w_rb <= 32'd0; w_cpsr <= 32'd0;
+            w_pok <= 1'b0; w_vx <= 1'b0; w_ldpc <= 1'b0;
         end else begin
             w_valid <= m_valid && !m_hold && !w_redirect;
+            w_vx    <= m_vx && !m_hold && !w_redirect;
+            w_ldpc  <= m_pcload && !m_hold && !w_redirect && !m_dabt_take;
             w_u <= m_u;
             w_exec <= m_exec;
+            w_pok <= m_pok;
             w_ra <= (m_u.kind == K_LOAD) ? m_ld : m_ra;
             w_rb <= m_rb;
             w_cpsr <= m_cpsr;
@@ -1030,7 +1172,9 @@ module arm_cpu
 `endif
 
     // ============================================================ BTB update, return stack repair
-    // A writes the BTB as each branch or BX commits: a taken one allocates
+    // A writes the BTB as each branch, BX or return by load (LDM/POP with
+    // pc, whose entry says "return": the target is the stack's) commits: a
+    // taken one allocates
     // (counter 2) or retargets its entry, and the counter of an entry it
     // held moves towards what happened.  The write lands a cycle later, from
     // flops, so A's forwarding and adders stop at a register; a fetch in
@@ -1045,7 +1189,7 @@ module arm_cpu
         if (a_u.kind == K_BX)  bw_d.tgt = {a_target[31:1], eb[0]};
         else if (a_u.ra_rd)    bw_d.tgt = {a_mtarget[31:1], 1'b1};
         else                   bw_d.tgt = {a_u.imm[31:1], a_u.thumb};
-        bw_c = a_commit && a_u.last && (a_u.kind == K_BRANCH || a_u.kind == K_BX)
+        bw_c = a_commit && a_u.last && (a_u.kind == K_BRANCH || a_u.kind == K_BX || a_ldret)
                && (a_u.p_tagm || a_brtaken);
         bw_e = bw_c && a_brtaken;
         if (!a_u.p_tagm)   bw_ctr = 2'd2;
@@ -1088,15 +1232,16 @@ module arm_cpu
         end
     end
 
-    // loads to PC: ARMv4T does not interwork on a load, so T stays as it is
-    assign w_redirect = w_valid && w_exec && w_u.kind == K_LOAD && w_u.wa_pc;
+    // loads to PC: ARMv4T does not interwork on a load, so T stays as it is.
+    // A return the fetch predicted right goes on without one.
+    assign w_redirect = w_ldpc && !w_pok;
     assign w_tthumb   = cpsr[5];
     assign w_target   = w_ra & (cpsr[5] ? 32'hFFFF_FFFE : 32'hFFFF_FFFC);
 
-    assign rf_wa_en = w_valid && w_exec && w_u.wa_en && !w_u.wa_pc;
+    assign rf_wa_en = w_vx && w_u.wa_en && !w_u.wa_pc;
     assign rf_wa    = w_u.wa;
     assign rf_da    = w_ra;
-    assign rf_wb_en = w_valid && w_exec && w_u.wb_en;
+    assign rf_wb_en = w_vx && w_u.wb_en;
     assign rf_wb    = w_u.wb;
     assign rf_db    = w_rb;
 
