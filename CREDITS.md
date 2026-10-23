@@ -79,6 +79,9 @@ the core's README when it ships with the adapter enabled.
   every pixel and every press against them. Its L + R + Select chord, and
   the MSX2 core's (`rtl/osk_overlay.v`), are where SELECT + R came from.
   The RTL and the glyphs are this core's own.
+- **The platform image** (`pkg/pocket/Platforms/_images/ngage.bin`, the
+  banner in the Pocket's list of systems) was made by plasticbugs. The
+  Nokia and N-Gage names on it are Nokia's.
 
 ## When you add to this
 
