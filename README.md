@@ -19,7 +19,7 @@ drivers.
 
 | part | implementation | verified by |
 |---|---|---|
-| CPU, ARMv4T + Thumb, 73.85 MHz (80 does not meet timing) | `rtl/arm_*.sv`: eight stages, branch prediction | lockstep with Unicorn, instruction by instruction (`sim/run_cpu.sh`, `sim/run_sys.sh`); docs/core-design.md 6 |
+| CPU, ARMv4T + Thumb, 80 MHz on a PLL of its own | `rtl/arm_*.sv`: eight stages, branch prediction; 64 KB instruction and data caches | lockstep with Unicorn, instruction by instruction (`sim/run_cpu.sh`, `sim/run_sys.sh`); docs/core-design.md 6 |
 | caches, page table, devices | `rtl/ngvm_{icache,dcache,mmu,io,sys}.sv` | lockstep with Unicorn behind ideal memories (`sim/run_sys.sh`) |
 | the kernel | `sw/kernel` | the reference machine, `tools/ngvm/ngvm.py`; six of seven games reach their menus or play |
 | RAM, firmware | Pocket SDRAM (`target/pocket/ngage_mem.sv`) | `sim/run_system.sh`: loaded at the loader's rate, read back byte for byte |
@@ -30,18 +30,20 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket**, slower than the phone: the current alpha is
-v0.3.1-alpha. The first flash (CPU at 64 MHz) booted and ran Sonic N into
-gameplay, with sound. Since then the CPU runs at 73.85 MHz, the picture is
-copied when the firmware updates the display, the audio FIFO holds
-32–64 ms, a cache miss restarts the CPU on the word it missed, and SDRAM
-reads come at a word a clock. In simulation of the Pocket's hardware,
-Sonic N's first 40 s run 1,347 million instructions against 1,083 million
-in v0.1.0-alpha. On the Pocket, Colin McRae Rally 2005, Tony Hawk's Pro
-Skater, Ghost Recon, Atari Masterpieces Vol. 1 and 2, Rayman 3, The
-Roots, The Sims Bustin' Out, Pocket Kingdom, The Elder Scrolls Travels:
-Shadowkey and (slowly) Call of Duty play; `docs/release-notes.md` lists
-what does not.
+**It runs on the Pocket**: the current release is v1.0.0. The first flash
+(CPU at 64 MHz) booted and ran Sonic N into gameplay, with sound. Since
+then the CPU runs at 80 MHz on a clock of its own, both caches hold
+64 KB, the picture is copied when the firmware updates the display, the
+audio FIFO holds 32–64 ms, a cache miss restarts the CPU on the word it
+missed, and SDRAM reads come at a word a clock, with no gap between
+bursts. In simulation of the Pocket's hardware, Virtua Cop in play draws
+about 1.7 times as many screens a second as in v0.3.1-alpha. On the
+Pocket, Virtua Cop, SSX: Out of Bounds and Puzzle Bobble VS play on
+v1.0.0. Colin McRae Rally 2005, Tony Hawk's Pro Skater, Ghost Recon,
+Atari Masterpieces Vol. 1 and 2, Rayman 3, The Roots, The Sims Bustin'
+Out, Pocket Kingdom, The Elder Scrolls Travels: Shadowkey and (slowly)
+Call of Duty played on the alphas; `docs/release-notes.md` lists what
+does not.
 `docs/bringup.md` says what each build should show, and logs what each did.
 
 What is proven, and by what:

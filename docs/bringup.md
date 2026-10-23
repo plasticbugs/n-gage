@@ -317,3 +317,15 @@ that died belong here as much as the one that lived.
   that differed by less than one (USER-EXEC 3). Not reported: whether The
   Sims runs slower (the reference drew 11% fewer screens), or any other
   game on this kernel.
+- 2026-10-23, `9c20916f9a8347a3621809861666b256` (`bitstream.rbf_r`
+  `0c44e9e693b3c62dfbccbd30da78328f`, 78615a2: CPU at 80 MHz on its own
+  PLL, 64 KB caches, SDRAM bursts back to back, the on-screen keypad)
+  with kernel `4ef9e13431949931c2af713441108b44` (20deed5: the keypad's
+  phone keys; 0dd9c1d: the scheduler over the ready threads), released as
+  v1.0.0: Virtua Cop, SSX: Out of
+  Bounds and Puzzle Bobble VS play, and the build was reported as great.
+  It is the first build on the card since v0.3.1-alpha. In simulation it
+  draws about 1.7 times v0.3.1-alpha's screens a second in Virtua Cop's
+  play. Not reported: how the speed compares on the Pocket, the
+  on-screen keypad, Puzzle Bobble's sound, and the games that played on
+  the alphas.

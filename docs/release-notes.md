@@ -1,8 +1,8 @@
-# N-Gage for Analogue Pocket — alpha
+# N-Gage for Analogue Pocket — 1.0.0
 
-An early test release. It boots the Nokia N-Gage's own firmware on the
-Pocket and runs games, but slower than the phone, and much of it is
-untested on hardware.
+The first full release. It boots the Nokia N-Gage's own firmware on the
+Pocket and runs games, the 3D ones about 1.7 times as smoothly as the
+alphas did.
 
 This core does not rebuild the phone's board. It runs **NGVM**, a small
 machine with just enough of an ARM phone for the Symbian user side of your
@@ -35,9 +35,8 @@ dump and your own games.
    and the screen stays black until it is done. The phone then boots as it
    would, Nokia logo first.
 
-**From 0.3.0-alpha or 0.2.0-alpha,** only `ngvm.bin` has changed: the
-bitstream is the same. Copying the whole zip over is fine too; your
-`sym.rom` and `.img` files are not in it.
+**From any alpha,** copy the whole zip over: both the bitstream and
+`ngvm.bin` have changed. Your `sym.rom` and `.img` files are not in it.
 
 **Rebuild your `.img` files with this zip's `mkdrive.py`** if you made them
 for 0.1.0-alpha and the game is larger than 24 MB, or is Tomb Raider, Tony
@@ -54,79 +53,76 @@ Hawk's Pro Skater or Pandemonium.
 | L / R | the soft keys |
 | Select | # |
 | Start | OK |
+| **Select + R** | the on-screen keypad, and put it away |
 
 The core's menu has a slider for each of A, B, X, Y, L and R: at 0 to 9
 the button is that digit key of the phone, at 10 it is as in the table.
 
-## New since 0.3.0-alpha
+**The on-screen keypad** is for every key the buttons do not reach.
+Press Select and R together and the phone's keypad comes up over the
+bottom of the picture: the soft keys, C, 0 to 9, * and #. The d-pad moves
+the highlight, A or B presses the key for as long as you hold it, and Y
+moves the keypad to the top of the screen and back. Select and R together
+put it away. While it is up, the game sees only the keys it presses.
 
-The phone's software side only; the gateware is 0.2.0-alpha's.
+## New since 0.3.1-alpha
 
-- **The Elder Scrolls Travels: Shadowkey** plays. After its Nokia
-  copyright screen it used to return to the N-Gage logo: it times its
-  frames by the milliseconds between two readings of the clock, and read
-  to the microsecond, two readings could differ by less than one, so it
-  divided by zero. The clock a game reads now moves once a tick (1/64 s),
-  as on the phone.
-- **Call of Duty** uses the same timing and could crash the same way. It
-  did in a simulation of the core, though not on a Pocket.
-
-## New in 0.3.0-alpha
-
-- **The Sims Bustin' Out** gets past its loading screen and plays. It
-  saves from near the top of its stack and copies past it; a phone has
-  memory there, and now so does this one.
-- **Call of Duty** plays, slowly. It needed three things a phone has: a
-  message server that stays up, a modem record in the phone's connection
-  settings, and an identity for the phone and its SIM.
-- **Pocket Kingdom: Own the World** plays. It asks for the phone's and
-  the SIM's identity, and waited for ever for an answer.
-- **The phone has a made-up identity:** IMEI `001010124628312` and IMSI
-  `001010123456789`, from the number ranges kept for test equipment, so
-  they belong to no real phone or SIM. Games that read them get these.
-  They cannot stand in for a particular phone: a game tied to the phone it
-  was installed on will not accept them.
-- **The Elder Scrolls Travels: Shadowkey** got past the N-Gage logo to
-  its own Nokia copyright screen (and stopped there; fixed above).
-- **Asphalt Urban GT 2** gets further: it decrypts its own code, which used
-  to fail. It then stops at its copy protection (below).
+- **Faster, most of all in 3D.** In a simulation of the Pocket's hardware,
+  Virtua Cop in play draws about 1.7 times as many screens a second as
+  with 0.3.1-alpha (12.5 against 7.5). It runs 43% more instructions a
+  second, and its first level loads well before 0.3.1-alpha's has. That
+  was measured on a build just before this one; over the game's first
+  25 s, this one draws 6% more screens again. What changed:
+  - the CPU runs at 80 MHz, on a clock of its own (73.85 MHz before);
+  - the instruction and data caches are 64 KB each (16 KB before), and a
+    store that misses no longer waits for its line;
+  - branch prediction has twice the entries and predicts returns made by
+    a load (POP with pc), and a multiply holds the pipeline a cycle less;
+  - the memory controller sends a burst's writes one a clock, starts the
+    next burst as soon as the last one's data is in, and puts the CPU's
+    requests on the bus sooner;
+  - the kernel's scheduler and its most frequent calls take less time.
+- **The on-screen keypad** (above), so that games can be given numbers
+  and the keys the buttons do not have.
 
 ## What to expect
 
-- **Seen on a Pocket:** with this build, The Elder Scrolls Travels:
-  Shadowkey and The Sims Bustin' Out boot and play, and Call of Duty
-  plays slowly. With 0.3.0-alpha's build, Pocket Kingdom plays well.
-  With 0.2.0-alpha's build (the later ones change it only for the games
-  above), Atari Masterpieces Vol. 1 and 2, Rayman 3 and The Roots play
-  well; on the builds before it, Colin McRae Rally 2005 plays perfectly,
-  Tony Hawk's Pro Skater and Ghost Recon play well, and Requiem of Hell
-  starts after a long pause. Sonic N played on 0.1.0-alpha.
+- **Seen on a Pocket:** with this build, Virtua Cop, SSX: Out of Bounds
+  and Puzzle Bobble VS play. With 0.3.1-alpha's build, The Elder Scrolls
+  Travels: Shadowkey and The Sims Bustin' Out play, and Call of Duty
+  plays slowly; with 0.3.0-alpha's, Pocket Kingdom plays well. With
+  0.2.0-alpha's, Atari Masterpieces Vol. 1 and 2, Rayman 3 and The Roots
+  play well. On the builds before it, Colin McRae Rally 2005 plays
+  perfectly, Tony Hawk's Pro Skater and Ghost Recon play well, and
+  Requiem of Hell starts after a long pause. Sonic N played on
+  0.1.0-alpha. The games not named for this build have not been reported
+  on it yet.
+- **The on-screen keypad** has been checked in simulation (every key
+  presses its own, and nothing else reaches the game), not yet on a
+  Pocket.
 - **Tested in the reference emulator only:** of 54 games, 46 run for
-  45 s past the boot logos with a picture and sound (46 with 0.3.0-alpha,
-  42 with 0.2.0-alpha), with A and X pressed a few times from 30 s.
-  Puzzle Bobble VS and Pandemonium reach their menus too and start their
-  sound later.
-- **The Sims Bustin' Out may run a little slower** than with 0.3.0-alpha:
-  it paces itself by the clock above, and in the reference emulator it
-  drew 11% fewer screens in its first 45 s. Not measured on a Pocket.
-- **Slower than the phone.** 3D games run at a lower frame rate than on
-  the phone, and Puyo Pop too slowly to keep its music (below).
+  45 s past the boot logos with a picture and sound, with A and X pressed
+  a few times from 30 s. Puzzle Bobble VS and Pandemonium reach their
+  menus too and start their sound later.
+- **Not yet compared with the phone.** On the alphas, 3D games ran below
+  the phone's frame rate; the heaviest may still.
 - **Sound** lags the picture by 32–64 ms.
 - **Games take some 0.3 s longer to start:** the phone's connection
   settings are written at boot.
 
 ## Known problems
 
-- Reported from a Pocket with 0.3.0-alpha, and unchanged here: Puzzle
-  Bobble VS has no sound, though the game itself has sound.
-- Reported from a Pocket with 0.2.0-alpha, and unchanged here:
+- Reported from a Pocket with 0.3.0-alpha, and not reported on this
+  build: Puzzle Bobble VS has no sound, though the game itself has sound.
+- Reported from a Pocket with 0.2.0-alpha, and not yet tried on this
+  build, which is faster:
   - X-Men Legends II returns to the N-Gage logo partway through its
     attract mode. It needs a faster CPU: in the reference emulator it
-    plays at 45 MIPS, and at this core's speed it starves its own view
-    events until the phone's view server gives up on it.
+    plays at 45 MIPS, and at 0.2.0-alpha's speed it starved its own view
+    events until the phone's view server gave up on it.
   - Puyo Pop has no music in the game; its attract mode and intro have
-    sound. It falls behind its music stream at this CPU's speed and
-    drops it for good.
+    sound. It fell behind its music stream at 0.2.0-alpha's speed and
+    dropped it for good.
 - Copy protection that checks the memory card the game was installed on
   stops Asphalt Urban GT 2, Warhammer 40,000: Glory in Death and One:
   the card here is an image, with nothing behind it to identify.
@@ -145,8 +141,8 @@ The phone's software side only; the gateware is 0.2.0-alpha's.
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `3abc5ef3b671449903455e69d1784251` |
-| `Assets/ngage/common/ngvm.bin` | `62f62252cdcf5a6cf0ec632009744e74` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `0c44e9e693b3c62dfbccbd30da78328f` |
+| `Assets/ngage/common/ngvm.bin` | `4ef9e13431949931c2af713441108b44` |
 
-CPU at 73.85 MHz. `docs/bringup.md` in the source says what each screen
+CPU at 80 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.
