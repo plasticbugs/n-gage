@@ -1,5 +1,7 @@
 # N-Gage — Analogue Pocket core (openFPGA)
 
+https://youtu.be/lo0pgil90-o
+
 The Nokia N-Gage (2003) runs Symbian OS 6.1 on a 104 MHz ARM9. This core
 does not rebuild the phone's board. It runs **NGVM**, a small machine with just
 enough of an ARM phone for the Symbian user side of your own phone's firmware
