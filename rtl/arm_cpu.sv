@@ -193,11 +193,12 @@ module arm_cpu
     // the redirect from M.
     // Loads and ALU writes to PC are not predicted (docs/core-design.md 5.6).
     localparam int BI   = 9;                    // index bits: pc[BI:1]
-    localparam int BT   = 8;                    // tag bits: pc[BI+BT:BI+1]
+    localparam int BT   = 16;                   // tag bits: pc[BI+BT:BI+1]
     localparam int BTBN = 1 << BI;
     // A partial tag: a false hit is a prediction A finds wrong and refetches
-    // after, as one on code another process has at the same address; the
-    // full one's compare was on the slowest path, into the BTB's own address.
+    // after, as one on code another process has at the same address.  16 bits
+    // compare in the two LUT levels 8 did, and the entry fits the same three
+    // block RAMs; 8 aliased code 256 KB apart, 0.7% of Tony Hawk's play.
     typedef struct packed {
         logic [BT-1:0] tag;                     // pc[BI+BT:BI+1]
         logic [31:0] tgt;                       // {address[31:1], Thumb}

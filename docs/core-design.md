@@ -132,8 +132,8 @@ kernel's hot data needs a faster home than SDRAM.
 
 - **SDRAM.** The controller is the template's, widened to all 64 MB of the
   chip: bank `[25:24]`, row `[23:11]`, column `[10:1]`. A burst issues a
-  WRITE every two clocks and a READ every clock, and each word is caught
-  three clocks after its READ.
+  READ or a WRITE every clock, and each word is caught three clocks after
+  its READ.
 - **Reads one a clock** (fourth build on; until then the menu's "SDRAM
   fast reads", off). Over the first 20 s of Virtua Cop on
   `sim/run_system.sh`, a line request takes 33-34 memory clocks instead of
@@ -160,6 +160,17 @@ kernel's hot data needs a faster home than SDRAM.
   passes at three clocks, at either pace, and fails at four with a READ
   every clock. Its bus does not keep a word after the chip lets go, so it
   also fails four clocks at the half pace, which the Pocket played.
+- **Writes one a clock** (from the build after 0.3.1; until then one every
+  two). NBA Jam's core found this pace sound on a Pocket (METHODOLOGY
+  5.28). The halfword a WRITE carries is now chosen from the line in the
+  same clock, not from a register a clock behind: with the register, the
+  memory gate read back 52,676 wrong halfwords at this pace. It passes at
+  every combination of read and write pace. Over Virtua Cop's first 1,501
+  frames on `sim/run_system.sh` (d7's CPU, the ready-set kernel), a bus
+  request takes 31.7 CPU clocks against about 35.7, the CPU retires
+  1,225 M instructions against 1,189 M (+3.0 %), and 771 frames are shown
+  against 692, with no memory protocol error. Bit 7 of `0xF2000000` goes
+  back to two clocks; no menu entry sets it (docs/bringup.md).
 - **CRAM.** `target/pocket/cram_ctrl.sv`:
   - asynchronous, with the address multiplexed on DQ;
   - 12 clocks a halfword read and 10 a write, back to back, each with
@@ -432,6 +443,11 @@ the next sizes were measured on the RTL itself.
 |---|---|---|---|
 | d5: I 32 KB, D 16 KB, BTB 256 | 126.1 M, 1.889 | 115.9 M, 2.070 | 2.33 M / 3.13 M |
 | d7: I 64 KB, D 32 KB, BTB 512 | 137.4 M (+9.0%), 1.730 | 125.1 M (+7.9%), 1.918 | 1.74 M / 2.68 M |
+| d10: d7 and the MMU's trims (`4a96437`) | 138.0 M, 1.722 | 125.9 M, 1.906 | |
+| d10, a write-back keeping the memory 14 clocks, not 27 | 139.9 M (+1.4%), 1.698 | 128.3 M (+1.9%), 1.870 | |
+| d11: d10 and D 64 KB | 140.4 M (+1.7%), 1.691 | 130.5 M (+3.7%), 1.839 | |
+| d13: d10, the BTB read as asked, an 8-bit tag (section 5.6) | 137.1 M | 125.1 M | |
+| d14: d13 with a 16-bit tag | 137.3 M | 125.8 M | |
 
 - **Where it came from.** On Virtua Cop, F2's waits on the I-cache fell
   from 0.079 to 0.027 cycles per instruction, and the cycles with the whole
@@ -442,6 +458,16 @@ the next sizes were measured on the RTL itself.
   without a difference: Virtua Cop to 87 s (93.0 M instructions) and Tony
   Hawk to 86.5 s (61.6 M). It also ran from power-on through 20 s of
   Virtua Cop (1,008 M).
+- **The write-back's 14 clocks** model a burst's WRITEs one a clock
+  (section 3) with the bench's `--wb 14`; the default, 27, is three
+  quarters of a line read.
+- **D 64 KB pays most on Tony Hawk**, where M's waits for a load's own line
+  fall from 0.224 to 0.178 cycles per instruction. Its fit failed in the
+  whole core (section 5.4, E).
+- **d13 against d10** is the price of reading the BTB before A's redirect
+  commits (section 5.6): about 0.6% on both games. That is no more than
+  timing alone moves the games' own states in this window, so only its
+  sign is read. 16 tag bits win back Tony Hawk's share, not Virtua Cop's.
 
 
 ## 5. The CPU
@@ -771,6 +797,11 @@ failing paths, which were then grouped by their end registers.
 | d5 | each way's word aligned and sign-extended before the way is chosen; Z without the carry chain; the buffer as plain vectors | −0.050 / +0.088 ns | two paths: the instruction buffer → the LDM register count → `d2_nregs` |
 | d6 | the count from the bytes (below); the I-cache at 64 KB, the D-cache at 32 KB, the BTB at 1,024 entries (section 4.5), each cache's LRU bits still flops: 93% of the ALMs | −0.543 / −0.457 ns | F1's next PC → the BTB's read address, across 1,024 entries' blocks; A's operands → CPSR's Z; the flush walk's set `ws` → the D-cache's dirty bits |
 | d7 | the BTB at 512; each cache's LRU bits in a block RAM, read beside the tags; the flush walk's clear of every dirty bit taken out: 77% of the ALMs | +0.273 / +0.425 ns | nothing: every clock met on every corner, holds included |
+| d11 | d7 with the D-cache at 64 KB, its dirty bits still flops: 83% | −0.364 / −0.222 ns | the walk's set `ws` → `dty[ws]`, a 1,024-to-1 mux → the tag RAM's write data; the BTB's read address (−0.315) |
+| B | d7, the MMU's trims and the on-screen keypad: 74% | −0.263 / −0.171 ns | the D-cache's tag RAM → its hit → `dc_ok` → M's hold → A's commit → A's redirect → `f1_pc_n` → the BTB's read address; a data abort the same way (section 5.6) |
+| C | B with the BTB read from the redirects as asked, `f1_bi`, and an 8-bit tag: 73% | +0.176 / +0.348 ns | nothing; the least, the walk's `ws` and dirty bits → the tag RAM's write data |
+| D | C with a burst's WRITEs one a clock (section 3) and a 16-bit tag: 72% | +0.425 / +0.260 ns | nothing, holds +0.123 the least; the least setup, the D-cache's `r_va` and tag RAM → A's `a_op2`, and the instruction buffer → `d2_ub` |
+| E | D with the D-cache at 64 KB, dirty bits flops: 84%, 274 of 308 RAM blocks | −0.497 / −0.648 ns; `core_pll` −0.391 | everywhere: D2 → S's uop, the SDRAM's `dram_dq` → `dq_in`, the D-cache → its data RAM's write enable, A → CPSR, the dirty bits → `dsome` |
 
 - **Z without the carry.** `x + y + ci` is zero exactly when
   `x ^ y == {(x | y)[30:0], ci}`, because each sum bit is zero only if the
@@ -797,6 +828,11 @@ failing paths, which were then grouped by their end registers.
   clear was redundant, since the walk writes back every dirty line and each
   write-back clears its own bit. Nothing was changed on CPSR's paths; they
   passed in the emptier fit.
+- **E, crowded.** Its failures share no logic: the SDRAM's capture is on
+  the memory clock, far from the D-cache. That is a full device placing
+  badly, as d6 was, not one path. The 2,048 dirty bits as flops, each with
+  a write decoder and a 1,024-to-1 mux behind it, go to a block RAM next,
+  as the LRU bits did for d7.
 
 ### 5.5 Where the cycles go, measured
 
@@ -869,15 +905,40 @@ Section 5.5 showed the BTB is needed. This is the one built
 - **The BTB:** 512 entries, direct-mapped, indexed by `pc[9:1]` (`BI` in
   `arm_cpu.sv` sets the size; it was 256 until gameplay was measured,
   section 4.5).
-  - Each entry holds the full tag `pc[31:10]`, the target with the Thumb
-    bit as bit 0, and a kind: plain, call or return.
+  - Each entry holds a partial tag `pc[25:10]` (`BT`, 16 bits), the
+    target with the Thumb bit as bit 0, and a kind: plain, call or return.
+    A false hit is a prediction A finds wrong and refetches after (the
+    table below).
   - The 2-bit counters sit in a RAM of their own, so a branch that is not
     taken can count down without rewriting the target.
-  - Both RAMs are read at the edge that loads `f1_pc`, with `f1_pc`'s next
-    value. The entry for an address is therefore there in the same cycle F1
-    holds it, so a correct prediction costs nothing.
-  - Quartus places the entries in M10K block RAM: 3 blocks for 512 × 56
-    bits, as for 256, and one for the counters.
+  - Both RAMs are read at the edge that loads `f1_pc`, with an index of
+    their own, `f1_bi`: `f1_pc`'s next value, but from the redirects as
+    they are asked for, not as they commit. The entry for an address is
+    therefore there in the same cycle F1 holds it, so a correct
+    prediction costs nothing.
+  - Quartus places the entries in M10K block RAM: 3 blocks for 512 × 50
+    bits, as for 256 × 56, and one for the counters.
+- **Why the index and the tag are not the obvious ones.** With the
+  keypad's build (B, section 5.4), every failing path ended at the BTB's
+  read address. They started at the D-cache's hit (`dc_ok`), went
+  through M's hold and A's commit into A's redirect, and so into
+  `f1_pc_n`. A data abort took the same route. Those are the latest
+  signals in the CPU. Read with the redirect as A asks for it, the BTB
+  does not wait for them. A redirect that then waits, or never comes, has
+  F1 fetch what is younger than it meanwhile. Those fetches are killed,
+  or carry a prediction that is checked like any other.
+  - The full tag's 22-bit compare was on the same path, so the tag was
+    cut to 8 bits (C).
+  - 8 bits alias code 256 KB apart. On the bench (section 4.5), A's
+    refetches of predicted non-branches rose from 21,777 to 374,446 on
+    Tony Hawk, and from 8,138 to 165,209 on Virtua Cop. That cost 0.7% of
+    Tony Hawk's play.
+  - 16 bits compare in the same two LUT levels as 8, and the entry still
+    fits three blocks.
+  - With 16 bits, the refetches are 42,392 and 114,294. No two addresses
+    the games ran share an index and 16 tag bits, so what remains is the
+    entry read for a redirect A asked for and did not commit: another
+    address's entry, whose tag may still match.
 - **A hit** (tag match and counter ≥ 2) sends F1 to the stored target. For
   a return, it goes to the top of the return stack instead.
 - **The return stack:** 8 entries in flops.
