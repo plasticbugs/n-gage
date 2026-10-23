@@ -108,6 +108,7 @@ module arm_cpu
 
     // redirects, oldest first; each kills everything younger
     logic        w_redirect, m_redirect, a_redirect, d_redirect;
+    logic        a_red_ask;                     // A's, before it commits (the BTB's index)
     logic [31:0] w_target, m_target, a_target, d_target;
     logic        w_tthumb, m_tthumb, a_tthumb;
     logic        kill_a, kill_s, kill_d2;       // the stage's uop is gone this cycle
@@ -185,15 +186,20 @@ module arm_cpu
 
     // ---- branch prediction: a BTB answering in F1's own cycle, and a return stack
     // The BTB is indexed by pc[BI:1] and read at the edge that loads f1_pc,
-    // with f1_pc's next value, so its entry for f1_pc is there while F1 holds
-    // it.  A hit whose counter says taken sends F1 to the stored target, or
-    // for a return to the return stack's top.  Every prediction is checked
-    // downstream: direct branches in A, BX in A with the redirect from M.
+    // with f1_pc's next value (f1_bi, after M), so its entry for f1_pc is
+    // there while F1 holds it.  A hit whose counter says taken sends F1 to
+    // the stored target, or for a return to the return stack's top.  Every
+    // prediction is checked downstream: direct branches in A, BX in A with
+    // the redirect from M.
     // Loads and ALU writes to PC are not predicted (docs/core-design.md 5.6).
     localparam int BI   = 9;                    // index bits: pc[BI:1]
+    localparam int BT   = 8;                    // tag bits: pc[BI+BT:BI+1]
     localparam int BTBN = 1 << BI;
+    // A partial tag: a false hit is a prediction A finds wrong and refetches
+    // after, as one on code another process has at the same address; the
+    // full one's compare was on the slowest path, into the BTB's own address.
     typedef struct packed {
-        logic [30-BI:0] tag;                    // pc[31:BI+1]
+        logic [BT-1:0] tag;                     // pc[BI+BT:BI+1]
         logic [31:0] tgt;                       // {address[31:1], Thumb}
         logic  [1:0] kind;                      // BK_*
     } btbe_t;
@@ -212,7 +218,7 @@ module arm_cpu
     logic [31:0] f1_seq, f1_pnext, f1_pc_n;
     logic        f1_thumb_n, f1_tagm, f1_hit, any_redirect;
     assign f1_seq   = f1_pc + (f1_thumb ? 32'd2 : 32'd4);
-    assign f1_tagm  = bq.tag == f1_pc[31:BI+1];
+    assign f1_tagm  = bq.tag == f1_pc[BI+BT:BI+1];
     assign f1_hit   = f1_tagm && bc[1];
     assign f1_pnext = bq.kind == BK_RET ? ras[ras_sp - 3'd1] : bq.tgt;
     assign any_redirect = w_redirect || m_redirect || a_redirect || d_redirect;
@@ -231,10 +237,6 @@ module arm_cpu
                 f1_pc_n = {f1_pnext[31:1], 1'b0}; f1_thumb_n = f1_pnext[0];
             end else f1_pc_n = f1_seq;
         end
-    end
-    always_ff @(posedge clk) begin
-        bq <= btb_e[f1_pc_n[BI:1]];
-        bc <= btb_c[f1_pc_n[BI:1]];
     end
 
     // ============================================================ D1
@@ -951,6 +953,7 @@ module arm_cpu
             a_target = a_u.pc + (a_u.thumb ? 32'd2 : 32'd4);
             a_tthumb = a_u.thumb;
         end
+        a_red_ask  = a_redirect;
         a_redirect = a_redirect && a_commit;
     end
 
@@ -1157,6 +1160,31 @@ module arm_cpu
         m_target    = m_dabt_take ? 32'h0000_0010 : m_tgt;
     end
 
+    // The BTB is read with f1_pc_n's index (F1 above), but from the
+    // redirects as they are asked for, not as they commit: whether M holds
+    // (dc_ok, through m_hold and a_commit) and a data abort are the latest
+    // signals in the CPU, and they were on the slowest path, into the BTB's
+    // own address.  A redirect asked for that waits, or never comes, has F1
+    // fetch meanwhile what is younger than it, which is killed, or which
+    // carries a prediction checked as any other is.
+    logic [BI:1] f1_bi;
+    always_comb begin
+        if (rst)                                  f1_bi = '0;
+        else if (w_redirect)                      f1_bi = w_target[BI:1];
+        else if (m_valid && m_red)                f1_bi = m_tgt[BI:1];
+        else if (a_red_ask)                       f1_bi = a_target[BI:1];
+        else if (d2_valid && !d2_red_done && (d2_ub || d2_bls) && !d2_ptaken)
+                                                  f1_bi = d_target[BI:1];
+        else if (f2_miss)                         f1_bi = f2_pc[BI:1];
+        else if (f1_go && f1_hit)                 f1_bi = f1_pnext[BI:1];
+        else if (f1_go)                           f1_bi = f1_seq[BI:1];
+        else                                      f1_bi = f1_pc[BI:1];
+    end
+    always_ff @(posedge clk) begin
+        bq <= btb_e[f1_bi];
+        bc <= btb_c[f1_bi];
+    end
+
     always_ff @(posedge clk) begin
         if (rst) begin
             m_valid <= 1'b0; m_exec <= 1'b0; m_mem <= 1'b0; m_u <= '0;
@@ -1227,7 +1255,7 @@ module arm_cpu
     logic [1:0] bw_ctr, bwq_ctr;
     logic [BI-1:0] bwq_i;
     always_comb begin
-        bw_d.tag  = a_u.pc[31:BI+1];
+        bw_d.tag  = a_u.pc[BI+BT:BI+1];
         bw_d.kind = a_u.br_call ? BK_CALL : a_u.br_ret ? BK_RET : BK_PLAIN;
         if (a_u.kind == K_BX)  bw_d.tgt = {a_target[31:1], eb[0]};
         else if (a_u.ra_rd)    bw_d.tgt = {a_mtarget[31:1], 1'b1};
