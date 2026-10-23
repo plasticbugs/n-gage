@@ -381,6 +381,36 @@ first 15 s, Bomberman's and Super Monkey Ball's first 15 s; the memory gate
 (`sim/run_mem.sh`) with each word checked as it is counted and 2,000 fills
 with write-backs, at every read pace.
 
+**The crossing, a clock shorter each way** (from the build after 0.3.1,
+`rtl/ngvm_xbus.sv`).
+
+- **The memory acts on a request in the clock it sees it.** `m_req`,
+  `m_cmd`, `m_addr` and `m_waddr` come straight from the CPU side's fields
+  in the clock of the take, and from registers after it. `ngage_mem`'s
+  burst arbiter gives the port to the CPU in that clock (`sd_want`), not
+  the next. `m_be` and `m_wdata` are read only from their registers, a
+  clock later.
+- **The CPU sees the answer, and each counted word, a clock sooner.**
+  `bus_done` and `bus_cnt` are decoded from the second synchroniser flop,
+  not taken from a register behind it.
+- **Why the fields may be used at once.** They are set at least a CPU clock
+  before the request toggle flips, and the toggle takes two memory clocks
+  to cross. So when the memory uses them in the clock of the take, they
+  have long settled. Only what the memory does with them in that clock is
+  new.
+- **Measured.** Virtua Cop's first 1,501 frames on `sim/run_system.sh`,
+  with the CPU and D-cache of build G (section 5.4), with the trims (H)
+  against without (G):
+
+  | | H | G |
+  |---|---|---|
+  | CPU clocks a bus request | 32.7 | 35.4 |
+  | instructions retired | 1,259.7 M (+1.1%) | 1,246.0 M |
+  | frames shown | 848 (+4.4%) | 812 |
+
+  No memory protocol error. The memory gate passes at every read and
+  write pace.
+
 ### 4.5 Gameplay, measured
 
 The traces of section 4.1 were taken in menus. Gameplay traces show
@@ -817,6 +847,9 @@ failing paths, which were then grouped by their end registers.
 | D | C with a burst's WRITEs one a clock (section 3) and a 16-bit tag: 72% | +0.425 / +0.260 ns | nothing, holds +0.123 the least; the least setup, the D-cache's `r_va` and tag RAM → A's `a_op2`, and the instruction buffer → `d2_ub` |
 | F | D with the multiplier's first stage at the edge into A (section 5.3): 74% | +0.463 / +0.607 ns | nothing, holds +0.124 the least; no path into the multiplier among the worst; the least, the walk's dirty bits → the tag RAM's write data, and S's match tag `s_ta.m_wa` → M's target and the BTB's write queue |
 | G | F with the D-cache at 64 KB, its dirty bits in two block RAMs, and the BTB's `bmis` (section 5.6): 63%, 276 RAM blocks | +0.222 / +0.061 ns | nothing, holds +0.125 the least; the least setup, the tag RAM's write enable → the data RAM's, and the D-cache's `r_va` and D2 → S's uop |
+| H | G with the crossing a clock shorter each way (section 4.4): 63% | −0.189 / −0.276 ns | A's `a_lb`, and a register Quartus retimed out of A's operand path, → CPSR's flags; the D-cache's `r_va` → D2 |
+| H, seed 2 | the same RTL with seed 2 | −1.966 / −1.700 ns | the D-cache's `r_va` → its region → the data RAMs' write enables |
+| I | H with the D-cache's hit kept apart from the region (below): 63%, 276 RAM blocks | +0.512 / +0.565 ns | nothing, holds +0.121 the least; the least setup, the D-cache's state → the BTB's read address, and the tag RAM or `r_va` → D2 |
 | E | D with the D-cache at 64 KB, dirty bits flops: 84%, 274 of 308 RAM blocks | −0.497 / −0.648 ns; `core_pll` −0.391 | everywhere: D2 → S's uop, the SDRAM's `dram_dq` → `dq_in`, the D-cache → its data RAM's write enable, A → CPSR, the dirty bits → `dsome` |
 
 - **Z without the carry.** `x + y + ci` is zero exactly when
@@ -858,6 +891,26 @@ failing paths, which were then grouped by their end registers.
   over what the read returns. G uses 2,036 fewer ALMs than F, though its
   D-cache is twice the size. That is what the 1,024 dirty flops of 32 KB
   cost, with their write decoders and 512-to-1 muxes.
+- **H to I, the region kept apart from the hit.**
+  - **What failed.** H's two seeds failed in different places, 1.8 ns
+    apart. The decode of the region from the D-cache's `r_va` was on
+    seed 2's list and on G's, both into `dc_ok` and into the data RAMs'
+    write enables.
+  - **Why the region is not needed.** A hit is always in a cached
+    region:
+    - the tag is all of `va[31:13]`;
+    - a line is filled only for a cached address;
+    - every cached region's bounds are whole megabytes (`region_of`).
+  - **The one exception.** A store that hits a ROM line must still
+    abort. It is recognised from `0x5xxxxxxx` alone, since nothing else
+    there is cached.
+  - **Equivalence.** From both checkpoints, in lockstep with Unicorn,
+    the CPU retired the same 65,108,822 and 95,742,586 instructions as
+    d16, in the same cycles, with the same bus traffic. On
+    `sim/run_system.sh`, I ran Virtua Cop's first 1,501 frames to the same
+    1,259,730,521 instructions and 848 frames as H.
+  - **A first attempt cost more.** It registered the region a cycle
+    ahead and cost 0.6% on Tony Hawk.
 
 ### 5.5 Where the cycles go, measured
 

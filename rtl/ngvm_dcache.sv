@@ -251,7 +251,15 @@ module ngvm_dcache
     wire  is_fl   = is_io && r_we && r_va[11:2] == IO_CACHE_FLUSH;
     wire  is_unc  = r_rg == RG_PHYS || r_rg == RG_DRIVE;
     wire  is_c    = !r_abt && !is_io && !is_unc;
-    wire  st_hit  = cmp && is_c && hit && r_we;
+    // A hit is only ever in a cached region: the tag is all of va[31:13], and
+    // a line is only filled for a cached address.  So a hit's answer and a
+    // store hit's writes do not wait on the region, whose decode from r_va
+    // was the slowest way into dc_ok and into the RAMs' write enables; only
+    // a store to ROM, which aborts, is kept out by the 0x5xxxxxxx it lies in
+    // (nothing else there is cached).
+    wire  r_rom5  = r_va[31:28] == 4'h5;
+    wire  hit_ok  = hit && !(r_we && r_rom5);
+    wire  st_hit  = cmp && hit_ok && r_we;
 
     // the line coming in (S_FILL)
     logic [TAGW-1:0] mtag;              // its tag
@@ -270,8 +278,10 @@ module ngvm_dcache
     wire         fend  = st == S_FILL && (fdone || m_done) && wk == 4'd8;
     wire         fline = r_tag == mtag && r_set == mset;
     wire         fhit  = st == S_FILL && fline && have_s[r_va[4:2]];
-    wire         fcmp  = st == S_FILL && fresh && r_v && is_c && !r_we;
-    wire         fst   = st == S_FILL && fresh && r_v && is_c && r_we && !fw && !fend;
+    // S_FILL's compares do without the region likewise: a hit, or the line
+    // coming in, is cached
+    wire         fcmp  = st == S_FILL && fresh && r_v && !r_we;
+    wire         fst   = st == S_FILL && fresh && r_v && r_we && !r_rom5 && !fw && !fend;
     wire         fst_l = fst && !hit && fline && xok;   // a store into the line coming in
     wire         fst_ok = fst && (hit || (fline && xok));
     wire         r_v_n = dc_req || (r_v && !dc_ok);         // r_v after this edge
@@ -312,10 +322,10 @@ module ngvm_dcache
         if (st == S_DONE) begin
             dc_ok = 1'b1; dc_abort = u_flt;
         end else if (cmp) begin
-            if (r_abt)                    ;                         // from S_DONE
-            else if (is_io)               dc_ok = r_we && !is_fl;   // a read: from u_q, in S_DONE
-            else if (is_c)                dc_ok = hit;
-            else                          dc_ok = unc_now;
+            // a hit; a device's store (a read answers from u_q, in S_DONE); an
+            // uncached store the buffer takes.  The regions exclude each other
+            // and r_abt, which completes from S_DONE.
+            dc_ok = hit_ok || (is_io && r_we && !is_fl) || (is_unc && unc_now);
         end else if (fcmp)                dc_ok = hit || fhit;
         else if (fst)                     dc_ok = fst_ok;
     end
@@ -416,7 +426,7 @@ module ngvm_dcache
             default:        dr_a = rd_a[SB+2:3];
         endcase
         // a fill's last word makes the other way next; else a hit, its way
-        lw_en = fend || (cmp || fcmp || fst) && is_c && hit;
+        lw_en = fend || (cmp || fcmp || fst) && hit_ok;
         lw_a  = fend ? mset : r_set;
         lw_d  = fend ? !mway : hit0;
     end

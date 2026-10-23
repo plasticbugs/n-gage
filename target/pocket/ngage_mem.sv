@@ -213,11 +213,14 @@ module ngage_mem (
     logic [25:1] b_addr;
 
     wire lcd_want = l_req && !l_done;
+    // the CPU's request wants the port from the clock it is taken, sd_wr and
+    // sd_two being set at the same edge as bown
+    wire sd_want  = sd_req || (m_new && !m_cram);
     always_ff @(posedge clk) begin
         if (init) begin bown <= B_IDLE; last_lcd <= 1'b0; end
         else case (bown)
-            B_IDLE: if (lcd_want && !sd_post && (!sd_req || !last_lcd)) begin bown <= B_LCD; last_lcd <= 1'b1; end
-                    else if (sd_req) begin bown <= B_CPU; last_lcd <= 1'b0; end
+            B_IDLE: if (lcd_want && !sd_post && (!sd_want || !last_lcd)) begin bown <= B_LCD; last_lcd <= 1'b1; end
+                    else if (sd_want) begin bown <= B_CPU; last_lcd <= 1'b0; end
             B_LCD, B_CPU: if (b_done) bown <= B_GAP;
             default: bown <= B_IDLE;     // the controller wants b_req low for a clock
         endcase
