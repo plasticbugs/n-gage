@@ -95,6 +95,7 @@ struct thread {
     u32  flags;               /* system/protected                           */
     u32  exc_handler, exc_mask;
     u64  cpu_time;
+    int  in_rdy;              /* in sched.c's set of threads that may be ready */
 };
 
 /* ---- processes ---------------------------------------------------------- */

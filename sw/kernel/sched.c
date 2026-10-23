@@ -18,6 +18,14 @@ static struct process *mapped_proc;     /* whose data window is mapped     */
 static u32 run_stamp;
 static int slice_expired;
 static int need_resched = 1;             /* a thread may now outrank cur    */
+/* The threads woken since the last choice, when that is all that changed:
+ * then only they can outrank cur, and schedule() need not look at every
+ * ready thread.  WOKEN_ALL says anything else changed (a resume, a
+ * priority), or more woke than fit. */
+#define WOKEN_MAX 4
+#define WOKEN_ALL (WOKEN_MAX + 1)
+static struct thread *woken[WOKEN_MAX];
+static int nwoken = WOKEN_ALL;
 static u64 slice_end;
 static struct ktimer *tq;                /* sorted by expiry                */
 
@@ -62,17 +70,38 @@ static int effective_prio(struct thread *t)
     return t->proc->prio + r;
 }
 
-void thread_reprioritise(struct thread *t) { t->prio = effective_prio(t); need_resched = 1; }
-
-/* One resume: the thread runs when its count reaches zero. */
-void thread_resume(struct thread *t)
-{
-    if (t->suspend_count > 0 && --t->suspend_count == 0) need_resched = 1;
-}
+void thread_reprioritise(struct thread *t) { t->prio = effective_prio(t); need_resched = 1; nwoken = WOKEN_ALL; }
 
 static int runnable(struct thread *t)
 {
     return t->state == T_READY && t->suspend_count == 0;
+}
+
+/* The threads that may be ready.  Every ready thread but the idle one is in
+ * it, so a choice looks at these and not at every thread object (the dead
+ * ones included, two cache misses each).  A thread goes in when it is woken
+ * or resumed, the only ways one becomes ready, and comes out when a choice
+ * finds it is not.  rdy_all says more were ready than fit, and the next
+ * choice rebuilds it from every thread. */
+#define RDY_MAX 64
+static struct thread *rdy[RDY_MAX];
+static int nrdy, rdy_all;
+
+static void rdy_add(struct thread *t)
+{
+    if (t->in_rdy || t == idle_thread) return;
+    if (nrdy == RDY_MAX) { rdy_all = 1; return; }
+    t->in_rdy = 1;
+    rdy[nrdy++] = t;
+}
+
+/* One resume: the thread runs when its count reaches zero. */
+void thread_resume(struct thread *t)
+{
+    if (t->suspend_count > 0 && --t->suspend_count == 0) {
+        need_resched = 1; nwoken = WOKEN_ALL;
+        rdy_add(t);
+    }
 }
 
 static void program_timer(void)
@@ -96,18 +125,27 @@ void sched_wake(struct thread *t)
     t->state = T_READY;
     t->wait_obj = 0;
     need_resched = 1;
+    rdy_add(t);
+    if (nwoken < WOKEN_MAX) woken[nwoken++] = t;
+    else nwoken = WOKEN_ALL;
 }
 
 void sched_block(struct thread *t, enum tstate st) { t->state = st; }
 
-void schedule(void)
+/* Whether t is chosen before b: the higher priority, then the one that has
+ * waited longest, then the newer object -- the one a walk of every thread
+ * (newest first, obj_new) meets first. */
+static int before(struct thread *t, struct thread *b)
 {
-    /* Nothing has woken, resumed or changed priority since the last choice,
-     * and cur can still run: it stays.  Most execs end here, and the scan
-     * below walks every thread object, the dead ones included. */
-    if (!need_resched && !slice_expired && cur && (cur == idle_thread || runnable(cur)))
-        return;
-    need_resched = 0;
+    if (t->prio != b->prio) return t->prio > b->prio;
+    s32 d = (s32)(t->run_stamp - b->run_stamp);
+    return d < 0 || (d == 0 && t->o.seq > b->o.seq);
+}
+
+/* The best of every thread object: the choice before the ready set, and the
+ * fallback when too many are ready for it. */
+static struct thread *walk_all(void)
+{
     struct thread *best = 0;
     for (struct kobj *o = obj_first(O_THREAD); o; o = o->next) {
         struct thread *t = (struct thread *)o;
@@ -116,11 +154,69 @@ void schedule(void)
             (t->prio == best->prio && (s32)(t->run_stamp - best->run_stamp) < 0))
             best = t;
     }
-    /* the running thread keeps its slice against equals */
+    return best;
+}
+
+/* The highest ready thread, of those the longest waiting; the running
+ * thread keeps its slice against equals. */
+static struct thread *walk_best(void)
+{
+    struct thread *best = 0;
+    if (rdy_all) {
+        for (int i = 0; i < nrdy; i++) rdy[i]->in_rdy = 0;
+        nrdy = 0; rdy_all = 0;
+        for (struct kobj *o = obj_first(O_THREAD); o; o = o->next)
+            if (runnable((struct thread *)o)) rdy_add((struct thread *)o);
+    }
+    if (rdy_all) best = walk_all();
+    else for (int i = 0; i < nrdy; ) {
+        struct thread *t = rdy[i];
+        if (!runnable(t)) { t->in_rdy = 0; rdy[i] = rdy[--nrdy]; continue; }
+        if (!best || before(t, best)) best = t;
+        i++;
+    }
+#ifdef SCHED_CHECK
+    struct thread *w = walk_all();
+    if (w != best) kprintf("[sched] check: the ready set chose %p, the walk %p\n", best, w);
+#endif
     if (best && cur && cur != best && runnable(cur) && cur != idle_thread &&
         cur->prio == best->prio && !slice_expired)
         best = cur;
+    return best;
+}
+
+void schedule(void)
+{
+    /* Nothing has woken, resumed or changed priority since the last choice,
+     * and cur can still run: it stays.  Most execs end here. */
+    if (!need_resched && !slice_expired && cur && (cur == idle_thread || runnable(cur)))
+        return;
+    need_resched = 0;
     u64 now = now_us();
+    struct thread *best;
+    /* Only wakes since the last choice, which left no ready thread above
+     * cur, and cur can go on: a woken thread above cur runs, else cur keeps
+     * its slice -- what the walk would choose.  A kernel built with
+     * SCHED_CHECK walks as well and says when the two differ, as it does
+     * for the ready set against every thread. */
+    if (nwoken <= WOKEN_MAX && cur && cur != idle_thread && runnable(cur) && !slice_expired &&
+        !lent && now - last_spare < LEND_EVERY_US) {
+        best = cur;
+        for (int i = 0; i < nwoken; i++) {
+            struct thread *t = woken[i];
+            if (!runnable(t) || t == idle_thread || t == best || t->prio < best->prio) continue;
+            if (t->prio > best->prio || (best != cur && (s32)(t->run_stamp - best->run_stamp) < 0))
+                best = t;
+        }
+#ifdef SCHED_CHECK
+        struct thread *w = walk_best();
+        if (w != best) kprintf("[sched] check: the woken chose %p, the walk %p\n", best, w);
+#endif
+        nwoken = 0;
+        goto chosen;
+    }
+    nwoken = 0;
+    best = walk_best();
     if (cur == idle_thread) last_spare = now;
     if (lent) {                         /* a lent slice runs out, or its thread waits */
         if (lent == cur && runnable(cur) && !slice_expired) best = cur;
@@ -150,6 +246,7 @@ void schedule(void)
     }
     if (!best) best = idle_thread;
     if (best == idle_thread) last_spare = now;
+chosen:
     if (best != cur || slice_expired) {
         slice_expired = 0;
         slice_end = now + (best == lent ? LEND_US : SLICE_US);

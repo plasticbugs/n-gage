@@ -111,7 +111,7 @@ void kmain(void)
      * up, and starts a second copy (PhoneServer panics PhSrvFault 2). */
     p->prio = 750;
     thread_reprioritise(p->main);
-    p->main->suspend_count = 0;
+    thread_resume(p->main);
     kprintf("EFile: entry %p data %p+%x bss %x\n", img->entry, img->data_bss_base, img->data_size, img->bss_size);
 
     sched_init();
