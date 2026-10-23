@@ -71,6 +71,14 @@ the core's README when it ships with the adapter enabled.
   runs the owner's own copy and contains none of it; `sw/kernel` is written
   from the public SDKs' interfaces and from watching the firmware run
   (`docs/eka1_exec.md`).
+- **The on-screen keypad** (`rtl/ngage_osk.sv`, `tools/make_osk_panel.py`,
+  `sim/run_osk.sh`) follows the on-screen keyboard of this author's BBC
+  Micro core (`rtl/bbc_osk.sv`, `tools/make_osk_panel.py` and
+  `sim/run_osk.sh` there): a panel bitmap and key map from a generator,
+  loaded into block RAM from one `.mif`/`.hex` pair, and a bench that checks
+  every pixel and every press against them. Its L + R + Select chord, and
+  the MSX2 core's (`rtl/osk_overlay.v`), are where SELECT + R came from.
+  The RTL and the glyphs are this core's own.
 
 ## When you add to this
 

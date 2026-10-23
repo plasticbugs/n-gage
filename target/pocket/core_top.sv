@@ -879,12 +879,16 @@ module core_top
 
     //! Controls, as the kernel reads them (IO_KEYS, sw/include/ngvm_hw.h):
     //! bit 0 up, 1 down, 2 left, 3 right, 4 A, 5 B, 6 X, 7 Y, 8 L, 9 R,
-    //! 10 select, 11 start; 1 = pressed.  The kernel maps them to the
-    //! phone's keys (docs/hardware.md).
-    wire [11:0] g_keys = {p1_start, p1_select, p1_btn_r1, p1_btn_l1,
-                          p1_btn_y, p1_btn_x, p1_btn_b, p1_btn_a,
-                          p1_right | j1_right, p1_left | j1_left,
-                          p1_down  | j1_down,  p1_up   | j1_up};
+    //! 10 select, 11 start, and 12-26 the on-screen keypad's phone keys;
+    //! 1 = pressed.  The pad reaches IO_KEYS through the keypad
+    //! (rtl/ngage_osk.sv, below the machine), which has it while it is up
+    //! and keeps its SELECT + R chord from the machine.  The kernel maps
+    //! them to the phone's keys (docs/hardware.md).
+    wire [11:0] g_pad = {p1_start, p1_select, p1_btn_r1, p1_btn_l1,
+                         p1_btn_y, p1_btn_x, p1_btn_b, p1_btn_a,
+                         p1_right | j1_right, p1_left | j1_left,
+                         p1_down  | j1_down,  p1_up   | j1_up};
+    wire [26:0] g_keys;
 
     //! The phone key each of A, B, X, Y, L and R presses (IO_KEYMAP,
     //! sw/include/ngvm_hw.h): six sliders of interact.json, a word each at
@@ -1019,6 +1023,29 @@ module core_top
     assign video_preset = (aspect_sel == 2'd1) ? 3'd1 : 3'd0;
 
     //! ------------------------------------------------------------------
+    //! The on-screen keypad (rtl/ngage_osk.sv; README, "On-screen keypad"),
+    //! after the BBC Micro core's keyboard.  SELECT + R shows a phone's keys
+    //! over the picture -- the soft keys, C, 1-9, *, 0, # -- and dismisses
+    //! them; the d-pad moves over them, A or B presses one (IO_KEYS bits
+    //! 12-26), Y moves the keypad to the other end of the screen.  While it
+    //! is up it has the pad: bits 0-11 read 0.  SELECT and R reach the
+    //! machine four frames late, so the chord never does.  sim/run_osk.sh
+    //! checks every panel pixel against tools/make_osk_panel.py, every key
+    //! it presses, and that nothing that drives it reaches IO_KEYS.
+    //! Its colour for a dot is registered on the cen_pix that registers the
+    //! LCD's, so the mux below sees the two together.
+    //! ------------------------------------------------------------------
+    wire osk_visible, osk_active, osk_pix, osk_held;
+    ngage_osk u_osk (
+        .clk(clk_sys), .rst(g_reset), .cen_pix(g_pix_ce), .de(g_de), .vsync(g_vs),
+        .pad(g_pad), .keys(g_keys),
+        .visible(osk_visible), .active(osk_active), .pix(osk_pix), .held(osk_held)
+    );
+    //! white keys on black, the key being pressed amber
+    wire [23:0] osk_rgb = !osk_pix ? 24'h000000 : osk_held ? 24'hFFC000 : 24'hFFFFFF;
+    wire [23:0] pic_rgb = osk_active ? osk_rgb : g_rgb;
+
+    //! ------------------------------------------------------------------
     //! The bring-up panel (rtl/dbg_overlay.sv, METHODOLOGY section 5.21), on
     //! the modifier word's bit 3.  Four rows of 32 squares on the bottom
     //! sixteen lines, green = 1, bit 31 of each row leftmost.  The raster
@@ -1057,7 +1084,7 @@ module core_top
     wire [7:0] ovl_r, ovl_g, ovl_b;
     dbg_overlay #(.SQW(5)) ovl (
         .clk(clk_sys), .cen_pix(g_pix_ce), .enable(ovl_en), .de(g_de), .vsync(g_vs),
-        .r_in(g_rgb[23:16]), .g_in(g_rgb[15:8]), .b_in(g_rgb[7:0]),
+        .r_in(pic_rgb[23:16]), .g_in(pic_rgb[15:8]), .b_in(pic_rgb[7:0]),
         .status(ovl_status), .r_out(ovl_r), .g_out(ovl_g), .b_out(ovl_b)
     );
 

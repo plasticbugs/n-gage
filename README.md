@@ -26,6 +26,7 @@ drivers.
 | memory card | Pocket CRAM (`target/pocket/cram_ctrl.sv`) | the same, with the chip's timing checked cycle by cycle (`sim/cram_model.sv`) |
 | LCD | `rtl/ngvm_lcd.sv`: the framebuffer copied to block RAM when the firmware updates the display | pixel-identical to the reference on the boot screens (`sim/run_system.sh`, 0 of 36,608 differ), and still: three consecutive frames identical |
 | audio | the FIFO in `rtl/ngvm_io.sv`, 1,024 samples (32–64 ms) at the game's rate | sample-for-sample the reference over 9.2 s of Virtua Cop's music, at the FIFO's output (`sim/run_system.sh --wav`) |
+| on-screen keypad | `rtl/ngage_osk.sv`, drawn by `tools/make_osk_panel.py` | every panel pixel matches the generator, each key presses its own bit, and nothing that drives it reaches the game (`sim/run_osk.sh`) |
 
 ## Status
 
@@ -60,9 +61,9 @@ What is not implemented:
 
 - Pausing: the game runs on behind the Pocket's menu.
 - Saving, sleep, the link port.
-- The phone's whole keypad at once. The Pocket's buttons map to the keys
-  the games use (below), and the menu can move A, B, X, Y, L and R to
-  any digit key.
+- The phone's green, red, menu and pen keys. The on-screen keypad (below)
+  leaves them out: the red and menu keys would take the phone out of the
+  game, and the green and pen keys are for calls and for editing text.
 
 ## Controls
 
@@ -74,11 +75,45 @@ What is not implemented:
 | Y | 9 |
 | L, R | left and right soft keys |
 | select | # |
+| **SELECT + R** | the on-screen keypad, and dismiss it |
 
 The core's menu has a slider for each of A, B, X, Y, L and R. At 0 to 9
 the button is that digit key of the phone; at 10 it is as in the table.
 They start at 5, 7, 10, 9, 10 and 10, the table's own keys. A game that
 asks for, say, 2 to pause or 0 for its map can then have it on a button.
+
+### On-screen keypad
+
+For everything the buttons do not reach, press **SELECT and R together**:
+the phone's keypad comes up over the bottom of the picture, and the same
+chord puts it away.
+
+```
+[ soft ] [ C ] [ soft ]
+[  1  ]  [ 2 ]  [  3  ]
+[  4  ]  [ 5 ]  [  6  ]
+[  7  ]  [ 8 ]  [  9  ]
+[  *  ]  [ 0 ]  [  #  ]
+```
+
+- **D-pad** moves the highlight a key at a time; it wraps at the edges,
+  and holding a direction repeats.
+- **A or B** presses the highlighted key. It is down for as long as the
+  button is, so a long press works, and for at least four frames, so a
+  quick tap always reaches the game. Tapping twice types twice, as on the
+  phone's own keys. The key turns amber while it is down.
+- **Y** moves the keypad to the top of the screen and back, to see what it
+  covers (a phone's dialogs open at the bottom).
+- The two keys with a bar are the left and right **soft keys**; what they
+  do is written at the bottom corners of the game's screen. **C** is the
+  clear key.
+- The keypad opens where it was left, on 5 the first time.
+
+While the keypad is up, all the buttons belong to it: the game sees only
+the keys it presses. So that the chord itself never reaches the game,
+SELECT and R on their own reach it four frames (67 ms) late; pressed
+within 50 ms of each other, they are the chord, and the game sees
+neither.
 
 ## Analogizer
 
@@ -149,6 +184,7 @@ sim/run_mem.sh         # the Pocket's memories: every byte in at the loader's ra
 sim/run_system.sh --rom SYM.ROM --drive game.img --frames 600 --snap 600
                        # the whole machine on the real memory glue, frames to artifacts/system/
 sim/run_analogizer.sh  # the Analogizer path, read at the cartridge pins
+sim/run_osk.sh         # the on-screen keypad against its generator, pictures to artifacts/osk/
 tools/ngvm/ngvm.py --rom SYM.ROM --drive game.img --frames-to DIR
                        # the reference machine, for frames and sound to compare with
 ```

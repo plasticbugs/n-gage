@@ -21,6 +21,10 @@ someone decodes squares off a screen.
   difference between the two images — as retention that fades, and with
   enough hours as wear that does not. Do not flash until it passes
   (METHODOLOGY 5.23).
+- `sim/run_osk.sh`: the on-screen keypad draws every pixel as
+  `tools/make_osk_panel.py` drew it, each key presses its own `IO_KEYS`
+  bit, and neither the pad that drives it nor SELECT + R reaches the
+  machine.
 - `tools/check_json.py pkg/pocket --active 176x208` clean.
 - `./build-local.sh compile`: no negative slack in any corner
   (`projects/output_files/*.sta.summary`), no ignored constraints.
@@ -102,6 +106,29 @@ build's first kernel, the Nokia logo stayed on screen for the rest of the
 run (56 s) instead, and the bench printed
 `PANIC ... PhoneServer: PhSrvFault 2` at 15.4 s
 (`docs/hardware.md`, open questions).
+
+## The on-screen keypad
+
+On any screen, press SELECT and R together. Within a frame:
+
+- a keypad 72 × 80 dots, white keys on black, over the bottom of the
+  picture and centred: two bars and C on top, then 1 2 3, 4 5 6, 7 8 9,
+  * 0 #, with 5 filled white (the highlight);
+- the d-pad moves the fill a key at a time and wraps; A or B on a key
+  turns it amber for as long as the button is held, and at least a
+  fifteenth of a second;
+- Y puts the keypad at the top of the picture, and Y again back;
+- SELECT and R together again: it is gone. In a menu whose right soft key
+  is "Back" or "Exit", showing and hiding the keypad must not leave the
+  menu: if it does, the chord reached the game.
+
+What proves it wrong:
+
+| reading | look at |
+|---|---|
+| nothing appears | the chord: do SELECT and R reach the core? Alone, in a game where # or the right soft key does something, each should act, a fifteenth of a second late |
+| a black box with no keys in it | the panel's block RAM was built empty: Quartus did not find `osk/ngage_osk_panel.mif` (the map report warns of it) |
+| keys drawn, presses do nothing | `IO_KEYS` bits 12-26 and the kernel (`ngvm.bin` must be this build's: an older kernel ignores them) |
 
 ## The panel
 

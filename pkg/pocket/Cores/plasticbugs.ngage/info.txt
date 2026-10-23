@@ -13,6 +13,9 @@ cards: see Assets/ngage/common/README.txt
 * X        OK, Y key 9
 * L / R    the soft keys
 * Select   #, Start OK
+* Select+R the on-screen keypad: 0-9,
+           * #, C, the soft keys. D-pad
+           moves, A presses, Y moves it
 
 Analogizer: CRT video and SNAC pads,
 set in this core's menu (Analogizer:

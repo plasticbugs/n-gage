@@ -18,7 +18,13 @@ a design target until a bench or the hardware measures it.
           |         +-----------+---- LCD frame store --> video out       |
           |                     +---- audio FIFO   --> 48 kHz I2S         |
           +---------------------------------------------------------------+
+ pad -----> on-screen keypad --> IO_KEYS          LCD --> keypad --> panel --> video out
 ```
+
+The on-screen keypad (`rtl/ngage_osk.sv`, in `core_top`) sits on both
+sides of the machine: the pad reaches `IO_KEYS` through it, and its panel
+goes over the LCD's picture before the bring-up panel does (section 2,
+"Raster").
 
 The CPU is our own: `rtl/cpu/` (section 5). Its caches use virtual tags
 and keep each line's physical page, so the page table is read only on a
@@ -57,6 +63,31 @@ bench need no converter:
 - Hsync is on dots 300–331. Vsync is on lines 235–237.
 - The LCD's frame pulse (NGVM's vblank) comes at line 232. It sets
   `IRQ_VBLANK`.
+
+**After the LCD**, in `core_top`, all in `clk_sys` and each registered
+on the dot enable:
+
+1. **The on-screen keypad** (`rtl/ngage_osk.sv`), when SELECT + R has
+   shown it: 72 × 80 pixels from a 1 KB block RAM that
+   `tools/make_osk_panel.py` writes (`rtl/osk/`), at dots 52–123 of
+   visible lines 124–203, or 4–83 when Y has moved it up. It counts its
+   place from the LCD's `de` and `vsync`, looks up the next dot's pixel
+   during the current one, and registers it on the dot enable that
+   registers the LCD's colour for that dot, so the mux sees the two
+   together and both are launched where the SDC's video multicycle
+   expects. `sim/run_osk.sh` checks every pixel against the generator.
+2. **The bring-up panel** (`rtl/dbg_overlay.sv`), on the bottom sixteen
+   lines.
+3. The hand-over to `clk_vid`, and the Analogizer, which both take the
+   picture with the keypad and the panel on it.
+
+**Input.** The pad (`key1`, so SNAC pads too) goes to the keypad, which
+gives `IO_KEYS`, registered: the pad as it is in bits 0-11 while the
+keypad is down, nothing of it while the keypad is up, and the keypad's
+own keys in bits 12-26 (`docs/hardware.md`, "Keys"). SELECT and R are
+held back four frames so that the chord can be told from either alone
+before either reaches the machine. `ngage_core` takes `IO_KEYS` into the
+CPU's clock through two flops a bit.
 
 ## 3. Where each memory lives
 
