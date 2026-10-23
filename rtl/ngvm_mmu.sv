@@ -12,7 +12,10 @@
 // A requester holds its req until it has used the answer; the handler waits
 // for the drop before it takes the next, so the bus's read data (held until
 // the next bus request) is still there while a cache copies a line out of it.
-// The D-cache goes first when both ask.
+// The D-cache goes first when both ask.  The answer is the bus's done itself,
+// the next request is taken at the edge the last one is let go, and the
+// table is read at the edge that takes a request, so a paged address is on
+// the bus two clocks after it is taken, as a flat one is.
 //
 // A fill asks for its line at the word the cache missed on, which the bus
 // brings first, and i_words / d_words count the words of the line that are
@@ -90,7 +93,7 @@ module ngvm_mmu
     end
 
     // ------------------------------------------------------------ requests
-    typedef enum logic [2:0] { S_IDLE, S_XLATE, S_PT, S_BUS, S_RESP, S_HOLD } st_t;
+    typedef enum logic [2:0] { S_IDLE, S_XLATE, S_BUS, S_RESP, S_HOLD } st_t;
     st_t         st;
     logic        who_d, fault, wb;
     logic  [1:0] cmd;
@@ -103,7 +106,9 @@ module ngvm_mmu
     wire  d_ok_rg = cmd == MC_FILL ? cached_rg(rg) : rg == RG_PHYS || rg == RG_DRIVE;
     wire  ok_rg   = who_d ? d_ok_rg : i_ok_rg;
 
-    assign pt_ra   = pt_index_of(va);
+    // a request is taken when idle, or as the one answered is let go
+    wire  take    = ready && (st == S_IDLE || (st == S_HOLD && (who_d ? !d_req : !i_req)));
+    assign pt_ra  = pt_index_of(take ? (d_req ? d_va : i_va) : va);
     assign rline   = bus_rdata;
     // A fill's victim must be whole before the bus is asked: the memory side
     // takes the fields when it takes the request (ngvm_xbus.sv), and the
@@ -123,13 +128,14 @@ module ngvm_mmu
     // the words in so far: the count since the request went out
     logic [3:0] wbase;
     wire        on_bus = st == S_BUS || st == S_RESP || st == S_HOLD;
-    always_ff @(posedge clk) if (!on_bus) wbase <= bus_cnt;
+    always_ff @(posedge clk) if (!on_bus || take) wbase <= bus_cnt;
     wire  [3:0] words  = on_bus ? bus_cnt - wbase : 4'd0;
     assign i_words = who_d ? 4'd0 : words;
     assign d_words = who_d ? words : 4'd0;
 
-    assign i_done    = st == S_RESP && !who_d;
-    assign d_done    = st == S_RESP &&  who_d;
+    wire   done      = st == S_RESP || (st == S_BUS && bus_done);
+    assign i_done    = done && !who_d;
+    assign d_done    = done &&  who_d;
     assign i_fault   = fault;
     assign d_fault   = fault;
     assign d_fill_pa = bus_addr;
@@ -137,7 +143,8 @@ module ngvm_mmu
 
     always_ff @(posedge clk) begin
         case (st)
-            S_IDLE: if (ready) begin
+            S_IDLE, S_HOLD: if (take) begin
+                st <= S_IDLE;
                 if (d_req) begin
                     who_d <= 1'b1; cmd <= d_cmd; va <= d_va; fault <= 1'b0;
                     wb <= d_cmd == MC_FILL && d_wb; bus_waddr <= d_pa[26:5];
@@ -151,31 +158,24 @@ module ngvm_mmu
                 end
             end
             S_XLATE: begin
-                // the table is read at this edge whether or not it is needed
-                if (!ok_rg) begin
+                // the table was read at the edge that took the request
+                if (!ok_rg || (paged_rg(rg) && pt_q == PT_NONE)) begin
                     fault <= 1'b1; st <= S_RESP;
-                end else if (paged_rg(rg)) st <= S_PT;
-                else begin
+                end else if (paged_rg(rg)) begin
+                    bus_addr <= bus_paged(pt_q, va);
+                    st <= S_BUS;
+                end else begin
                     bus_addr <= bus_flat(rg, va);
                     st <= S_BUS;
                 end
             end
-            S_PT: begin
-                if (pt_q == PT_NONE) begin
-                    fault <= 1'b1; st <= S_RESP;
-                end else begin
-                    bus_addr <= bus_paged(pt_q, va);
-                    st <= S_BUS;
-                end
-            end
-            S_BUS: if (bus_done) st <= S_RESP;
-            S_RESP: st <= S_HOLD;
-            S_HOLD: if (who_d ? !d_req : !i_req) st <= S_IDLE;
+            S_BUS: if (bus_done) st <= S_HOLD;      // answered (done)
+            S_RESP: st <= S_HOLD;                   // a fault, answered
             default: st <= S_IDLE;
         endcase
         // a fill goes out at the word missed on, a write aligned to its line,
         // a word read to its word
-        if (st == S_XLATE || st == S_PT)
+        if (st == S_XLATE)
             if (cmd == MC_URD || cmd == MC_FILL) bus_addr[1:0] <= 2'd0; else bus_addr[4:0] <= 5'd0;
         if (rst) st <= S_IDLE;
     end
