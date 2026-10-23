@@ -202,7 +202,7 @@ module ngage_mem (
     assign       m_free = !m_busy;
 
     // --------------------------------------------------------- burst port
-    typedef enum logic [1:0] { B_IDLE, B_LCD, B_CPU, B_GAP } bown_t;
+    typedef enum logic [1:0] { B_IDLE, B_LCD, B_CPU } bown_t;
     bown_t       bown;
     logic        last_lcd;              // whose turn it was last
     logic        b_wr, b_done, b_we, b_req;
@@ -221,8 +221,10 @@ module ngage_mem (
         else case (bown)
             B_IDLE: if (lcd_want && !sd_post && (!sd_want || !last_lcd)) begin bown <= B_LCD; last_lcd <= 1'b1; end
                     else if (sd_want) begin bown <= B_CPU; last_lcd <= 1'b0; end
-            B_LCD, B_CPU: if (b_done) bown <= B_GAP;
-            default: bown <= B_IDLE;     // the controller wants b_req low for a clock
+            // B_IDLE's clock, b_req low, is the one the controller wants
+            // between bursts
+            B_LCD, B_CPU: if (b_done) bown <= B_IDLE;
+            default: bown <= B_IDLE;
         endcase
     end
 

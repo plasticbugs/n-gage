@@ -29,6 +29,13 @@
 // A burst taken with b_wrap stays inside its aligned 16 words: it starts at
 // b_addr and wraps, so a cache line comes critical word first, and b_idx is
 // each word's place in the line (b_addr[4:1] first), not its order.
+//
+// Between bursts (NGVM): b_done comes a clock after the last READ's word
+// lands, or a clock after the PRECHARGE that ends a write; the last chunk then
+// waits tRP alone before the controller is idle, as every chunk before it
+// always has; and the edge that accepts a burst also decides to open its row,
+// so the ACTIVATE goes out at the next idle clock.  The commands within a
+// burst, and their spacing, are as before.
 //------------------------------------------------------------------------------
 `default_nettype none
 
@@ -110,6 +117,11 @@ module sdram_ctrl #(
     logic [TAGW-1:0] cap [0:5];
     logic [15:0] dq_in;
     wire  [TAGW-1:0] cap_now = cap[0];
+    logic            cap_burst;          // a burst READ's word is still on its way
+    always_comb begin
+        cap_burst = 1'b0;
+        for (int i = 0; i < 6; i++) cap_burst |= cap[i][TAGW-1] && cap[i][TAGW-2];
+    end
 
     // ---- state ---------------------------------------------------------------
     typedef enum logic [3:0] {
@@ -181,8 +193,13 @@ module sdram_ctrl #(
     // the live b_active at the use site so a burst that ended on the
     // previous clock can never be re-opened from a stale decision. Being one
     // clock late only delays a chunk open by a clock, at chunk boundaries.
+    // It is also set at the edge that accepts a burst (b_take, from b_req and
+    // this controller's flops), so the row opens at the next idle clock, not
+    // a clock after that.
     logic        b_start;
-    always_ff @(posedge clk) b_start <= b_active && !(b_yield && any_req_q) && !refresh_due;
+    wire         b_take = b_req && !b_active && !b_done && !b_accepted;
+    always_ff @(posedge clk)
+        b_start <= (b_take || (b_active && !(b_yield && any_req_q))) && !refresh_due;
     always_comb begin
         any_req = 1'b0; pick = 3'd0;
         for (int k = NCLI; k >= 1; k--) begin
@@ -355,18 +372,16 @@ module sdram_ctrl #(
                     command <= CMD_PRECHARGE; SDRAM_A[10] <= 1'b1;
                     state   <= S_WAIT2;
                     b_yield <= 1'b1;
-                    if (b_remain == 10'd0) begin
-                        b_active <= 1'b0;
-                        // b_done after the final capture has certainly landed
-                        state <= S_WAIT5;
-                    end
+                    // the last chunk too: tRP, then idle.  b_done follows
+                    // once its last READ's word has landed (below)
+                    if (b_remain == 10'd0) b_active <= 1'b0;
                 end
             end
             default: state <= S_IDLE;
         endcase
 
         // accept a burst request (served from the next idle slot)
-        if (b_req && !b_active && !b_done && !b_accepted) begin
+        if (b_take) begin
             b_active <= 1'b1; b_accepted <= 1'b1;
             b_is_we  <= b_we;
             b_is_wrap <= b_wrap;
@@ -378,9 +393,12 @@ module sdram_ctrl #(
         end
         if (!b_req) b_accepted <= 1'b0;
 
-        // burst completion: signalled when the controller returns to idle with
-        // nothing left to issue and the pipeline drained
-        if (state == S_WAIT1 && !b_active && b_req && !b_done && (b_issued != 10'd0 || b_aborted) && b_remain == 10'd0) begin
+        // burst completion: signalled once nothing is left to issue, the row
+        // is closing (b_active falls with the PRECHARGE) and no READ's word is
+        // still in the capture pipeline: a clock after the last b_wr.  A
+        // write's words went with its WRITEs.  The next burst may be accepted
+        // meanwhile; its ACTIVATE waits for S_IDLE, tRP after the PRECHARGE.
+        if (!b_active && b_req && !b_done && (b_issued != 10'd0 || b_aborted) && b_remain == 10'd0 && !cap_burst) begin
             b_done   <= 1'b1;
             b_issued <= '0;
             b_aborted <= 1'b0;

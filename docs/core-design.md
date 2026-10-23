@@ -171,6 +171,40 @@ kernel's hot data needs a faster home than SDRAM.
   1,225 M instructions against 1,189 M (+3.0 %), and 771 frames are shown
   against 692, with no memory protocol error. Bit 7 of `0xF2000000` goes
   back to two clocks; no menu entry sets it (docs/bringup.md).
+- **Between bursts** (from the build after 0.3.1, `sdram_ctrl.sv`,
+  `ngage_mem.sv`). Before, from a burst's last READ to the next burst's
+  first took 17 clocks, where the chip needs about 7. Three changes remove
+  the waits the controller made for itself:
+  - **Done when the data is in.** `b_done` comes a clock after the last
+    READ's word lands, or a clock after the PRECHARGE that ends a write.
+    Before, it came five WAIT states after the PRECHARGE.
+  - **tRP alone after the last chunk.** The last chunk now waits tRP, then
+    goes idle: three clocks from PRECHARGE to the next ACTIVATE, the wait
+    an LCD burst has always had between its chunks.
+  - **No gap state.** The glue's `B_GAP` is gone: `B_IDLE` gives the clock
+    with `b_req` low that the controller needs.
+  - **The row opens at once.** The edge that accepts a burst also decides
+    to open its row (`b_take`), so the ACTIVATE goes out at the next idle
+    clock.
+
+  The commands within a burst, and their spacing, are unchanged.
+  `sim/sdram_model.sv` now checks every command against the slowest grade
+  the chip might be: tRCD, tRP, tRAS, tRC, tRFC and tWR, at 96 MHz. The
+  controller before the change passes those checks in the memory gate at
+  every read and write pace. The changed one passes them there and on
+  `sim/run_system.sh`.
+
+  Virtua Cop's first 1,501 frames, against build I (section 5.4):
+
+  | | after | before |
+  |---|---|---|
+  | memory clocks a request | 28.4 | 31.8 |
+  | CPU clocks a bus request | 28.6 | 32.7 |
+  | instructions | 1,282.5 M (+1.8%) | 1,259.7 M |
+  | screen updates | 897 (+5.8%) | 848 |
+  | longest LCD copy | 71,282 clocks | 80,486 clocks |
+
+  No memory protocol or timing error.
 - **CRAM.** `target/pocket/cram_ctrl.sv`:
   - asynchronous, with the address multiplexed on DQ;
   - 12 clocks a halfword read and 10 a write, back to back, each with
@@ -850,6 +884,14 @@ failing paths, which were then grouped by their end registers.
 | H | G with the crossing a clock shorter each way (section 4.4): 63% | −0.189 / −0.276 ns | A's `a_lb`, and a register Quartus retimed out of A's operand path, → CPSR's flags; the D-cache's `r_va` → D2 |
 | H, seed 2 | the same RTL with seed 2 | −1.966 / −1.700 ns | the D-cache's `r_va` → its region → the data RAMs' write enables |
 | I | H with the D-cache's hit kept apart from the region (below): 63%, 276 RAM blocks | +0.512 / +0.565 ns | nothing, holds +0.121 the least; the least setup, the D-cache's state → the BTB's read address, and the tag RAM or `r_va` → D2 |
+| J | I at 82 MHz | −0.665 / −0.477 ns | D2's PC operand → S's uop; M's `m_exec` → the D-cache's `r_va`; a store hit's tag RAM → the data RAM's write enable |
+| J, seed 2 | the same RTL with seed 2 | −0.701 / −0.623 ns | the D-cache's tag RAM → its hit → the stall → the instruction buffer's read address |
+| K | I, 80 MHz, with the SDRAM controller's waits between bursts taken out (section 3): 64% | −0.587 / −0.788 ns | A's late operands → CPSR's Z; the return stack → F1's PC; D2 → the BTB's read address. The CPU is I's |
+| K, seed 2 | the same RTL with seed 2 | −0.283 / −0.165 ns | the D-cache's `r_va` → its hit → the stall → the instruction buffer's read address |
+| L | K with synthesis for speed, registers packed as Quartus sees fit, and register duplication on (below): 64%, 270 RAM blocks | +0.904 / +0.850 ns; `core_pll` +0.250 | nothing; the core PLL moved to the right edge, and the SDRAM's capture became `core_pll`'s worst path |
+| M | L with the instruction buffer's entries as separate registers (section 5.6), and both PLLs pinned where most fits before L had them: 67%, 268 RAM blocks | +0.662 / +0.697 ns; `core_pll` +0.130 | nothing; the SDRAM's capture is `core_pll`'s worst path, its clock from another output counter (below) |
+| N | M with the SDRAM clock's output counter and global clock pinned as I had them (below): 67%, 268 RAM blocks | +0.884 / +0.756 ns; `core_pll` +0.759 | nothing, holds +0.135 the least; the least setup, A's `a_wb_fb` and M's `m_exec` → the D-cache's `r_va`, and its `r_wd` → S |
+| O | N at 84 MHz: 66% | −0.417 / −0.457 ns | the D-cache's `r_va`, and M's LDM/STM state, → the stall → D2's `d2_nregs`, the instruction buffer's read pointer and F1's PC |
 | E | D with the D-cache at 64 KB, dirty bits flops: 84%, 274 of 308 RAM blocks | −0.497 / −0.648 ns; `core_pll` −0.391 | everywhere: D2 → S's uop, the SDRAM's `dram_dq` → `dq_in`, the D-cache → its data RAM's write enable, A → CPSR, the dirty bits → `dsome` |
 
 - **Z without the carry.** `x + y + ci` is zero exactly when
@@ -911,6 +953,56 @@ failing paths, which were then grouped by their end registers.
     1,259,730,521 instructions and 848 frames as H.
   - **A first attempt cost more.** It registered the region a cycle
     ahead and cost 0.6% on Tony Hawk.
+- **82 MHz, with the area settings (below), was not within reach of
+  seeds.** Two seeds missed by 0.5 to 0.7 ns, each on different paths: D2
+  into S, M into the D-cache, and the D-cache's hit through the stall.
+- **One fit is not the CPU's speed.** I's CPU met 80 MHz by 0.512 ns. The
+  same CPU, beside a small change to the memory controller (K), missed by
+  0.788 with one seed and by 0.283 with another. Placement alone moves the
+  CPU's slack by more than a nanosecond, so a change is judged by its
+  paths, and a build by a fit that meets timing.
+- **L, the template's area settings changed.** The project had kept the
+  template's settings for a nearly full device:
+  - synthesis for area (`OPTIMIZATION_TECHNIQUE AREA`);
+  - registers packed with their neighbours' logic ("MINIMIZE AREA WITH
+    CHAINS");
+  - no register duplication.
+
+  The device is 64% full and limited by the CPU's paths, so L, K's RTL
+  with the opposite settings, met timing by 0.904 ns: the most of any
+  build. Its ALMs did not grow, and it used 6 fewer RAM blocks.
+- **The SDRAM clock's counter pinned.** L moved `core_pll` to the right
+  edge, and its read capture fell from about +0.8 to +0.25 ns. M pinned
+  the PLL back on the left (`FRACTIONALPLL_X0_Y1`), on the guess that the
+  side was the cause, and the capture fell further, to +0.130. The side
+  was not it. The capture follows which PLL output counter drives
+  `dram_clk`, and which global clock carries it:
+
+  | `dram_clk` from | fits | capture setup, 85 °C |
+  |---|---|---|
+  | `X0_Y0` (left) | d3, d4, d5, D, F, G, H, I, J, N | +0.759 to +0.803 ns |
+  | `X54_Y3` (right) | d2, and a 73.85 MHz build | +0.796, +0.798 ns |
+  | `X54_Y0` (right) | L | +0.250 ns |
+  | `X0_Y6` (left) | E, M | −0.391, +0.130 ns |
+
+  In M, the latch side was within 0.04 ns of I's. `dram_clk` reached its
+  pin 0.63 ns later, through counter `X0_Y6_N1` and `CLKCTRL_G5`, where I
+  used `X0_Y0_N1` and `CLKCTRL_G0`. N pins that counter and that global
+  clock, with both PLLs where M put them, and the capture came back to
+  +0.759 / +0.769 ns. Its hold paths and the SDRAM outputs (+3.03 ns) are
+  I's within 0.02 ns. Pinned, the capture keeps the margin that every build
+  tested on the Pocket so far is likely to have had. The released
+  bitstreams' own fit reports were not kept, so that is not proven.
+- **Past 80 MHz is the stall.** All of O's failing paths are one chain.
+  M's stall comes from the D-cache's hit (from `r_va`) or from an LDM or
+  STM's state. It runs through the free signals of A, S and D2 into D1's
+  take, which loads every D2 register and moves the buffer's pointer. On
+  the worst path that is nine levels of logic, with two hauls of 1.6 to
+  1.8 ns from the D-cache's corner of the chip to D2's. A faster clock
+  needs that chain cut, with a skid register between D2 and S. The cost
+  is a mux on the D2 → S path, which failed at 82 MHz (J). A second seed
+  at 84 MHz might pass, but the next change to the RTL would put the
+  build back at the edge.
 
 ### 5.5 Where the cycles go, measured
 
@@ -1038,9 +1130,18 @@ Section 5.5 showed the BTB is needed. This is the one built
     only D2 reads it.
   - Both rings are kept in flops. Quartus made the first versions block
     RAMs, whose late read data and next-pointer address put the stall
-    chain back on the path. The buffer carries `ramstyle "logic"`. The
-    prediction ring is stored as plain vectors, because Quartus splits an
-    array of structs before it reads the attribute.
+    chain back on the path. The prediction ring is stored as plain
+    vectors, because Quartus splits an array of structs before it reads
+    the attribute.
+  - The instruction ring carried `ramstyle "logic"`, and Quartus 18.1 still
+    made it a block RAM (`ib_q`) in K's fits. K's second seed failed on
+    that RAM's read address, through the D-cache's hit and the stall. Each
+    entry is now its own register, written in a generate loop, which
+    synthesis cannot merge into a RAM. Fits M and N have no `ib_q`.
+  - In lockstep with Unicorn from both checkpoints, the CPU retired the
+    same 65,108,822 and 95,742,586 instructions as before, in the same
+    cycles, with the same bus traffic. 200 random programs (seeds
+    18001–18200) passed against the reference.
 
 **Checking.** Every prediction travels with its instruction: `p_taken`,
 `p_next`, and the stack depth before it, `p_sp`.

@@ -161,19 +161,23 @@ module arm_cpu
     logic  [2:0] f2_psp;
     // flops, not a block RAM: a RAM's read data comes late, and Quartus
     // would take its address from ib_r's next value, at the stall's end.
-    // Plain vectors, as pr's are: as a struct array, read entry by entry
-    // (g_ls below), it became one (the stall chain into its read address
-    // was 0.15 ns too slow at 80 MHz).
-    (* ramstyle = "logic" *) logic [$bits(ibe_t)-1:0] ib_q [0:IB-1];
+    // Each entry is a register of its own: as an array, even of plain
+    // vectors with ramstyle "logic", Quartus made the buffer a block RAM,
+    // and the stall chain into its read address was the slowest path at
+    // 80 MHz (D-cache r_va -> hit -> stall -> ib_q, -0.283 ns).
     ibe_t        ib [0:IB-1];
+    logic        f2_push;
     genvar ie;
     generate
         for (ie = 0; ie < IB; ie = ie + 1) begin : g_ib
-            assign ib[ie] = ibe_t'(ib_q[ie]);
+            logic [$bits(ibe_t)-1:0] q;
+            always_ff @(posedge clk)
+                if (f2_push && ib_w == 2'(ie)) q <= {ic_data, f2_pc, f2_thumb, ic_abort};
+            assign ib[ie] = ibe_t'(q);
         end
     endgenerate
     logic  [2:0] ib_n;                          // entries held
-    logic        f2_push, f2_miss, f1_go;
+    logic        f2_miss, f1_go;
 
     // fetch only what the buffer can always take: what it holds, what is in
     // F2, and this one
@@ -638,10 +642,7 @@ module arm_cpu
                 ib_r <= ib_r + {1'b0, d1_take};
             end
         end
-        if (f2_push) begin
-            ib_q[ib_w] <= {ic_data, f2_pc, f2_thumb, ic_abort};
-            pr[ib_w] <= pr_f2;
-        end
+        if (f2_push) pr[ib_w] <= pr_f2;
     end
 
     // ============================================================ S

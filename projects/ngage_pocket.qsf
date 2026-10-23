@@ -32,11 +32,11 @@ set_global_assignment -name SMART_RECOMPILE OFF
 set_global_assignment -name ADV_NETLIST_OPT_SYNTH_WYSIWYG_REMAP ON
 set_global_assignment -name ALLOW_POWER_UP_DONT_CARE ON
 set_global_assignment -name MUX_RESTRUCTURE ON
-set_global_assignment -name OPTIMIZATION_TECHNIQUE AREA
+set_global_assignment -name OPTIMIZATION_TECHNIQUE SPEED
 # The binding constraint is LAB packing, not raw ALM count (ALMs fit at
 # 18,454/18,480 while the fitter still wanted 1,860 of 1,848 LABs), so pack
 # registers for density explicitly.
-set_global_assignment -name AUTO_PACKED_REGISTERS_STRATIXII "MINIMIZE AREA WITH CHAINS"
+set_global_assignment -name AUTO_PACKED_REGISTERS_STRATIXII AUTO
 set_global_assignment -name PRE_MAPPING_RESYNTHESIS ON
 set_global_assignment -name REMOVE_REDUNDANT_LOGIC_CELLS ON
 set_global_assignment -name SAFE_STATE_MACHINE OFF
@@ -56,7 +56,7 @@ set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 set_global_assignment -name PERIPHERY_TO_CORE_PLACEMENT_AND_ROUTING_OPTIMIZATION ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_ASYNCHRONOUS_SIGNAL_PIPELINING ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_COMBO_LOGIC ON
-set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION OFF
+set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_DUPLICATION ON
 set_global_assignment -name PHYSICAL_SYNTHESIS_REGISTER_RETIMING ON
 set_global_assignment -name ROUTER_CLOCKING_TOPOLOGY_ANALYSIS ON
 set_global_assignment -name ROUTER_LCELL_INSERTION_AND_LOGIC_DUPLICATION ON
@@ -890,3 +890,13 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to dram_we_n
 # is a real silicon failure, not lost margin, so let the fitter pad every
 # path, not just the pins.
 set_global_assignment -name OPTIMIZE_HOLD_TIMING "ALL PATHS"
+# The PLLs, and the SDRAM clock's output counter and global clock, where the
+# fits before the speed settings put them.  The read capture's margin depends
+# on which counter drives dram_clk: every archived fit from X0_Y0 or X54_Y3
+# left 0.77-0.80 ns of setup, X54_Y0 0.25, X0_Y6 0.13 and -0.39
+# (docs/core-design.md, section 5.4, M).  Pinned, the capture keeps the
+# margin of the builds tested on the Pocket so far.
+set_location_assignment FRACTIONALPLL_X0_Y1_N0 -to "core_top:ic|core_pll:core_pll|core_pll_0002:core_pll_inst|altera_pll:altera_pll_i|general[0].gpll~FRACTIONAL_PLL"
+set_location_assignment FRACTIONALPLL_X54_Y1_N0 -to "core_top:ic|cpu_pll:cpu_pll|altera_pll:altera_pll_i|general[0].gpll~FRACTIONAL_PLL"
+set_location_assignment PLLOUTPUTCOUNTER_X0_Y0_N1 -to "core_top:ic|core_pll:core_pll|core_pll_0002:core_pll_inst|altera_pll:altera_pll_i|general[3].gpll~PLL_OUTPUT_COUNTER"
+set_location_assignment CLKCTRL_G0 -to "core_top:ic|core_pll:core_pll|core_pll_0002:core_pll_inst|altera_pll:altera_pll_i|outclk_wire[3]~CLKENA0"
