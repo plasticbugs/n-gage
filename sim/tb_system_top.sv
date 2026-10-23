@@ -31,6 +31,7 @@ module tb_system_top #(
     input  logic [23:0] keymap,         // IO_KEYMAP; 0, the default keys, unless set
     input  logic        rd_late,        // the menu's "SDRAM read late"
     input  logic        rd_fast,        // 0: its "SDRAM half-rate reads"
+    input  logic        wr_fast,        // 0: a burst WRITE every 2 clocks (bit 7)
 
     output logic [23:0] rgb,
     output logic        de, pix_ce, vblank, hsync, vsync,
@@ -91,7 +92,7 @@ module tb_system_top #(
 
     ngage_mem u_mem (
         .clk(clk), .clk_sdram(clk), .init(mem_init), .ready(mem_ready),
-        .rd_late(rd_late), .burst_slow(1'b0), .rd_fast(rd_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
+        .rd_late(rd_late), .burst_slow(1'b0), .rd_fast(rd_fast), .wr_fast(wr_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
         .rom_size(rom_size), .drive_size(drive_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),

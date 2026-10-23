@@ -175,6 +175,15 @@ which changed anything.
   memory clocks this way, against 34.
 - **SDRAM slow bursts** issues them every five.
 
+A burst's WRITEs (the D-cache writing a line back) go one a clock from the
+build after 0.3.1, where every earlier build issued one every two clocks.
+NBA Jam's core found writes at that pace sound on a Pocket (METHODOLOGY
+5.28), the memory gate passes at both paces, and this core had not been
+flashed with it before. If that build corrupts the picture or crashes a
+game which the build before it ran, suspect this first: bit 7 of
+0xF2000000 goes back to two clocks, and no menu entry sets it, so the test
+is a build with an entry for it in place of one of the key sliders.
+
 None of them survives a reload.
 
 The game runs on while the menu is open: that is expected (NGVM does not

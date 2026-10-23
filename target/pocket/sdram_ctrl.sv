@@ -23,7 +23,8 @@
 // the Punch-Out!! core used, selectable from the Pocket menu as a diagnostic;
 // `rd_fast` = 1 issues the READs one a clock, which NBA Jam's hardware found
 // unsound at its capture phase (METHODOLOGY 5.28): a menu choice until the
-// Pocket has settled it).  Burst WRITEs stay at one every 2 clocks.
+// Pocket has settled it).  Burst WRITEs go one a clock with `wr_fast` = 1,
+// which 5.28 found sound on the Pocket, and one every 2 clocks without it.
 //
 // A burst taken with b_wrap stays inside its aligned 16 words: it starts at
 // b_addr and wraps, so a cache line comes critical word first, and b_idx is
@@ -41,6 +42,7 @@ module sdram_ctrl #(
     input  logic        rd_late,      // 1: capture read data at READ+4 (in-phase chip clock)
     input  logic        burst_slow,   // 1: one burst READ every 5 clocks instead of 2
     input  logic        rd_fast,      // 1: one burst READ a clock (unless burst_slow)
+    input  logic        wr_fast,      // 1: one burst WRITE a clock (unless burst_slow)
     output logic        ready,        // init complete
 
     // chip
@@ -72,9 +74,9 @@ module sdram_ctrl #(
     output logic [15:0] b_data,
     output logic        b_done,       // pulse; b_req may drop
     // burst writes (GSP shift-register-transfer rows): b_we with b_req selects
-    // a run of WRITEs in the open row, one every 2 clocks; the client presents
-    // b_wdata for word b_widx (its own index of the next word to issue), which
-    // the 2-clock spacing gives a registered RAM read time to settle
+    // a run of WRITEs in the open row, one a clock with wr_fast; the client
+    // presents b_wdata for word b_widx (its own index of the next word to
+    // issue) in the same clock, so at one a clock it may not be registered
     input  logic        b_we,
     input  logic [15:0] b_wdata,
     input  logic  [1:0] b_be,         // byte enables for word b_widx (writes)
@@ -316,7 +318,7 @@ module sdram_ctrl #(
             S_BOPEN1: state <= S_BOPEN2;
             S_BOPEN2: state <= S_BREAD;
             S_BREAD: begin
-                // issue a READ (no auto precharge) every 1, 2 or 5 clocks
+                // issue a READ or WRITE (no auto precharge) every 1, 2 or 5 clocks
                 if (b_gap == 3'd0 && b_abort) begin
                     // cut short mid-chunk: no more READs; what was issued still lands
                     b_remain <= '0; b_aborted <= 1'b1;
@@ -336,7 +338,7 @@ module sdram_ctrl #(
                     b_issued <= b_issued + 10'd1;
                     b_remain <= b_remain - 10'd1;
                     b_chunk  <= b_chunk + 6'd1;
-                    b_gap    <= burst_slow ? 3'd4 : rd_fast && !b_is_we ? 3'd0 : 3'd1;
+                    b_gap    <= burst_slow ? 3'd4 : (b_is_we ? wr_fast : rd_fast) ? 3'd0 : 3'd1;
                     // stop at: end of burst, end of chunk, end of SDRAM row (a
                     // wrapping burst never leaves its row)
                     if (b_remain == 10'd1 || b_chunk == 6'(BURST_CHUNK - 10'd1) || (!b_is_wrap && b_next[10:1] == 10'h3ff)) begin

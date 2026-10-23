@@ -46,6 +46,7 @@ module ngage_mem (
     input  logic         rd_late,       // SDRAM diagnostics, from the Pocket menu
     input  logic         burst_slow,
     input  logic         rd_fast,
+    input  logic         wr_fast,
     input  logic         sram_slow,
     input  logic         sram_slow_wr,
 
@@ -228,12 +229,10 @@ module ngage_mem (
     assign b_len  = bown == B_LCD ? 10'(l_len) : m_cmd == BC_RDWORD ? 10'd2 : 10'd16;
     assign b_wrap = bown == B_CPU && !sd_wr && m_cmd != BC_RDWORD;
 
-    // a write burst's halfword b_widx, settled before the controller takes it
-    // (sdram_ctrl.sv: a WRITE every two clocks at the fastest)
-    always_ff @(posedge clk) begin
-        b_wdata <= m_wdata[16*int'(b_widx[3:0]) +: 16];
-        b_be    <= m_be[2*int'(b_widx[3:0]) +: 2];
-    end
+    // a write burst's halfword b_widx, in the clock the controller asks for it
+    // (sdram_ctrl.sv: a WRITE a clock with wr_fast); m_wdata holds until m_done
+    assign b_wdata = m_wdata[16*int'(b_widx[3:0]) +: 16];
+    assign b_be    = m_be[2*int'(b_widx[3:0]) +: 2];
 
     assign l_wr   = b_wr && bown == B_LCD;
     assign l_idx  = b_idx[4:0];
@@ -318,7 +317,7 @@ module ngage_mem (
     // ------------------------------------------------------------- SDRAM
     sdram_ctrl #(.NCLI(NCLI)) u_sdram (
         .clk(clk), .clk_pin(clk_sdram), .init(init),
-        .rd_late(rd_late), .burst_slow(burst_slow), .rd_fast(rd_fast), .ready(ready),
+        .rd_late(rd_late), .burst_slow(burst_slow), .rd_fast(rd_fast), .wr_fast(wr_fast), .ready(ready),
         .SDRAM_DQ(SDRAM_DQ), .SDRAM_A(SDRAM_A),
         .SDRAM_DQML(SDRAM_DQML), .SDRAM_DQMH(SDRAM_DQMH), .SDRAM_BA(SDRAM_BA),
         .SDRAM_nCS(SDRAM_nCS), .SDRAM_nWE(SDRAM_nWE),

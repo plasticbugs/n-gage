@@ -917,14 +917,16 @@ module core_top
     //! SDRAM switches from the modifier word (the "SDRAM" entries of
     //! interact.json): bit 4 catches read data at READ+4 instead of READ+3,
     //! 5 slows bursts to a READ every 5 clocks, 6 issues a burst's READs every
-    //! 2 clocks instead of every clock.  Each bit is 0 at the setting tested
-    //! on the Pocket (docs/bringup.md, log).  The menu no longer offers
+    //! 2 clocks instead of every clock, 7 a burst's WRITEs every 2 clocks
+    //! instead of every clock.  Each bit is 0 at the setting tested on the
+    //! Pocket (docs/bringup.md, log; bit 7's from NBA Jam, METHODOLOGY 5.28).  The menu no longer offers
     //! these, nor the bring-up panel (bit 3), since 0.2.0: their place went to
     //! the six key sliders (Analogue's limit is 16 entries).  An entry put
     //! back in interact.json sets its bit again.
     wire g_rd_late    =  mod_sw0[4];
     wire g_burst_slow =  mod_sw0[5];
     wire g_rd_fast    = ~mod_sw0[6];
+    wire g_wr_fast    = ~mod_sw0[7];
 
     // NGVM's bus and the LCD's line fetch, between the machine and the memories
     wire         m_req, m_done;
@@ -944,7 +946,7 @@ module core_top
 
     ngage_mem u_mem (
         .clk(clk_sys), .clk_sdram(clk_sdram), .init(mem_init), .ready(mem_ready),
-        .rd_late(g_rd_late), .burst_slow(g_burst_slow), .rd_fast(g_rd_fast),
+        .rd_late(g_rd_late), .burst_slow(g_burst_slow), .rd_fast(g_rd_fast), .wr_fast(g_wr_fast),
         .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_download),
         .rom_size(rom_size), .drive_size(drive_size),
