@@ -526,6 +526,8 @@ struct Bench {
         top->ic_abort = iabt;
         top->dc_ok = dc_pend;
         top->dc_rdata = dc_q;
+        top->dc_rdata1 = dc_q;              // the same word by either way, which
+        top->dc_rsel = cycles & 1;          // alternates, so both are checked
         top->dc_abort = dc_abt;
 
         if (rt) {

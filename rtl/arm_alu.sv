@@ -2,6 +2,12 @@
 // ARM data-processing ALU: the sixteen opcodes, and the flags they would set.
 // Logical operations take C from the shifter and leave V; arithmetic ones
 // take both from the adder.  Whether the flags are written is the caller's.
+//
+// An arithmetic Z does not wait for the sum: x + y + ci is zero exactly when
+// every carry into a bit equals that bit's x ^ y, and then the carry out of
+// each bit is x | y, so the test is (x ^ y) == {(x | y) << 1, ci}, with no
+// carry chain.  The ALU, its result mux and a 32-bit zero test into CPSR.Z
+// was the slowest way into A's flags at 80 MHz.
 //------------------------------------------------------------------------------
 `default_nettype none
 
@@ -16,8 +22,8 @@ module arm_alu (
     output logic  [3:0] nzcv
 );
     logic [32:0] sum;
-    logic [31:0] x, y;
-    logic        ci, arith, c, v;
+    logic [31:0] x, y, lres;
+    logic        ci, arith, c, v, z;
 
     always_comb begin
         // every arithmetic opcode is x + y + ci
@@ -34,17 +40,18 @@ module arm_alu (
         sum = {1'b0, x} + {1'b0, y} + {32'd0, ci};
 
         case (op)
-            4'h0, 4'h8: res = a & b;                    // AND, TST
-            4'h1, 4'h9: res = a ^ b;                    // EOR, TEQ
-            4'hC:       res = a | b;                    // ORR
-            4'hD:       res = b;                        // MOV
-            4'hE:       res = a & ~b;                   // BIC
-            4'hF:       res = ~b;                       // MVN
-            default:    res = sum[31:0];
+            4'h0, 4'h8: lres = a & b;                   // AND, TST
+            4'h1, 4'h9: lres = a ^ b;                   // EOR, TEQ
+            4'hC:       lres = a | b;                   // ORR
+            4'hD:       lres = b;                       // MOV
+            4'hE:       lres = a & ~b;                  // BIC
+            default:    lres = ~b;                      // MVN
         endcase
+        res = arith ? sum[31:0] : lres;
 
         c = arith ? sum[32] : shc;
         v = arith ? ((x[31] == y[31]) && (sum[31] != x[31])) : vin;
-        nzcv = {res[31], res == 32'd0, c, v};
+        z = arith ? (x ^ y) == {x[30:0] | y[30:0], ci} : lres == 32'd0;
+        nzcv = {res[31], z, c, v};
     end
 endmodule

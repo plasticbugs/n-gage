@@ -42,7 +42,8 @@
 // the abort is answered.
 //
 // What is not cached:
-//   * the devices (RG_IO): ngvm_io answers in the compare cycle;
+//   * the devices (RG_IO): ngvm_io answers in the compare cycle, and a read
+//     completes a cycle later from a flop (S_DONE);
 //   * the physical alias and the drive: a load is one word through the miss
 //     handler.  A store completes at once into the write-combining buffer
 //     (wc_*), one line with a byte mask, which goes out as one masked line
@@ -71,7 +72,9 @@ module ngvm_dcache
     input  logic  [31:0] dc_addr,
     input  logic  [31:0] dc_wdata,
     input  logic   [3:0] dc_be,
-    output logic  [31:0] dc_rdata,
+    output logic  [31:0] dc_rdata,      // way 0's word (or S_DONE's)
+    output logic  [31:0] dc_rdata1,     // way 1's word (or S_DONE's)
+    output logic         dc_rsel,       // the answer is dc_rdata1
     output logic         dc_ok,
     output logic         dc_abort,
 
@@ -262,18 +265,27 @@ module ngvm_dcache
     typedef enum logic [2:0] { A_STORE, A_UNC, A_MISS, A_CLEAN, A_FLUSH } after_t;
     after_t after;
 
+    // The word: a hit's way, else the line coming in's (whether fhit or
+    // not, the answer is used only if it is), so fhit's compare is not on
+    // the data's path; or S_DONE's, which goes into both.  The CPU aligns
+    // both ways' words and takes one with dc_rsel last, so the tag compare
+    // is not in front of the alignment: the RAM, the compare, the way's mux
+    // and the alignment into W were the slowest path at 80 MHz.
+    //
+    // An access to no region (r_abt) completes a cycle late, from S_DONE,
+    // as a faulted fill does: then an abort, which redirects the CPU's
+    // fetch, comes from flops.
     always_comb begin
+        dc_rdata  = st == S_DONE ? u_q : q0m;
+        dc_rdata1 = st == S_DONE ? u_q : q1m;
+        dc_rsel   = hit1 || (!hit0 && mway);
         dc_ok    = 1'b0;
         dc_abort = 1'b0;
-        // the way: a hit's, else the line coming in's (whether fhit or not,
-        // the answer is used only if it is), so fhit's compare is not on
-        // the data's path
-        dc_rdata = hit1 || (!hit0 && mway) ? q1m : q0m;
         if (st == S_DONE) begin
-            dc_ok = 1'b1; dc_abort = u_flt; dc_rdata = u_q;
+            dc_ok = 1'b1; dc_abort = u_flt;
         end else if (cmp) begin
-            if (r_abt)                    begin dc_ok = 1'b1; dc_abort = 1'b1; end
-            else if (is_io)               begin dc_ok = !is_fl; dc_rdata = io_rdata; end
+            if (r_abt)                    ;                         // from S_DONE
+            else if (is_io)               dc_ok = r_we && !is_fl;   // a read: from u_q, in S_DONE
             else if (is_c)                dc_ok = hit;
             else                          dc_ok = unc_now;
         end else if (fcmp)                dc_ok = hit || fhit;
@@ -403,10 +415,15 @@ module ngvm_dcache
 
         case (st)
             S_IDLE: begin
-                if (cmp && is_fl) begin
+                if (cmp && r_abt) begin
+                    u_q <= 32'd0; u_flt <= 1'b1; st <= S_DONE;
+                end else if (cmp && is_fl) begin
                     ws <= 8'd0; flushing <= 1'b1; walking <= 1'b1;
                     if (wc_v) begin st <= S_WCF; after <= A_FLUSH; end
                     else st <= S_WALK;
+                end else if (cmp && is_io && !r_abt && !r_we) begin
+                    // a device read is answered a cycle late, from a flop
+                    u_q <= io_rdata; u_flt <= 1'b0; st <= S_DONE;
                 end else if (cmp && is_unc && !r_abt && !unc_now) begin
                     // a load, or a store for another line: the buffer goes first
                     if (wc_v) begin st <= S_WCF; after <= unc_st ? A_STORE : A_UNC; end

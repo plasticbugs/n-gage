@@ -72,8 +72,8 @@ module ngvm_sys
 
     logic        ic_req, ic_ok, ic_abort;
     logic [31:0] ic_addr, ic_data;
-    logic        dc_req, dc_we, dc_ok, dc_abort;
-    logic [31:0] dc_addr, dc_wdata, dc_rdata;
+    logic        dc_req, dc_we, dc_ok, dc_abort, dc_rsel;
+    logic [31:0] dc_addr, dc_wdata, dc_rdata, dc_rdata1;
     logic  [3:0] dc_be;
     logic  [1:0] dc_size;
 
@@ -81,7 +81,8 @@ module ngvm_sys
         .clk(clk), .rst(cpu_rst), .irq(irq),
         .ic_req(ic_req), .ic_addr(ic_addr), .ic_data(ic_data), .ic_ok(ic_ok), .ic_abort(ic_abort),
         .dc_req(dc_req), .dc_we(dc_we), .dc_addr(dc_addr), .dc_wdata(dc_wdata), .dc_be(dc_be),
-        .dc_size(dc_size), .dc_rdata(dc_rdata), .dc_ok(dc_ok), .dc_abort(dc_abort),
+        .dc_size(dc_size), .dc_rdata(dc_rdata), .dc_rdata1(dc_rdata1), .dc_rsel(dc_rsel),
+        .dc_ok(dc_ok), .dc_abort(dc_abort),
         .rt_valid(rt_valid), .rt_irq(rt_irq), .rt_pc(rt_pc), .rt_instr(rt_instr),
         .rt_thumb(rt_thumb), .rt_cpsr(rt_cpsr)
     );
@@ -121,7 +122,7 @@ module ngvm_sys
     ngvm_dcache u_dc (
         .clk(clk), .rst(cpu_rst),
         .dc_req(dc_req), .dc_we(dc_we), .dc_addr(dc_addr), .dc_wdata(dc_wdata), .dc_be(dc_be),
-        .dc_rdata(dc_rdata), .dc_ok(dc_ok), .dc_abort(dc_abort),
+        .dc_rdata(dc_rdata), .dc_rdata1(dc_rdata1), .dc_rsel(dc_rsel), .dc_ok(dc_ok), .dc_abort(dc_abort),
         .win_id(win_id),
         .io_req(io_req), .io_we(io_we), .io_off(io_off), .io_wdata(io_wdata), .io_rdata(io_rdata),
         .clean(lcd_show), .cleaned(cleaned), .inv_i(inv_i),

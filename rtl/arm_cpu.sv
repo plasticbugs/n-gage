@@ -24,8 +24,9 @@
 // valid) or not, in which case the CPU asks again.  The data port is a
 // request/complete handshake: a request is taken at an edge where the memory
 // is idle or completing (dc_ok); dc_ok then says the oldest request is done
-// (a load's dc_rdata is valid in that cycle).  ic_abort/dc_abort come with
-// ok and mark the access as faulted.
+// (a load's word is valid in that cycle: dc_rdata1 if dc_rsel, else
+// dc_rdata; a memory with one word leaves dc_rsel low).  ic_abort/dc_abort
+// come with ok and mark the access as faulted.
 //
 // Architectural state changes at A (CPSR, SPSR) and at W (registers), in
 // program order; anything younger than a redirect is killed before it
@@ -54,6 +55,8 @@ module arm_cpu
     output logic  [3:0] dc_be,
     output logic  [1:0] dc_size,
     input  logic [31:0] dc_rdata,
+    input  logic [31:0] dc_rdata1,
+    input  logic        dc_rsel,
     input  logic        dc_ok,
     input  logic        dc_abort,
 
@@ -156,8 +159,18 @@ module arm_cpu
     logic  [1:0] f2_pctr;
     logic  [2:0] f2_psp;
     // flops, not a block RAM: a RAM's read data comes late, and Quartus
-    // would take its address from ib_r's next value, at the stall's end
-    (* ramstyle = "logic" *) ibe_t ib [0:IB-1];
+    // would take its address from ib_r's next value, at the stall's end.
+    // Plain vectors, as pr's are: as a struct array, read entry by entry
+    // (g_ls below), it became one (the stall chain into its read address
+    // was 0.15 ns too slow at 80 MHz).
+    (* ramstyle = "logic" *) logic [$bits(ibe_t)-1:0] ib_q [0:IB-1];
+    ibe_t        ib [0:IB-1];
+    genvar ie;
+    generate
+        for (ie = 0; ie < IB; ie = ie + 1) begin : g_ib
+            assign ib[ie] = ibe_t'(ib_q[ie]);
+        end
+    endgenerate
     logic  [2:0] ib_n;                          // entries held
     logic        f2_push, f2_miss, f1_go;
 
@@ -239,11 +252,16 @@ module arm_cpu
                                : d1.pc + 32'd8;
 
     // predecode: what D2 must know without waiting for the decoder
-    function automatic logic [4:0] popcount16(input logic [15:0] x);
-        logic [4:0] n;
-        n = 5'd0;
-        for (int i = 0; i < 16; i++) n = n + {4'd0, x[i]};
-        return n;
+    function automatic logic [3:0] popcount8(input logic [7:0] x);  // a tree: pairs, nibbles
+        logic [1:0] p0, p1, p2, p3;
+        logic [2:0] n0, n1;
+        p0 = {1'b0, x[0]} + {1'b0, x[1]};
+        p1 = {1'b0, x[2]} + {1'b0, x[3]};
+        p2 = {1'b0, x[4]} + {1'b0, x[5]};
+        p3 = {1'b0, x[6]} + {1'b0, x[7]};
+        n0 = {1'b0, p0} + {1'b0, p1};
+        n1 = {1'b0, p2} + {1'b0, p3};
+        return {1'b0, n0} + {1'b0, n1};
     endfunction
     function automatic logic two_or_more(input logic [15:0] x);  // no adder: by nibbles
         logic [3:0] any, two;
@@ -284,7 +302,16 @@ module arm_cpu
                                ? M_USR : cpsr[4:0];
             assign ls_low[gi]  = lowest(l);
             assign ls_ix[gi]   = phys(lowest(l), ls_mode[gi]);
-            assign ls_cnt[gi]  = popcount16(l);
+            // the count from the word's bytes, so no mux stands in front of
+            // the adders (Thumb's halfword and list through popcount16 were
+            // 50 ps too slow into d2_nregs at 80 MHz): ARM's list is bytes 0
+            // and 1, Thumb's the low byte of its halfword, and LR or PC
+            wire [3:0] c0 = popcount8(ib[gi].word[7:0]);
+            wire [3:0] c1 = popcount8(ib[gi].word[15:8]);
+            wire [3:0] c2 = popcount8(ib[gi].word[23:16]);
+            wire [3:0] ca = ib[gi].thumb && ib[gi].pc[1] ? c2 : c0;
+            wire [3:0] cb = ib[gi].thumb ? {3'd0, (pu || po) && h[8]} : c1;
+            assign ls_cnt[gi]  = {1'b0, ca} + {1'b0, cb};
             assign ls_more[gi] = two_or_more(l);
             assign ls_rest[gi] = l & (l - 16'd1);
         end
@@ -607,7 +634,7 @@ module arm_cpu
             end
         end
         if (f2_push) begin
-            ib[ib_w] <= '{word: ic_data, pc: f2_pc, thumb: f2_thumb, abt: ic_abort};
+            ib_q[ib_w] <= {ic_data, f2_pc, f2_thumb, ic_abort};
             pr[ib_w] <= pr_f2;
         end
     end
@@ -1087,30 +1114,42 @@ module arm_cpu
     end
 
     // ============================================================ M
-    logic [31:0] m_addr, m_cpsr, m_ld, m_tgt;
+    logic [31:0] m_addr, m_cpsr, m_tgt;
+    logic [31:0] m_wa0, m_wa1;                  // W's ra if the word is dc_rdata, dc_rdata1
     logic        m_red, m_tth, m_pok;
-    always_comb begin
-        m_hold = m_valid && m_mem && !dc_ok;
-        // load alignment
+    // a load's value from a word: aligned, rotated, extended
+    function automatic logic [31:0] align(input logic [31:0] d);
+        logic [31:0] r;
         case (m_u.msize)
             2'd0: begin
-                m_ld = {24'd0, dc_rdata[{m_addr[1:0], 3'b000} +: 8]};
-                if (m_u.msigned) m_ld = {{24{m_ld[7]}}, m_ld[7:0]};
+                r = {24'd0, d[{m_addr[1:0], 3'b000} +: 8]};
+                if (m_u.msigned) r = {{24{r[7]}}, r[7:0]};
             end
             2'd1: begin
-                m_ld = {16'd0, m_addr[1] ? dc_rdata[31:16] : dc_rdata[15:0]};
-                if (m_u.msigned) m_ld = {{16{m_ld[15]}}, m_ld[15:0]};
+                r = {16'd0, m_addr[1] ? d[31:16] : d[15:0]};
+                if (m_u.msigned) r = {{16{r[15]}}, r[15:0]};
             end
-            default: m_ld = (dc_rdata >> {m_addr[1:0], 3'b000}) | (dc_rdata << (6'd32 - {1'b0, m_addr[1:0], 3'b000}));
+            default: r = (d >> {m_addr[1:0], 3'b000}) | (d << (6'd32 - {1'b0, m_addr[1:0], 3'b000}));
         endcase
-        if (m_addr[1:0] == 2'd0 && m_u.msize == 2'd2) m_ld = dc_rdata;
-        // a return by load that the fetch predicted: is the word loaded the
-        // address it went to?  (ARMv4T does not interwork on a load, so the
-        // state is the load's own.)  Compared from the cache's word, beside
-        // the alignment, so that W's redirect starts at a flop.
-        m_pok = m_u.p_taken && m_u.br_ret && m_u.lsm && !m_u.restore && m_addr[1:0] == 2'd0
-             && dc_rdata[31:2] == m_u.p_next[31:2] && m_u.p_next[0] == m_u.thumb
-             && (m_u.thumb ? dc_rdata[1] == m_u.p_next[1] : !m_u.p_next[1]);
+        if (m_addr[1:0] == 2'd0 && m_u.msize == 2'd2) r = d;
+        return r;
+    endfunction
+    // a return by load that the fetch predicted: is the word loaded the
+    // address it went to?  (ARMv4T does not interwork on a load, so the
+    // state is the load's own.)  Compared from the cache's word, beside the
+    // alignment, so that W's redirect starts at a flop.
+    function automatic logic pok(input logic [31:0] d);
+        return m_u.p_taken && m_u.br_ret && m_u.lsm && !m_u.restore && m_addr[1:0] == 2'd0
+            && d[31:2] == m_u.p_next[31:2] && m_u.p_next[0] == m_u.thumb
+            && (m_u.thumb ? d[1] == m_u.p_next[1] : !m_u.p_next[1]);
+    endfunction
+    always_comb begin
+        m_hold = m_valid && m_mem && !dc_ok;
+        // both of the D-cache's words are aligned, and the way picked last:
+        // dc_rsel comes from its tag compare, the latest signal into W
+        m_wa0 = m_u.kind == K_LOAD ? align(dc_rdata)  : m_ra;
+        m_wa1 = m_u.kind == K_LOAD ? align(dc_rdata1) : m_ra;
+        m_pok = dc_rsel ? pok(dc_rdata1) : pok(dc_rdata);
         m_dabt_take = m_valid && m_mem && dc_ok && dc_abort && !w_redirect;
         m_redirect  = !w_redirect && ((m_valid && m_red) || m_dabt_take);
         m_tthumb    = m_dabt_take ? 1'b0 : m_tth;
@@ -1154,12 +1193,15 @@ module arm_cpu
             w_u <= m_u;
             w_exec <= m_exec;
             w_pok <= m_pok;
-            w_ra <= (m_u.kind == K_LOAD) ? m_ld : m_ra;
+            w_ra <= dc_rsel ? m_wa1 : m_wa0;
             w_rb <= m_rb;
             w_cpsr <= m_cpsr;
-            if (m_dabt_take) begin                      // the aborted access writes nothing but LR_abt
-                w_u.wa_en <= 1'b1; w_u.wa <= 5'd26; w_u.wa_pc <= 1'b0; w_u.wb_en <= 1'b0;
-                w_ra <= m_u.pc + 32'd8;
+            // the aborted access writes nothing but LR_abt, by port B: the
+            // abort is known late (dc_ok), and w_ra's input is the loaded
+            // word's, the slowest way into W
+            if (m_dabt_take) begin
+                w_u.wa_en <= 1'b0; w_u.wa_pc <= 1'b0; w_u.wb_en <= 1'b1; w_u.wb <= 5'd26;
+                w_rb <= m_u.pc + 32'd8;
                 w_cpsr <= {cpsr[31:8], 1'b1, cpsr[6], 1'b0, M_ABT};
             end
         end
