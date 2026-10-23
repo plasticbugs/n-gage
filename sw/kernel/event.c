@@ -79,23 +79,34 @@ s32 event_exec(int idx, u32 a0, u32 a1)
  * event with an N-Gage standard scan code (e32keys.h).  The game keys of
  * the phone are 5 and 7; the soft keys and the OK key run the menus.  The
  * menu can put A, B, X, Y, L or R on any digit key instead (IO_KEYMAP), so
- * two buttons may hold one key: it goes up when the last is let go. */
-static const u8 scan[12] = {
+ * two buttons may hold one key: it goes up when the last is let go.
+ *
+ * Bits 12-26 are the on-screen keypad's keys (KEY_PAD_*, ngvm_hw.h): the
+ * digits, *, #, the soft keys and C, which the pad has no button for.  The
+ * scan codes for * and C are S60's ('*', EStdKeyBackspace), as # (0x7F) and
+ * the soft keys already were here; that the firmware's key tables turn them
+ * into '*' and the clear key has not been seen in a game yet. */
+static const u8 scan[KEY_BITS] = {
     0x10, 0x11, 0x0E, 0x0F,     /* d-pad: EStdKey{Up,Down,Left,Right}Arrow */
     '5',  '7',                  /* A, B: the N-Gage's game keys            */
     0xA7, '9',                  /* X: OK (EStdKeyDevice3), Y: 9            */
     0xA4, 0xA5,                 /* L, R: left and right soft keys          */
     0x7F, 0xA7,                 /* select: #, start: OK                    */
+    '0', '1', '2', '3', '4',    /* the keypad: 0-9                         */
+    '5', '6', '7', '8', '9',
+    '*',  0x7F,                 /* *, # (EStdKeyHash)                      */
+    0xA4, 0xA5,                 /* left and right soft keys                */
+    0x01,                       /* C: EStdKeyBackspace                     */
 };
 
 void keys_poll(void)
 {
-    static u8 held[12];                       /* the phone keys down, distinct */
+    static u8 held[KEY_BITS];                 /* the phone keys down, distinct */
     static int nheld;
-    u32 now = IO(IO_KEYS) & 0xFFF, map = IO(IO_KEYMAP);
-    u8 down[12];
+    u32 now = IO(IO_KEYS) & ((1u << KEY_BITS) - 1), map = IO(IO_KEYMAP);
+    u8 down[KEY_BITS];
     int n = 0;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < KEY_BITS; i++) {
         if (!(now & (1u << i))) continue;
         u8 k = scan[i];
         if (i >= 4 && i <= 9) {               /* A B X Y L R: 4 bits each, A first */

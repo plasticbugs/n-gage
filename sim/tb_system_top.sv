@@ -27,7 +27,7 @@ module tb_system_top #(
     input  logic  [7:0] dl_data,
     input  logic        dl_active,
 
-    input  logic [11:0] keys,
+    input  logic [26:0] keys,           // IO_KEYS: the pad 11:0, the keypad's keys 26:12
     input  logic [23:0] keymap,         // IO_KEYMAP; 0, the default keys, unless set
     input  logic        rd_late,        // the menu's "SDRAM read late"
     input  logic        rd_fast,        // 0: its "SDRAM half-rate reads"

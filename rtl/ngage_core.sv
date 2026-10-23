@@ -13,7 +13,8 @@
 //                                  table, which is far longer than the bus
 //                                  takes to finish anything in flight
 //   frame          96 MHz -> CPU   a toggle: NGVM's vblank, one pulse a frame
-//   keys           96 MHz -> CPU   two flops; each bit is a button on its own
+//   keys           96 MHz -> CPU   two flops; each bit is a button or a keypad
+//                                  key on its own, registered on 96 MHz
 //   keymap         96 MHz -> CPU   two flops: set from the menu, so it holds
 //                                  still for seconds; a read across a change
 //                                  can mix the two settings for one press
@@ -60,7 +61,7 @@ module ngage_core #(
     input  logic  [15:0] l_data,
     input  logic         l_done,
 
-    input  logic  [11:0] keys,          // KEY_* (ngvm_hw.h), 1 = pressed
+    input  logic  [26:0] keys,          // IO_KEYS: KEY_* (ngvm_hw.h), 1 = pressed
     input  logic  [23:0] keymap,        // IO_KEYMAP (ngvm_hw.h); 0 = the default keys
     input  logic  [31:0] rom_size,
     input  logic  [31:0] drive_size,
@@ -105,7 +106,7 @@ module ngage_core #(
     logic  [31:0] lcd_base;
     logic         lcd_on, vb_c;
     logic         show_t;           // a toggle: never reset (ngvm_xbus.sv)
-    logic  [11:0] keys_s0, keys_s1;
+    logic  [26:0] keys_s0, keys_s1;
     logic  [23:0] keymap_s0, keymap_s1;
     logic         dbg_putc, dbg_exit, dbg_hex;
     logic  [31:0] dbg_data;

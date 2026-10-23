@@ -43,7 +43,7 @@ module ngvm_sys
     output logic         lcd_on,
     output logic         lcd_show_t,    // toggles: the LCD may copy the frame now
     input  logic         vblank,        // pulse in this domain: a frame starts
-    input  logic  [11:0] keys,
+    input  logic  [26:0] keys,          // IO_KEYS: the pad, and the on-screen keypad's keys
     input  logic  [23:0] keymap,
     input  logic  [31:0] rom_size,
     input  logic  [31:0] drive_size,

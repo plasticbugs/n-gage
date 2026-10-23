@@ -126,7 +126,10 @@
 #define NGVM_LAUNCH_MAGIC "NGVMRUN"   /* 8 bytes with its NUL                  */
 #define NGVM_LAUNCH_MAX   0x1B6       /* bytes of path, NUL included           */
 
-/* Pocket controls as the kernel sees them. */
+/* IO_KEYS.  Bits 0-11 are the Pocket's controls.  Bits 12-26 are the phone
+ * keys of the on-screen keypad (SELECT + R; rtl/ngage_osk.sv), one bit a
+ * key, held while the keypad presses it.  While the keypad is up it has the
+ * pad, and bits 0-11 read 0.  Nothing reads above bit 26.                    */
 #define KEY_UP     (1u << 0)
 #define KEY_DOWN   (1u << 1)
 #define KEY_LEFT   (1u << 2)
@@ -139,6 +142,13 @@
 #define KEY_R      (1u << 9)
 #define KEY_SELECT (1u << 10)
 #define KEY_START  (1u << 11)
+#define KEY_PAD_0     (1u << 12)   /* digit d is KEY_PAD_0 << d, to bit 21    */
+#define KEY_PAD_STAR  (1u << 22)
+#define KEY_PAD_HASH  (1u << 23)
+#define KEY_PAD_LSOFT (1u << 24)   /* the left soft key                       */
+#define KEY_PAD_RSOFT (1u << 25)   /* the right soft key                      */
+#define KEY_PAD_CLEAR (1u << 26)   /* C                                       */
+#define KEY_BITS   27
 
 #ifndef __ASSEMBLER__
 #define IO(off) (*(volatile unsigned int *)(NGVM_IO_BASE + (off)))

@@ -24,7 +24,10 @@ slices (sw/kernel/sched.c); 200,000 held Ashen to 4,610 LCD updates in
 A key script is a list of "SECONDS:KEYS" steps: at that virtual time the
 pressed set becomes KEYS, names joined with '+' (up down left right a b x y
 l r select start), or nothing for none.  "26:start 26.2: 30:a 30.2:" taps
-start, then a.
+start, then a.  The on-screen keypad's keys (IO_KEYS bits 12-26: the core
+draws them on SELECT + R) are named for the phone key: 0-9 star hash lsoft
+rsoft clear.  "40:2 40.1:" presses 2 as the keypad does; on the Pocket the
+pad's own buttons read 0 meanwhile, which a script says by naming none.
 """
 import argparse, array, bisect, ctypes, os, re, struct, sys, time
 
@@ -491,7 +494,10 @@ class Machine:
             rgb[i * 3 + 2] = (p & 15) * 17
         return rgb
 
-    KEY_NAMES = ('up', 'down', 'left', 'right', 'a', 'b', 'x', 'y', 'l', 'r', 'select', 'start')
+    # IO_KEYS bit by bit (ngvm_hw.h): the pad's buttons, then the keypad's keys
+    KEY_NAMES = ('up', 'down', 'left', 'right', 'a', 'b', 'x', 'y', 'l', 'r', 'select', 'start',
+                 '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'star', 'hash', 'lsoft', 'rsoft', 'clear')
+    assert len(KEY_NAMES) == KEY_BITS
 
     @classmethod
     def parse_keys(cls, script):

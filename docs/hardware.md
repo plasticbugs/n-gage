@@ -214,19 +214,36 @@ register; what follows is behaviour the header cannot say.
 
 ### Keys
 
-`IO_KEYS` holds Pocket buttons, 1 = pressed. The kernel turns them into
-Symbian scan codes (`EStdKey*`) and raw events for the window server. The
-mapping is the kernel's choice, not hardware's, and these are its
-defaults:
+`IO_KEYS` holds Pocket buttons in bits 0-11 and the on-screen keypad's
+phone keys in bits 12-26, 1 = pressed (`KEY_*` in `ngvm_hw.h`). The
+kernel turns them into Symbian scan codes (`EStdKey*`) and raw events for
+the window server. The mapping is the kernel's choice, not hardware's, and
+these are its defaults:
 
-| Pocket | phone | scan code |
-|---|---|---|
-| d-pad | joystick | `EStdKey{Up,Down,Left,Right}Arrow` |
-| A, B | 5, 7 (the N-Gage's game keys) | `'5'`, `'7'` |
-| X, start | OK | `EStdKeyDevice3` (0xA7) |
-| Y | 9 | `'9'` |
-| L, R | left and right soft keys | 0xA4, 0xA5 |
-| select | # | 0x7F |
+| bit | Pocket | phone | scan code |
+|---|---|---|---|
+| 0-3 | d-pad | joystick | `EStdKey{Up,Down,Left,Right}Arrow` |
+| 4, 5 | A, B | 5, 7 (the N-Gage's game keys) | `'5'`, `'7'` |
+| 6, 11 | X, start | OK | `EStdKeyDevice3` (0xA7) |
+| 7 | Y | 9 | `'9'` |
+| 8, 9 | L, R | left and right soft keys | 0xA4, 0xA5 |
+| 10 | select | # | 0x7F |
+| 12-21 | keypad 0-9 | 0-9 | `'0'`-`'9'` |
+| 22 | keypad * | * | `'*'` (0x2A) |
+| 23 | keypad # | # | 0x7F |
+| 24, 25 | keypad soft keys | left and right soft keys | 0xA4, 0xA5 |
+| 26 | keypad C | clear | `EStdKeyBackspace` (0x01) |
+
+Bits 12-26 come from the on-screen keypad (`rtl/ngage_osk.sv`, README
+"On-screen keypad"): SELECT + R on the Pocket shows it, and its keys
+press these bits, one at a time, each for as long as its button is held
+and for at least four frames. While it is up it has the pad, so bits
+0-11 read 0; SELECT and R reach bits 10 and 9 four frames late, so the
+chord that shows it never reaches the machine. The scan codes for * and C
+are S60's, as those for # and the soft keys were already; that the
+firmware's key tables turn them into `'*'` and the clear key has not
+been seen in a game yet. The phone's green, red, menu and pen keys have
+no bit.
 
 `IO_KEYMAP` moves A, B, X, Y, L and R: 4 bits each, A in bits 3:0 to R in
 23:20, `d + 1` for digit key `d` (scan code `'0' + d`) and 0 for the

@@ -41,7 +41,7 @@ module ngvm_io
     output logic        lcd_show,       // pulse: IO_LCD_SHOW was written
     input  logic        vblank,         // pulse, in this domain: a frame starts
 
-    input  logic [11:0] keys,           // KEY_*, 1 = pressed
+    input  logic [26:0] keys,           // KEY_*, 1 = pressed: the pad 11:0, the keypad 26:12
     input  logic [23:0] keymap,         // IO_KEYMAP: the phone key for A B X Y L R
     input  logic [31:0] rom_size,
     input  logic [31:0] drive_size,
@@ -114,7 +114,7 @@ module ngvm_io
             IO_LCD_BASE:    io_rdata = lcd_base;
             IO_LCD_CTRL:    io_rdata = {31'd0, lcd_on};
             IO_LCD_FRAME:   io_rdata = lcd_frame;
-            IO_KEYS:        io_rdata = {20'd0, keys};
+            IO_KEYS:        io_rdata = {5'd0, keys};
             IO_KEYMAP:      io_rdata = {8'd0, keymap};
             IO_AUDIO_LEVEL: io_rdata = 32'(a_lvl);
             IO_AUDIO_RATE:  io_rdata = a_rate;
