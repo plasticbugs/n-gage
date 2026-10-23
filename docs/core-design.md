@@ -28,14 +28,16 @@ miss.
 
 | clock | frequency | drives |
 |---|---|---|
-| `clk_cpu` | 73.85 MHz = 960 / 13; the first flash ran at 64 = 960 / 15, and 80 = 960 / 12 does not close (section 5.4) | the CPU, caches, page table, devices (`rtl/ngvm_sys.sv`) |
+| `clk_cpu` | 80 MHz, from a fractional PLL of its own (`target/pocket/cpu_pll.v`); earlier builds ran at 64 and 73.85 MHz, outputs of `core_pll` (section 5.4) | the CPU, caches, page table, devices (`rtl/ngvm_sys.sv`) |
 | `clk_sys` | 96 MHz | the SDRAM and CRAM controllers, the LCD (`target/pocket/ngage_mem.sv`, `rtl/ngvm_lcd.sv`) |
 | `clk_sdram` | 96 MHz, phase-shifted | the SDRAM pin clock (template, unchanged) |
 | `clk_vid` | 6.857 MHz = 96 / 14 | the raster; `pix_sync` pins the dot divider to it (template, unchanged) |
 
 The CPU closes timing alone at 87–91 MHz (section 5.4), not 96, so it has
-its own PLL output. The two sides share the PLL's VCO but are timed as
-asynchronous. Everything between them crosses by a toggle handshake or two
+its own clock. It first came from another output of `core_pll`, which
+fixed it to 960 MHz divided by a whole number. Now it comes from a PLL of
+its own, whose frequency `core_top` sets with `CPU_HZ`. Either way, the two
+sides are timed as asynchronous. Everything between them crosses by a toggle handshake or two
 flops; `rtl/ngage_core.sv` lists each crossing and why it is safe.
 
 - **The bus.** `rtl/ngvm_xbus.sv` carries the miss port's one request at a
@@ -66,7 +68,7 @@ bench need no converter:
 | *(unused)* | 8 MB | SDRAM `0x3800000` | |
 | drive, `0x60000000` | ≤ 32 MB | CRAM0 (16 MB) + CRAM1 (16 MB) | uncached 16-bit words |
 | page table | 16,640 × 16 bits | block RAM | one read a miss |
-| I-cache, D-cache | 16 KB each *(section 4)* | block RAM | every cycle |
+| I-cache, D-cache | 64 KB and 32 KB *(section 4)* | block RAM | every cycle |
 | audio FIFO | 1,024 × 32 bits | block RAM | 32–64 ms of sound at 16 kHz |
 | LCD frame store | 36,608 × 12 bits, as 32K + 4K | block RAM | written by a copy from SDRAM, read by the raster |
 
@@ -189,8 +191,10 @@ kernel's hot data needs a faster home than SDRAM.
 
 **Decision.**
 
-- I: 16 KB, 2-way, 32-byte lines.
-- D: 16 KB, 2-way, 32-byte lines, write-back. The plan was a one-line
+- I: 16 KB, 2-way, 32-byte lines. Gameplay later made it 32 KB, then
+  64 KB (section 4.5).
+- D: 16 KB, 2-way, 32-byte lines, write-back; 32 KB since gameplay was
+  measured (section 4.5). The plan was a one-line
   write-back buffer, so an eviction would not wait in front of the fill.
   The first builds wrote the victim back and then fetched the line. The
   third sends the victim with the fill, to be written after it (section
@@ -335,6 +339,81 @@ first 15 s, Bomberman's and Super Monkey Ball's first 15 s; the memory gate
 (`sim/run_mem.sh`) with each word checked as it is counted and 2,000 fills
 with write-backs, at every read pace.
 
+### 4.5 Gameplay, measured
+
+The traces of section 4.1 were taken in menus. Gameplay traces show
+something different.
+
+**Method.**
+
+- `ngvm.py --memtrace 85:0.3:FILE` records 0.3 virtual s of Virtua Cop and
+  of Tony Hawk's Pro Skater, both in play, with a key pressed every 2 s.
+- `cs3`/`cs4`, scratch models built on `cachesim`, replay each trace with
+  a crude timing model:
+  - the core's CPI with ideal memory is 1.6;
+  - a line takes 33 CPU clocks, and its first word arrives at 13;
+  - a write-back keeps the memory 16 clocks more;
+  - translation adds 5 clocks.
+- Figures are modelled cycles per 1,000 instructions.
+
+| change, Virtua Cop / Tony Hawk | I misses per 1,000 | modelled cycles |
+|---|---|---|
+| I-cache 16 → 32 KB | 8.88 → 4.19 / 5.88 → 3.63 | −5.8% / −2.5% |
+| a store miss completes once its fill is on the bus | | a further −3.7% / −5.3% |
+| D-cache 16 → 32 KB | | −2.7% / −3.6% |
+| D-cache 4-way | | about −0.8% more |
+| next-line prefetch on every D miss, or tagged | | +3.7% to +6.5%, or within 0.6% |
+| write-validate: a store miss fetches nothing, a load merges | | −0.5% |
+
+**Readings.**
+
+- **The I-cache matters more in play.** At 16 KB, Virtua Cop missed 8.88
+  times per 1,000 instructions in play, against 1.5 in its menu.
+- **Prefetch loses.** The bus takes one request at a time, and about 45%
+  of prefetched lines are never used. Each unused line holds the bus
+  against a real miss.
+- **Write-validate is not worth its complexity.** Stores that miss are
+  already off the critical path.
+
+**Built:**
+
+- I-cache 32 KB (`rtl/ngvm_icache.sv`).
+- A store miss completes once its fill is on the bus (`m_xok`).
+- A dirty victim is read out during the translation, beside the fill.
+- The valid bits are in the tag RAMs (`rtl/ngvm_dcache.sv`).
+
+The commits that made each change give its lockstep runs.
+
+**Second round, on the RTL.** The cache model leaves out the pipeline, so
+the next sizes were measured on the RTL itself.
+
+- `ngvm.py --save-at 85:FILE` saves a reference checkpoint 85 s into each
+  game, in play. `tb_sys --restore FILE` starts the system bench there.
+- Each build runs at 80 MHz with a line costing 36 CPU clocks, and the
+  bench profiles 86–89 s.
+- A checkpoint holds the kernel's own data, so a run must use the kernel
+  that made it.
+- Single-change variants on d5 were profiled over 86–91 s:
+  - BTB 512: +1.2% on Virtua Cop, +0.6% on Tony Hawk.
+  - I-cache 64 KB: +5.2% and +2.4%.
+
+| build | Virtua Cop: instructions, CPI | Tony Hawk | line reads, 85–89 s |
+|---|---|---|---|
+| d5: I 32 KB, D 16 KB, BTB 256 | 126.1 M, 1.889 | 115.9 M, 2.070 | 2.33 M / 3.13 M |
+| d7: I 64 KB, D 32 KB, BTB 512 | 137.4 M (+9.0%), 1.730 | 125.1 M (+7.9%), 1.918 | 1.74 M / 2.68 M |
+
+- **Where it came from.** On Virtua Cop, F2's waits on the I-cache fell
+  from 0.079 to 0.027 cycles per instruction, and the cycles with the whole
+  front end empty fell from 0.161 to 0.080. Tony Hawk is memory-bound: M
+  still waits 0.412 cycles per instruction, 0.226 of them for a load's own
+  line.
+- **Checked.** d7 ran in lockstep with Unicorn from both checkpoints,
+  without a difference: Virtua Cop to 87 s (93.0 M instructions) and Tony
+  Hawk to 86.5 s (61.6 M). It also ran from power-on through 20 s of
+  Virtua Cop (1,008 M).
+
+
+## 5. The CPU
 
 ### 5.1 Why our own
 
@@ -646,6 +725,48 @@ output (section 2). The first full fit at 80 MHz:
   either step. That fit met every clock on every corner: `clk_cpu` with
   +0.993 ns hot (Fmax 68.4 MHz), and +0.109 ns the least anywhere.
 
+**80 MHz, on a PLL of its own.** The CPU side is asynchronous to the
+memory side (section 2), so its clock need not divide `core_pll`'s VCO.
+`target/pocket/cpu_pll.v` is a fractional PLL for the CPU alone, and
+`core_top` sets its frequency together with `CPU_HZ`. Each fit below used
+one processor and the default seed. `projects/report_worst.tcl` named the
+failing paths, which were then grouped by their end registers.
+
+| fit | what changed | `clk_cpu` setup slack, 85 °C / 0 °C | what failed |
+|---|---|---|---|
+| d2 | the I-cache at 32 KB, stores that complete on the bus, the victim beside the fill (section 4.5), returns by load predicted (5.6); 80 = 960 / 12 on `core_pll` | −0.434 / −0.427 ns | CPSR → M's operand; M's redirect → the instruction buffer's handshake; the return stack's repair; D1's LDM figures |
+| d3 | the d2 families taken off (commit `cacf15d`); `cpu_pll` | −1.143 / −1.031 ns | all into W's load result `w_ra`: a device read through the IO decode, and the cache RAMs through the hit |
+| d4 | device reads and region aborts answered from a register in `S_DONE`, a cycle later; an abort's link through port B | −0.388 / −0.615 ns | RAM → `w_ra`; `w_ra` → CPSR's Z (−0.22); RAM → the instruction buffer, which Quartus had made a block RAM (−0.15); RAM → F1's PC through an abort (−0.11) |
+| d5 | each way's word aligned and sign-extended before the way is chosen; Z without the carry chain; the buffer as plain vectors | −0.050 / +0.088 ns | two paths: the instruction buffer → the LDM register count → `d2_nregs` |
+| d6 | the count from the bytes (below); the I-cache at 64 KB, the D-cache at 32 KB, the BTB at 1,024 entries (section 4.5), each cache's LRU bits still flops: 93% of the ALMs | −0.543 / −0.457 ns | F1's next PC → the BTB's read address, across 1,024 entries' blocks; A's operands → CPSR's Z; the flush walk's set `ws` → the D-cache's dirty bits |
+| d7 | the BTB at 512; each cache's LRU bits in a block RAM, read beside the tags; the flush walk's clear of every dirty bit taken out: 77% of the ALMs | +0.273 / +0.425 ns | nothing: every clock met on every corner, holds included |
+
+- **Z without the carry.** `x + y + ci` is zero exactly when
+  `x ^ y == {(x | y)[30:0], ci}`, because each sum bit is zero only if the
+  carry into it is `x ^ y` at that bit, and the carry out is then
+  `x | y`. The identity was checked on 2,000,128 random and edge cases, and
+  it takes the 32-bit carry chain out of the flags.
+- **d5's families, against d4.** `w_ra` went from −0.615 to +0.256 ns
+  cold, CPSR to +0.49, the buffer to +0.83 and F1's PC to +1.21. Quartus
+  still made part of the buffer a block RAM, despite the attribute, but
+  its paths now pass.
+- **Cost.** d4's and d5's D-cache changes add a cycle to device reads and
+  to region aborts only. On the CPU bench, with ideal memory over Virtua
+  Cop's first 3 virtual s, d5 retires the same instructions in the same
+  97,420,197 cycles as d3.
+- **The count.** d5's last two paths are the LDM/STM register count beside
+  each buffer entry: Thumb's halfword mux, its list mux, then a 16-bit
+  popcount, 12.3 ns. It is now the popcount of the word's bytes, straight
+  from the flops, with one small add after.
+- **d6 to d7.** As flops, the LRU bits were 1,536 registers, each with a
+  write decoder, and a 1,024- or 512-way mux on the fetch and load
+  addresses. A wrong LRU bit only picks a worse victim, so a block RAM
+  read beside the tags serves; a write at the edge of the read is not
+  seen. The RAMs freed 2,890 ALMs (17,133 → 14,243). The flush walk's bulk
+  clear was redundant, since the walk writes back every dirty line and each
+  write-back clears its own bit. Nothing was changed on CPSR's paths; they
+  passed in the emptier fit.
+
 ### 5.5 Where the cycles go, measured
 
 `sim/run_cpu.sh` (sections 6 and 8) tallies each cycle by what the
@@ -714,15 +835,18 @@ Section 5.5 showed the BTB is needed. This is the one built
 
 **Fetch.**
 
-- **The BTB:** 256 entries, direct-mapped, indexed by `pc[8:1]`.
-  - Each entry holds the full tag `pc[31:9]`, the target with the Thumb bit
-    as bit 0, and a kind: plain, call or return.
+- **The BTB:** 512 entries, direct-mapped, indexed by `pc[9:1]` (`BI` in
+  `arm_cpu.sv` sets the size; it was 256 until gameplay was measured,
+  section 4.5).
+  - Each entry holds the full tag `pc[31:10]`, the target with the Thumb
+    bit as bit 0, and a kind: plain, call or return.
   - The 2-bit counters sit in a RAM of their own, so a branch that is not
     taken can count down without rewriting the target.
   - Both RAMs are read at the edge that loads `f1_pc`, with `f1_pc`'s next
     value. The entry for an address is therefore there in the same cycle F1
     holds it, so a correct prediction costs nothing.
-  - Quartus places the entries in M10K block RAM (3 blocks, 15,104 bits).
+  - Quartus places the entries in M10K block RAM: 3 blocks for 512 × 56
+    bits, as for 256, and one for the counters.
 - **A hit** (tag match and counter ≥ 2) sends F1 to the stored target. For
   a return, it goes to the top of the return stack instead.
 - **The return stack:** 8 entries in flops.
@@ -772,11 +896,25 @@ The write lands a cycle later, from flops, so A's forwarding and adders
 end at a register. A fetch in between sees the old entry, which is
 checked like any other.
 
+**Returns by load** (`LDM`/`POP` with pc) are predicted from the return
+stack, as BX lr is.
+
+- A taken one writes its BTB entry with the kind "return", so the next
+  fetch of it goes to the stack's top.
+- M compares the loaded word with the predicted address. Only a wrong
+  one redirects, from W.
+- A holds while such a load is in M, so nothing behind it commits on a
+  prediction that W may still undo.
+
+Measured on the CPU bench, with ideal memory, over Virtua Cop's first 3
+virtual s: CPI went from 1.588 to 1.532, and W's redirects from 0.014 to
+0.004 per instruction.
+
 **Not predicted.**
 
-- **Loads to PC** (`LDR pc`, `LDM`/`POP` with pc). These redirect from W
-  (7 cycles). They still pop the return stack, so returns made by BX lr
-  stay matched.
+- **`LDR pc`, and a load to PC whose entry is not a return.** These
+  redirect from W (7 cycles). They still pop the return stack, so returns
+  made by BX lr stay matched.
 - **ALU writes to PC** (`MOV pc, lr`, `ADD pc, …`). These redirect from M
   (6 cycles).
 - **A Thumb BL whose two halves reach D2 apart.** It redirects from M.
@@ -908,6 +1046,32 @@ are on the RTL as committed. The random programs write only the flags
 with MSR, so mode changes, which D1's register indices depend on, are
 covered by the firmware in the game runs. The match tags' own check (section 5.3)
 held throughout.
+
+**Starting in a game's play.** A gameplay window at 80–92 s is an hour or
+more of booting on this bench before it measures anything. Instead,
+`tools/ngvm/ngvm.py --save-at 85:FILE` saves the machine where the
+reference reaches that virtual second, which takes about a minute. The
+file holds:
+
+- the registers of every mode, and the SPSRs;
+- the devices and the page table;
+- RAM, the fixed processes' section and the drive.
+
+`--restore FILE` then starts the bench there:
+
+- it loads memory and Unicorn from the file;
+- once the CPU's reset ends, it sets the RTL's registers, fetch address,
+  devices and table, before the CPU's first clock;
+- the caches, the BTB and the audio FIFO start empty.
+
+Times given to `--seconds`, `--keys` and `--profile` stay times since
+power-on.
+
+Virtua Cop at 85 s (in play, the docks), restored into the d5 RTL, ran
+from 85 to 86 s in lockstep with Unicorn: 42.4 M instructions, identical. The frames
+show the shootout going on. The game state is the reference's, whose
+timing differs from the RTL's, so a restored window is for comparing RTL
+variants with each other, not with a run from power-on.
 
 **The rotate-and-mask shifter** was also compared with the one it
 replaced. The comparison covered every type, every amount, both amount

@@ -10,12 +10,12 @@
 # matches nothing -- take it out of the group then (the CI constraint check
 # says so).
 #
-# The sixth output is NGVM's CPU clock, 64 MHz, in a group of its own: every
-# path between it and the 96 MHz side is a crossing built not to need timing
-# (rtl/ngvm_xbus.sv: fields held still for clocks before a synchronised
-# toggle says they may be taken; rtl/ngage_core.sv lists the rest).  The two
-# share a VCO, so Quartus would otherwise time them as related clocks whose
-# edges come 2 ns apart.
+# NGVM's CPU clock comes from a PLL of its own (target/pocket/cpu_pll.v, at
+# core_top's CPU_HZ), in a group of its own: every path between it and the
+# 96 MHz side is a crossing built not to need timing (rtl/ngvm_xbus.sv:
+# fields held still for clocks before a synchronised toggle says they may
+# be taken; rtl/ngage_core.sv lists the rest).  core_pll's sixth output,
+# which was the CPU's clock, drives nothing.
 # ==============================================================================
 set_clock_groups -asynchronous \
  -group { bridge_spiclk } \
@@ -26,7 +26,7 @@ set_clock_groups -asynchronous \
           ic|core_pll|core_pll_inst|altera_pll_i|general[2].gpll~PLL_OUTPUT_COUNTER|divclk \
           ic|core_pll|core_pll_inst|altera_pll_i|general[3].gpll~PLL_OUTPUT_COUNTER|divclk \
           ic|core_pll|core_pll_inst|altera_pll_i|general[4].gpll~PLL_OUTPUT_COUNTER|divclk } \
- -group { ic|core_pll|core_pll_inst|altera_pll_i|general[5].gpll~PLL_OUTPUT_COUNTER|divclk } \
+ -group { ic|cpu_pll|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk } \
  -group { ic|pocket_audio_mixer|audio_pll|mf_audio_pll_inst|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk } \
  -group { ic|pocket_audio_mixer|audio_pll|mf_audio_pll_inst|altera_pll_i|general[1].gpll~PLL_OUTPUT_COUNTER|divclk }
 

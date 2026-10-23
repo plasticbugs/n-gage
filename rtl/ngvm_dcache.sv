@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// The data cache: 16 KB, two ways of 256 lines of 32 bytes, virtually tagged,
+// The data cache: 32 KB, two ways of 512 lines of 32 bytes, virtually tagged,
 // write-back and write-allocate (docs/core-design.md 4).  Each line keeps the
 // bus address it came from, so a write-back never reads the page table.
 //
@@ -109,6 +109,7 @@ module ngvm_dcache
 );
     localparam logic [1:0] MC_FILL = 2'd0, MC_WB = 2'd1, MC_URD = 2'd2, MC_WCB = 2'd3;
     localparam int PAW = 22;            // a line's bus address, [26:5]
+    localparam int SB  = 9;             // set bits: va[13:5]
 
     // ------------------------------------------------------------ arrays
     // data: a RAM per way, with byte enables; tags: {vtag, bus line}.  The
@@ -117,21 +118,24 @@ module ngvm_dcache
     // slices of an unpacked word is not inferred by Quartus 18.1, which then
     // builds 131,072 flops instead of 16 block RAMs.
     localparam int TV = TAGW + PAW;     // a tag word's valid bit: {valid, vtag, bus line}
-    logic [3:0][7:0]     dat0 [0:2047], dat1 [0:2047];
-    logic [TV:0]         tag0 [0:255],  tag1 [0:255];
-    logic [255:0]        dty0, dty1;
-    logic [255:0]        lru;           // the way to replace next
+    logic [3:0][7:0]     dat0 [0:(8<<SB)-1], dat1 [0:(8<<SB)-1];
+    logic [TV:0]         tag0 [0:(1<<SB)-1], tag1 [0:(1<<SB)-1];
+    logic [(1<<SB)-1:0]  dty0, dty1;
+    logic                lru  [0:(1<<SB)-1];    // the way to replace next: a hint, so a RAM
+    logic                lq;                    // lru of the set the tags were read for
+    logic                lw_en, lw_d;
+    logic [SB-1:0]       lw_a;
 
-    logic [10:0] rd_a;                  // what the RAMs read at this edge
+    logic [SB+2:0] rd_a;                // what the RAMs read at this edge
     logic [31:0] q0, q1;
     logic [TV:0] t0, t1;
 
     logic        dw_en, dw_way;
-    logic [10:0] dw_a;
+    logic [SB+2:0] dw_a;
     logic [31:0] dw_d;
     logic  [3:0] dw_be;
     logic        tw0, tw1;
-    logic  [7:0] tw_a;
+    logic [SB-1:0] tw_a;
     logic [TV:0] tw_d;
 
     always_ff @(posedge clk) begin
@@ -165,8 +169,14 @@ module ngvm_dcache
     always_ff @(posedge clk) begin
         if (tw0) tag0[tw_a] <= tw_d;
         if (tw1) tag1[tw_a] <= tw_d;
-        t0 <= tag0[rd_a[10:3]];
-        t1 <= tag1[rd_a[10:3]];
+        t0 <= tag0[rd_a[SB+2:3]];
+        t1 <= tag1[rd_a[SB+2:3]];
+    end
+    // read with the tags, so a write at that edge is not seen: it only
+    // chooses a victim
+    always_ff @(posedge clk) begin
+        if (lw_en) lru[lw_a] <= lw_d;
+        lq <= lru[rd_a[SB+2:3]];
     end
 
     // ------------------------------------------------------------ the request
@@ -196,7 +206,7 @@ module ngvm_dcache
     logic        r_abt;
     assign r_rg  = region_of(r_va);
     assign r_abt = r_rg == RG_NONE || (r_rg == RG_ROM && r_we);
-    wire  [7:0]  r_set = r_va[12:5];
+    wire  [SB-1:0] r_set = r_va[SB+4:5];
 
     // ------------------------------------------------------------ compare
     wire [TAGW-1:0] r_tag = vtag_of(r_va, win_id);
@@ -206,14 +216,14 @@ module ngvm_dcache
 
     // the store bypass: the word written at the edge that read this one
     logic        byp_v, byp_w;
-    logic [10:0] byp_a;
+    logic [SB+2:0] byp_a;
     logic  [3:0] byp_be;
     logic [31:0] byp_d;
     function automatic logic [31:0] merge(input logic [31:0] old, input logic [3:0] be, input logic [31:0] d);
         for (int b = 0; b < 4; b++) if (be[b]) old[8*b +: 8] = d[8*b +: 8];
         return old;
     endfunction
-    wire  byp   = byp_v && byp_a == r_va[12:2];
+    wire  byp   = byp_v && byp_a == r_va[SB+4:2];
     wire [31:0] q0m = byp && !byp_w ? merge(q0, byp_be, byp_d) : q0;
     wire [31:0] q1m = byp &&  byp_w ? merge(q1, byp_be, byp_d) : q1;
 
@@ -300,18 +310,18 @@ module ngvm_dcache
     // ------------------------------------------------------------ the miss side
     logic        mway;              // the way being filled or written back
     logic        mdty;              // ... and whether it is to be written back first
-    logic  [7:0] mset;
+    logic [SB-1:0] mset;
     logic [PAW-1:0] mpa;            // its bus line, for a write-back
     logic [255:0] wb_d;             // the line to write back
     logic  [3:0] k;                 // word counter, 0..8
-    logic  [7:0] ws;                // the walk's set
+    logic [SB-1:0] ws;              // the walk's set
     wire  dsome = dty0[ws] || dty1[ws]; // a dirty line in the walk's set
     st_t         gap_next;          // where S_GAP goes
 
-    wire  vict  = !t0[TV] ? 1'b0 : !t1[TV] ? 1'b1 : lru[r_set];
+    wire  vict  = !t0[TV] ? 1'b0 : !t1[TV] ? 1'b1 : lq;
     wire  vdty  = vict ? t1[TV] && dty1[r_set] : t0[TV] && dty0[r_set];
     logic        kill_v, kill_w;        // the victim to mark invalid, the edge after the miss
-    logic  [7:0] kill_a;
+    logic [SB-1:0] kill_a;
 
     assign m_req = st == S_WB || st == S_FILL || st == S_UNC || st == S_WCF;
     assign m_wb  = mdty;
@@ -335,12 +345,12 @@ module ngvm_dcache
     // the RAMs have read the old r_va, and `fresh` says so)
     always_comb begin
         case (st)
-            S_REPLAY: rd_a = r_va[12:2];
-            S_FILL:   rd_a = vrd ? {mset, k[2:0]} : r_v ? r_va[12:2] : dc_addr[12:2];
+            S_REPLAY: rd_a = r_va[SB+4:2];
+            S_FILL:   rd_a = vrd ? {mset, k[2:0]} : r_v ? r_va[SB+4:2] : dc_addr[SB+4:2];
             S_WBRD:   rd_a = {mset, k[2:0]};
             S_WALK:   rd_a = {ws, 3'd0};
             S_SWEEP:  rd_a = {ws, 3'd0};
-            default:  rd_a = dc_addr[12:2];
+            default:  rd_a = dc_addr[SB+4:2];
         endcase
     end
 
@@ -351,7 +361,7 @@ module ngvm_dcache
     always_comb begin
         dw_en  = st_wr || fw;
         dw_way = fw ? mway : st_w;
-        dw_a   = fw ? {mset, fw_w} : r_va[12:2];
+        dw_a   = fw ? {mset, fw_w} : r_va[SB+4:2];
         dw_d   = fw ? m_rline[32*fw_w +: 32] : r_wd;
         dw_be  = fw ? ~fmask[4*fw_w +: 4] : r_be;
         // a tag: a fill's, valid; a victim's, invalid; a flushed or swept
@@ -364,6 +374,10 @@ module ngvm_dcache
         end else if (st == S_SWEEP || (st == S_WALK && flushing && !dsome)) begin
             tw0 = 1'b1; tw1 = 1'b1; tw_a = ws; tw_d = '0;
         end
+        // a fill's last word makes the other way next; else a hit, its way
+        lw_en = fend || (cmp || fcmp || fst) && is_c && hit;
+        lw_a  = fend ? mset : r_set;
+        lw_d  = fend ? !mway : hit0;
     end
 
     wire  [2:0] kp = 3'(k - 4'd1);      // the word S_WBRD has out
@@ -394,14 +408,13 @@ module ngvm_dcache
         // stores: the bypass, dirty, LRU; and the line coming in's bytes
         byp_v <= st_wr;
         if (st_wr) begin
-            byp_a <= r_va[12:2]; byp_w <= st_w; byp_be <= r_be; byp_d <= r_wd;
+            byp_a <= r_va[SB+4:2]; byp_w <= st_w; byp_be <= r_be; byp_d <= r_wd;
         end
         if (st_wr && hit) begin
             if (hit1) dty1[r_set] <= 1'b1; else dty0[r_set] <= 1'b1;
         end
         if (fst_l) fmask <= fmask | be_line;
         if (st == S_FILL && m_xok) xok <= 1'b1;     // not S_WCF's, which comes first
-        if ((cmp || fcmp || fst) && is_c && hit) lru[r_set] <= hit0;
 
         // an uncached store into the buffer, now or after it is written out
         if ((cmp && unc_now && !r_abt) || (st == S_WCF && m_done && after == A_STORE)) begin
@@ -418,7 +431,7 @@ module ngvm_dcache
                 if (cmp && r_abt) begin
                     u_q <= 32'd0; u_flt <= 1'b1; st <= S_DONE;
                 end else if (cmp && is_fl) begin
-                    ws <= 8'd0; flushing <= 1'b1; walking <= 1'b1;
+                    ws <= '0; flushing <= 1'b1; walking <= 1'b1;
                     if (wc_v) begin st <= S_WCF; after <= A_FLUSH; end
                     else st <= S_WALK;
                 end else if (cmp && is_io && !r_abt && !r_we) begin
@@ -434,7 +447,7 @@ module ngvm_dcache
                     else st <= S_FILL;
                 end else if (clean_pend) begin
                     // a request in its compare is kept, and read again after
-                    ws <= 8'd0; flushing <= 1'b0; walking <= 1'b1;
+                    ws <= '0; flushing <= 1'b0; walking <= 1'b1;
                     if (wc_v) begin st <= S_WCF; after <= A_CLEAN; end
                     else st <= S_WALK;
                 end
@@ -479,7 +492,6 @@ module ngvm_dcache
                 end else if (fend) begin
                     if (mway) dty1[mset] <= fmask != '0 || fst_l;
                     else      dty0[mset] <= fmask != '0 || fst_l;
-                    lru[mset] <= !mway;
                     mdty <= 1'b0;
                     st <= r_v_n ? S_REPLAY : S_IDLE;
                 end
@@ -493,13 +505,13 @@ module ngvm_dcache
             S_WALK: begin
                 // the tags of set ws are read at this edge
                 if (dsome) st <= S_WTAG;
-                else if (ws != 8'd255) ws <= ws + 8'd1;
+                else if (!(&ws)) ws <= ws + 1'b1;
                 else begin
                     // the walk is over
                     cleaned <= clean_pend;
                     clean_pend <= 1'b0; walking <= 1'b0;
+                    // every dirty line was written back, which cleared its bit
                     if (flushing) begin
-                        dty0 <= '0; dty1 <= '0;
                         flushing <= 1'b0;
                         st <= S_DONE;
                     end else st <= r_v ? S_REPLAY : S_IDLE;
@@ -512,21 +524,21 @@ module ngvm_dcache
                 st <= S_WBRD;
             end
             S_SWEEP: begin
-                ws <= ws + 8'd1;
-                if (ws == 8'd255) st <= r_v_n ? S_REPLAY : S_IDLE;
+                ws <= ws + 1'b1;
+                if (&ws) st <= r_v_n ? S_REPLAY : S_IDLE;
             end
             default: st <= S_IDLE;
         endcase
 
         if (rst) begin
-            st <= S_SWEEP; ws <= 8'd0;          // the tags start unknown
+            st <= S_SWEEP; ws <= '0;            // the tags start unknown
             r_v <= 1'b0; look <= 1'b0; byp_v <= 1'b0; wc_v <= 1'b0; mdty <= 1'b0; kill_v <= 1'b0;
-            dty0 <= '0; dty1 <= '0; lru <= '0;
+            dty0 <= '0; dty1 <= '0;
             clean_pend <= 1'b0; flushing <= 1'b0; walking <= 1'b0; u_flt <= 1'b0;
             cleaned <= 1'b0;
         end
     end
-    assign inv_i = st == S_WALK && !dsome && ws == 8'd255 && flushing;
+    assign inv_i = st == S_WALK && !dsome && (&ws) && flushing;
 endmodule
 
 `default_nettype wire

@@ -15,7 +15,7 @@
 `default_nettype none
 
 module tb_system_top #(
-    parameter int CPU_HZ = 73_846_154
+    parameter int CPU_HZ = 80_000_000
 ) (
     input  logic        clk,            // 96 MHz
     input  logic        clk_cpu,

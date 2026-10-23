@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// The instruction cache: 32 KB, two ways of 512 lines of 32 bytes, virtually
+// The instruction cache: 64 KB, two ways of 1,024 lines of 32 bytes, virtually
 // tagged (docs/core-design.md 4).
 //
 // It answers the CPU's instruction port (arm_cpu.sv): an address at an edge
@@ -19,7 +19,7 @@
 // flops until the cache had 256 sets, so a flush could clear them at once;
 // at 512 sets the mux that read them sat on the fetch address, and their
 // clear on the D-cache's flush walk.  A flush (inv) now sweeps the tag RAMs,
-// a set a cycle, 512 cycles in which no fetch is answered; flushes come
+// a set a cycle, 1,024 cycles in which no fetch is answered; flushes come
 // when code is loaded, a few times a game.  A miss marks its victim invalid
 // at the edge after it starts, from flops (the victim's choice, through LRU
 // and the hit, was the slowest way into the tag RAM's write).  A lookup
@@ -62,12 +62,12 @@ module ngvm_icache
     input  logic [255:0] fill_line,
     input  logic   [3:0] fill_words     // how many of its words are in fill_line
 );
-    localparam int SB = 9;              // set bits: va[13:5]
+    localparam int SB = 10;             // set bits: va[14:5]
 
     // ------------------------------------------------------------ arrays
     logic [31:0]     dat0 [0:(8<<SB)-1], dat1 [0:(8<<SB)-1];
     logic [TAGW:0]   tag0 [0:(1<<SB)-1], tag1 [0:(1<<SB)-1];   // {valid, tag}
-    logic [(1<<SB)-1:0] lru;            // the way to replace next
+    logic            lru  [0:(1<<SB)-1];   // the way to replace next: a hint, so a RAM
 
     logic [31:0]     q0, q1;
     logic [TAGW:0]   t0, t1;
@@ -79,6 +79,9 @@ module ngvm_icache
     logic        tw0, tw1;
     logic [SB-1:0] tw_a;
     logic [TAGW:0] tw_d;
+    logic          lq;                  // lru of the set the tags were read for
+    logic          lw_en, lw_d;
+    logic [SB-1:0] lw_a;
 
     always_ff @(posedge clk) begin
         if (dw_en && !dw_way) dat0[dw_a] <= dw_d;
@@ -91,6 +94,12 @@ module ngvm_icache
         if (tw1) tag1[tw_a] <= tw_d;
         t0 <= tag0[ic_addr[SB+4:5]];
         t1 <= tag1[ic_addr[SB+4:5]];
+    end
+    // read with the tags, so a write at that edge is not seen: it only
+    // chooses a victim
+    always_ff @(posedge clk) begin
+        if (lw_en) lru[lw_a] <= lw_d;
+        lq <= lru[ic_addr[SB+4:5]];
     end
 
     // ------------------------------------------------------------ lookup
@@ -137,7 +146,7 @@ module ngvm_icache
     assign ic_data  = hit1 || (fhit && mway) ? q1 : q0;
 
     wire start = st == S_IDLE && !blind && f2_req && !hit && !fmatch;
-    wire vict  = !vq0 ? 1'b0 : !vq1 ? 1'b1 : lru[f2_set];
+    wire vict  = !vq0 ? 1'b0 : !vq1 ? 1'b1 : lq;
     wire fw    = st == S_FILL && wk < fill_words;          // a word to write
     wire fend  = st == S_FILL && (fdone || fill_done) && wk == 4'd8;
 
@@ -161,12 +170,15 @@ module ngvm_icache
         end else if (kill_v) begin
             tw0 = !kill_w; tw1 = kill_w; tw_a = kill_a; tw_d = '0;
         end
+        // a fill's last word makes the other way next; else a hit, its way
+        lw_en = fend && !discard || f2_req && hit;
+        lw_a  = fend && !discard ? mva[SB+4:5] : f2_set;
+        lw_d  = fend && !discard ? !mway : hit0;
     end
 
     always_ff @(posedge clk) begin
         f2_have <= start ? '0 : have;   // a new line has nothing in yet
         kill_v <= start; kill_w <= vict; kill_a <= f2_set;
-        if (f2_req && hit) lru[f2_set] <= hit0;
         case (st)
             S_IDLE: if (sweep_pend) begin
                 st <= S_SWEEP; sw <= '0; sweep_pend <= 1'b0;
@@ -182,10 +194,7 @@ module ngvm_icache
                 if (fw) begin wk <= wk + 4'd1; have[dw_w] <= 1'b1; end
                 if (fill_done) fdone <= 1'b1;
                 if (fill_done && fill_fault) st <= S_WAIT;
-                else if (fend) begin
-                    st <= S_WAIT;
-                    if (!discard) lru[mva[SB+4:5]] <= !mway;
-                end
+                else if (fend) st <= S_WAIT;
             end
             S_SWEEP: begin
                 sw <= sw + 1'b1;
@@ -205,7 +214,7 @@ module ngvm_icache
         end
         if (rst) begin
             st <= S_SWEEP; sw <= '0; sweep_pend <= 1'b0;   // the tags start unknown
-            lru <= '0; fv <= 1'b0; have <= '0; discard <= 1'b0; kill_v <= 1'b0;
+            fv <= 1'b0; have <= '0; discard <= 1'b0; kill_v <= 1'b0;
         end
     end
 endmodule

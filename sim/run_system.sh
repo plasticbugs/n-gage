@@ -11,14 +11,14 @@
 # both -- but this is the one to run before a flash: it is the only
 # simulation in which the clock crossing, the arbiter, the refresh, the
 # PSRAM and the download exist at all (METHODOLOGY section 5.16).
-# CPU_HZ=n sets the CPU's clock (73.85 MHz by default, as core_top's PLL);
+# CPU_HZ=n sets the CPU's clock (80 MHz by default, as core_top's PLL);
 # OBJ=dir builds elsewhere than sim/obj_system, JOBS=n limits the build.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/.." && pwd)
 cd "$here"
 verilator --version >/dev/null 2>&1 || { echo "verilator not found" >&2; exit 2; }
-HZ=${CPU_HZ:-73846154}
+HZ=${CPU_HZ:-80000000}
 OBJ=${OBJ:-$here/obj_system}
 make -s -C "$root"/sw/kernel >/dev/null
 

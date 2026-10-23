@@ -36,7 +36,7 @@
 #include <vector>
 
 #ifndef SYS_HZ
-#define SYS_HZ 73846154
+#define SYS_HZ 80000000
 #endif
 static const double CPU_HZ = SYS_HZ, MEM_HZ = 96e6;
 static const int W = 176, H = 208;

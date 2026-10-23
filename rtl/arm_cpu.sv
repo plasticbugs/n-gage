@@ -184,15 +184,16 @@ module arm_cpu
     assign pr_f2   = '{ptaken: f2_ptaken, pnext: f2_pnext, ptagm: f2_ptagm, pctr: f2_pctr, psp: f2_psp};
 
     // ---- branch prediction: a BTB answering in F1's own cycle, and a return stack
-    // The BTB is indexed by pc[8:1] and read at the edge that loads f1_pc,
+    // The BTB is indexed by pc[BI:1] and read at the edge that loads f1_pc,
     // with f1_pc's next value, so its entry for f1_pc is there while F1 holds
     // it.  A hit whose counter says taken sends F1 to the stored target, or
     // for a return to the return stack's top.  Every prediction is checked
     // downstream: direct branches in A, BX in A with the redirect from M.
     // Loads and ALU writes to PC are not predicted (docs/core-design.md 5.6).
-    localparam int BTBN = 256;
+    localparam int BI   = 9;                    // index bits: pc[BI:1]
+    localparam int BTBN = 1 << BI;
     typedef struct packed {
-        logic [22:0] tag;                       // pc[31:9]
+        logic [30-BI:0] tag;                    // pc[31:BI+1]
         logic [31:0] tgt;                       // {address[31:1], Thumb}
         logic  [1:0] kind;                      // BK_*
     } btbe_t;
@@ -211,7 +212,7 @@ module arm_cpu
     logic [31:0] f1_seq, f1_pnext, f1_pc_n;
     logic        f1_thumb_n, f1_tagm, f1_hit, any_redirect;
     assign f1_seq   = f1_pc + (f1_thumb ? 32'd2 : 32'd4);
-    assign f1_tagm  = bq.tag == f1_pc[31:9];
+    assign f1_tagm  = bq.tag == f1_pc[31:BI+1];
     assign f1_hit   = f1_tagm && bc[1];
     assign f1_pnext = bq.kind == BK_RET ? ras[ras_sp - 3'd1] : bq.tgt;
     assign any_redirect = w_redirect || m_redirect || a_redirect || d_redirect;
@@ -232,8 +233,8 @@ module arm_cpu
         end
     end
     always_ff @(posedge clk) begin
-        bq <= btb_e[f1_pc_n[8:1]];
-        bc <= btb_c[f1_pc_n[8:1]];
+        bq <= btb_e[f1_pc_n[BI:1]];
+        bc <= btb_c[f1_pc_n[BI:1]];
     end
 
     // ============================================================ D1
@@ -1224,9 +1225,9 @@ module arm_cpu
     logic       bw_e, bw_c, bwq_e, bwq_c;
     btbe_t      bw_d, bwq_d;
     logic [1:0] bw_ctr, bwq_ctr;
-    logic [7:0] bwq_i;
+    logic [BI-1:0] bwq_i;
     always_comb begin
-        bw_d.tag  = a_u.pc[31:9];
+        bw_d.tag  = a_u.pc[31:BI+1];
         bw_d.kind = a_u.br_call ? BK_CALL : a_u.br_ret ? BK_RET : BK_PLAIN;
         if (a_u.kind == K_BX)  bw_d.tgt = {a_target[31:1], eb[0]};
         else if (a_u.ra_rd)    bw_d.tgt = {a_mtarget[31:1], 1'b1};
@@ -1240,7 +1241,7 @@ module arm_cpu
     end
     always_ff @(posedge clk) begin
         bwq_e <= !rst && bw_e; bwq_c <= !rst && bw_c;
-        bwq_d <= bw_d; bwq_ctr <= bw_ctr; bwq_i <= a_u.pc[8:1];
+        bwq_d <= bw_d; bwq_ctr <= bw_ctr; bwq_i <= a_u.pc[BI:1];
         if (bwq_e) btb_e[bwq_i] <= bwq_d;
         if (bwq_c) btb_c[bwq_i] <= bwq_ctr;
     end

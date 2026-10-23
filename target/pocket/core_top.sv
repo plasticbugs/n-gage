@@ -817,7 +817,7 @@ module core_top
     wire clk_vid_90deg; // Video: 6.857 MHz @ 90deg (Pocket RGB clock pair)
     wire clk_sdram;     // SDRAM chip clock: 96.0 MHz, phase-shifted (see the SDC)
     wire clk_ana;       // Analogizer: 48.0 MHz, clk_sys / 2, in phase with it
-    wire clk_cpu;       // NGVM's CPU side: 73.85 MHz (VCO / 13), asynchronous to the rest by design
+    wire clk_cpu;       // NGVM's CPU side: CPU_HZ, from cpu_pll, asynchronous to the rest by design
 
     core_pll core_pll
     (
@@ -828,8 +828,19 @@ module core_top
         .outclk_2 ( clk_vid_90deg ),
         .outclk_3 ( clk_sdram     ),
         .outclk_4 ( clk_ana       ),
-        .outclk_5 ( clk_cpu       ),
+        .outclk_5 (               ),
         .locked   ( pll_core_locked )
+    );
+
+    // the CPU's clock: a PLL of its own, so its frequency is this one number
+    localparam int CPU_HZ = 80_000_000;
+    wire pll_cpu_locked, pll_cpu_locked_sys;
+    cpu_pll #(.FREQ("80.000000 MHz")) cpu_pll
+    (
+        .refclk   ( clk_74a ),
+        .rst      ( 0       ),
+        .outclk_0 ( clk_cpu ),
+        .locked   ( pll_cpu_locked )
     );
 
     // Synchronize pll_core_locked into clk_74a domain before usage
@@ -842,6 +853,7 @@ module core_top
     synch_3 sync_rst(reset_sw, reset_sw_s, clk_sys);
     wire pll_locked_sys;
     synch_3 sync_lck2(pll_core_locked, pll_locked_sys, clk_sys);
+    synch_3 sync_lck3(pll_cpu_locked, pll_cpu_locked_sys, clk_sys);
 
     //! The SDRAM initialises on the hardware reset; the machine is held until
     //! the SDRAM is ready and the host's first "all complete" has been seen
@@ -856,7 +868,7 @@ module core_top
     wire  allc_s;
     synch_3 sync_allc(dataslot_allcomplete, allc_s, clk_sys);
     always_ff @(posedge clk_sys) if (allc_s) loaded <= 1'b1;
-    wire  g_reset = reset_sw_s | ~loaded | ~mem_ready;
+    wire  g_reset = reset_sw_s | ~loaded | ~mem_ready | ~pll_cpu_locked_sys;
 
     //! The three slots (data.json) arrive at their bus addresses: the kernel
     //! at 0, SYM.ROM at 0x2000000, the game's drive image at 0x4000000.
@@ -980,7 +992,7 @@ module core_top
     always @(posedge clk_sys) begin vt_s <= vt; vt_d <= vt_s; end
     wire pix_sync = vt_s ^ vt_d;
 
-    ngage_core #(.CPU_HZ(73_846_154)) u_core (
+    ngage_core #(.CPU_HZ(CPU_HZ)) u_core (
         //! pause_core is the Pocket's menu being open.  NGVM does not use it
         //! yet: the game runs on behind the menu.  It must never be ORed into
         //! reset, which would boot the phone again when the menu closed.
