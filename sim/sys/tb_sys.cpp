@@ -24,6 +24,22 @@
 //       [--frames-to DIR --frame-every N] [--keys "S:MASK ..."] [--keymap HEX]
 //       [--watch-pc ADDR,ADDR,...]  (hex; prints when each retires, its first 20 times)
 //       [--profile FROM]  (where the cycles go from FROM seconds, the idle loop's apart)
+//       [--restore FILE]  (start from tools/ngvm/ngvm.py --save-at's machine; see below)
+//
+// --restore starts the machine where the reference saved it, so a run can
+// begin in a game's play rather than at power-on.  The file holds, little-
+// endian: "NGVMCKP1"; the virtual time (double, s), PC and CPSR; the 32
+// registers in arm_regs.sv's physical numbering; the SPSRs of FIQ, SVC, ABT,
+// IRQ and UND; the microsecond clock (u64), then IRQ status and enable, the
+// timer's compare and whether it is armed, the clock's latched high word,
+// LCD base and control, the frame count, the keys, the audio rate, the data
+// window's number and the drive's size (u32 each); the page table (u16 an
+// entry); RAM, the fixed processes' section and the drive.  The bench loads
+// memory and Unicorn from it, and once the CPU's reset ends (cpu_rst, after
+// the page table's clear) sets the RTL's registers, CPSR, SPSRs, fetch
+// address, devices and table to it, before the CPU's first clock.  The
+// caches, the BTB and the audio FIFO start empty.  Times given to --seconds,
+// --keys and --profile stay times since power-on.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -114,6 +130,8 @@ struct Bench {
     size_t rom_size = 0, drive_size = 0;
     int exit_code = -1;
     std::string con;
+    double t_base = 0;                              // virtual s at cycle 0 (--restore)
+    double vt() const { return t_base + (double)cycles / CPU_HZ; }
 
     // the bus: one request, answered after a latency
     int lat_line = 40, lat_word = 20;
@@ -133,6 +151,7 @@ struct Bench {
     const char *frames_to = nullptr;
     int frame_every = 0;
     std::vector<std::pair<uint64_t, uint32_t>> keys;  // (cycle, mask)
+    std::vector<std::pair<double, uint32_t>> key_s;   // (virtual s, mask), as given
 
     std::deque<std::pair<uint32_t, uint32_t>> io_reads;
     uint32_t uc_pt_index = 0;
@@ -150,6 +169,8 @@ struct Bench {
     // side when the next instruction retires
     enum { P_RETIRE, P_UOP, P_EMPTY, P_EMPTY_IF, P_F2MISS, P_SWAIT, P_SW_LOAD, P_SW_SHIFT, P_SW_MUL,
            P_SW_SHREG, P_SW_RRX, P_MUL, P_MHOLD,
+           P_MH_CMP, P_MH_LDFILL, P_MH_STFILL, P_MH_FILLOTHER, P_MH_REPLAY, P_MH_WALK, P_MH_UNC,
+           P_MH_WCF, P_MH_OTHER,
            P_DRED, P_ARED_BR, P_ARED_BX, P_ARED_EXC, P_ARED_OTHER, P_MRED, P_WRED, P_N };
     uint64_t prof_from = UINT64_MAX, prof_pend[P_N] = {}, prof_busy[P_N] = {}, prof_cyc[2] = {};
     void profile() {
@@ -166,7 +187,24 @@ struct Bench {
             for (int k = 0; k < 5; k++) if (c->s_why >> k & 1) prof_pend[P_SW_LOAD + k]++;
         }
         if (c->a_busy) prof_pend[P_MUL]++;
-        if (c->m_hold) prof_pend[P_MHOLD]++;
+        if (c->m_hold) {
+            // what the D-cache is doing meanwhile (ngvm_dcache.sv st_t)
+            auto *s = top->rootp->ngvm_sys;           // u_dc is flattened into it
+            prof_pend[P_MHOLD]++;
+            int k;
+            switch (s->u_dc__DOT__st) {
+            case 0:  k = P_MH_CMP; break;                               // S_IDLE: the compare
+            case 5:  k = !s->u_dc__DOT__r_v ? P_MH_FILLOTHER            // S_FILL
+                         : s->u_dc__DOT__mtag == s->u_dc__DOT__r_tag && s->u_dc__DOT__mset == s->u_dc__DOT__r_set
+                           ? (s->u_dc__DOT__r_we ? P_MH_STFILL : P_MH_LDFILL) : P_MH_FILLOTHER; break;
+            case 1:  case 7: k = P_MH_REPLAY; break;                    // S_REPLAY, S_DONE
+            case 2:  case 3: case 8: case 9: k = P_MH_WALK; break;      // S_WBRD, S_WB, S_WALK, S_WTAG
+            case 6:  k = P_MH_UNC; break;
+            case 10: k = P_MH_WCF; break;
+            default: k = P_MH_OTHER; break;                             // S_GAP, S_SWEEP
+            }
+            prof_pend[k]++;
+        }
         if (c->w_redirect) prof_pend[P_WRED]++;
         else if (c->m_redirect) prof_pend[P_MRED]++;
         else if (c->a_redirect) {
@@ -191,11 +229,14 @@ struct Bench {
             "  ... with S, D2 and the buffer empty too", "F2 waits on the I-cache", "S waits on an operand",
             "  ... a load's value", "  ... a result in A, to shift", "  ... a result in A, to multiply",
             "  ... a shift by register's extra cycle", "  ... an RRX behind a flag write", "A waits on the multiplier",
-            "M waits on memory", "D2 redirects (B, BL, Thumb BL pair)", "A redirects: conditional B",
+            "M waits on memory",
+            "  ... the D-cache's compare", "  ... a load's own line coming in", "  ... a store's own line, not on the bus yet",
+            "  ... another line coming in", "  ... a replay or S_DONE", "  ... a clean or flush walk",
+            "  ... an uncached access", "  ... the combining buffer going out", "  ... other (S_GAP, S_SWEEP)", "D2 redirects (B, BL, Thumb BL pair)", "A redirects: conditional B",
             "A redirects: BX", "A redirects: exceptions", "A redirects: other (MSR)",
             "M redirects (ALU to PC, BL suffix)", "W redirects (load to PC)" };
         printf("profile from %.2f s: %llu busy cycles, %llu idle; by what each cycle saw (they overlap; redirects are events):\n",
-               (double)prof_from / CPU_HZ, (unsigned long long)prof_cyc[0], (unsigned long long)prof_cyc[1]);
+               t_base + (double)prof_from / CPU_HZ, (unsigned long long)prof_cyc[0], (unsigned long long)prof_cyc[1]);
         for (int i = 0; i < P_N; i++)
             printf("  %-42s %12llu  %6.3f per instruction\n", name[i], (unsigned long long)prof_busy[i],
                    prof_busy[P_RETIRE] ? (double)prof_busy[i] / prof_busy[P_RETIRE] : 0.0);
@@ -408,7 +449,7 @@ struct Bench {
 
     void report(const char *why) {
         fprintf(stderr, "\n*** %s after %llu instructions (%llu cycles, %.3f s)\n", why,
-                (unsigned long long)retired, (unsigned long long)cycles, (double)cycles / CPU_HZ);
+                (unsigned long long)retired, (unsigned long long)cycles, vt());
         fprintf(stderr, "last retired:\n");
         for (auto &r : hist)
             fprintf(stderr, "  %08x %s %0*x  cpsr %08x%s\n", r.pc, r.thumb ? "T" : "A",
@@ -480,6 +521,102 @@ struct Bench {
         return true;
     }
 
+    // ---------------------------------------------------- --restore
+    struct Ckpt {
+        double t = 0;
+        uint32_t pc = 0, cpsr = 0, regs[32] = {}, spsr[5] = {};    // SPSR: FIQ SVC ABT IRQ UND
+        uint64_t us = 0;
+        uint32_t irq_status = 0, irq_enable = 0, timer_cmp = 0, timer_armed = 0, hi_latch = 0,
+                 lcd_base = 0, lcd_ctrl = 0, frames = 0, keys = 0, audio_rate = 0, win_id = 0,
+                 drive_size = 0;
+        std::vector<uint16_t> pt;
+    } ck;
+    bool restore_pending = false;
+    void load_ckpt(const char *path) {
+        auto d = slurp(path);
+        size_t o = 8;
+        auto take = [&](void *p, size_t n) {
+            if (o + n > d.size()) { fprintf(stderr, "%s: short\n", path); exit(2); }
+            memcpy(p, &d[o], n); o += n;
+        };
+        if (d.size() < 8 || memcmp(d.data(), "NGVMCKP1", 8)) { fprintf(stderr, "%s: not a checkpoint\n", path); exit(2); }
+        take(&ck.t, 8); take(&ck.pc, 4); take(&ck.cpsr, 4);
+        take(ck.regs, sizeof ck.regs); take(ck.spsr, sizeof ck.spsr); take(&ck.us, 8);
+        uint32_t *dev[] = {&ck.irq_status, &ck.irq_enable, &ck.timer_cmp, &ck.timer_armed, &ck.hi_latch,
+                           &ck.lcd_base, &ck.lcd_ctrl, &ck.frames, &ck.keys, &ck.audio_rate, &ck.win_id,
+                           &ck.drive_size};
+        for (auto *v : dev) take(v, 4);
+        ck.pt.resize(NGVM_PT_ENTRIES);
+        take(ck.pt.data(), 2 * NGVM_PT_ENTRIES);
+        take(ucm.ram.data(), NGVM_RAM_SIZE);
+        take(ucm.ksec.data(), NGVM_KSEC_SIZE);
+        if (ck.drive_size > NGVM_DRIVE_MAX) { fprintf(stderr, "%s: drive too large\n", path); exit(2); }
+        take(ucm.drive.data(), ck.drive_size);
+        memcpy(&sdram[0], ucm.ram.data(), NGVM_RAM_SIZE);
+        memcpy(&sdram[BUS_KSEC], ucm.ksec.data(), NGVM_KSEC_SIZE);
+        memcpy(&cram[0], ucm.drive.data(), ck.drive_size);
+        drive_size = ck.drive_size;
+        t_base = ck.t;
+        restore_pending = true;
+        printf("[restore] %.3f s: pc %08x cpsr %08x from %s\n", ck.t, ck.pc, ck.cpsr, path);
+    }
+    // after the edge that ends the CPU's reset, before its first clock: the
+    // caches sweep their tags for hundreds of cycles first, so a fetch or
+    // access that started from a value set here before it settled misses
+    void restore_rtl() {
+        auto *s = top->rootp->ngvm_sys;
+        auto *c = s->u_cpu;
+        for (int i = 0; i < 31; i++) c->u_regs->r[i] = ck.regs[i];
+        c->cpsr = ck.cpsr;
+        c->spsr_fiq = ck.spsr[0]; c->spsr_svc = ck.spsr[1]; c->spsr_abt = ck.spsr[2];
+        c->spsr_irq = ck.spsr[3]; c->spsr_und = ck.spsr[4];
+        switch (ck.cpsr & 0x1F) {
+        case 0x11: c->spsr_cur = ck.spsr[0]; break;
+        case 0x13: c->spsr_cur = ck.spsr[1]; break;
+        case 0x17: c->spsr_cur = ck.spsr[2]; break;
+        case 0x12: c->spsr_cur = ck.spsr[3]; break;
+        case 0x1B: c->spsr_cur = ck.spsr[4]; break;
+        default:   c->spsr_cur = ck.cpsr; break;
+        }
+        c->f1_pc = ck.pc & ~1u;
+        c->f1_thumb = ck.cpsr >> 5 & 1;
+        for (uint32_t i = 0; i < NGVM_PT_ENTRIES; i++) s->u_mmu__DOT__pt[i] = ck.pt[i];
+        s->u_io__DOT__us = ck.us;
+        s->u_io__DOT__us_frac = 0;
+        s->u_io__DOT__status = ck.irq_status & 3;          // timer, vblank; audio is a level
+        s->u_io__DOT__enable = ck.irq_enable;
+        s->u_io__DOT__cmp = ck.timer_cmp;
+        s->u_io__DOT__armed = ck.timer_armed & 1;
+        s->u_io__DOT__hi_latch = ck.hi_latch;
+        s->u_io__DOT__lcd_base = ck.lcd_base;
+        s->u_io__DOT__lcd_on = ck.lcd_ctrl & 1;
+        s->u_io__DOT__lcd_frame = ck.frames;
+        s->u_io__DOT__a_rate = ck.audio_rate ? ck.audio_rate : 8000;
+        s->u_io__DOT__win_id = ck.win_id & 0x3F;
+    }
+    void uc_restore() {
+        static const int R[15] = {UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3,
+            UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7, UC_ARM_REG_R8,
+            UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11, UC_ARM_REG_R12, UC_ARM_REG_R13, UC_ARM_REG_R14};
+        // each mode's bank in turn (Unicorn banks on a write of the CPSR), as ngvm.py's save
+        static const struct { uint32_t mode; int lo, hi, phys, spsr; } banks[] = {
+            {0x1F, 0, 14, 0, -1}, {0x11, 8, 14, 16, 0}, {0x13, 13, 14, 23, 1},
+            {0x17, 13, 14, 25, 2}, {0x12, 13, 14, 27, 3}, {0x1B, 13, 14, 29, 4}};
+        for (auto &b : banks) {
+            uint32_t m = (ck.cpsr & ~0x1Fu) | b.mode;
+            uc_reg_write(uc, UC_ARM_REG_CPSR, &m);
+            for (int r = b.lo; r <= b.hi; r++) uc_reg_write(uc, R[r], &ck.regs[b.phys + r - b.lo]);
+            if (b.spsr >= 0) uc_reg_write(uc, UC_ARM_REG_SPSR, &ck.spsr[b.spsr]);
+        }
+        uc_reg_write(uc, UC_ARM_REG_CPSR, &ck.cpsr);
+        uint32_t pc = ck.pc & ~1u;
+        uc_reg_write(uc, UC_ARM_REG_PC, &pc);
+        for (uint32_t i = 0; i < NGVM_PT_ENTRIES; i++)
+            if (ck.pt[i] != NGVM_PT_NONE) uc_pt_set(i, ck.pt[i]);
+        uc_next_pc = pc;
+        have_next = true;
+    }
+
     // the LCD as the gateware shows it: the bus memory as it was when the
     // D-cache had written back what IO_LCD_SHOW asked for (lcd_show_t)
     std::vector<uint16_t> shown = std::vector<uint16_t>(LCD_W * LCD_H, 0);
@@ -520,12 +657,12 @@ struct Bench {
         if (rt && !watch.empty()) {
             auto w = watch.find(r.pc & ~1u);
             if (w != watch.end() && w->second++ < 20)
-                printf("[watch] %08x at %.6f s\n", w->first, (double)cycles / CPU_HZ);
+                printf("[watch] %08x at %.6f s\n", w->first, vt());
         }
         if (top->io_rd) io_reads.push_back({(uint32_t)top->io_rd_off * 4, top->io_rd_data});
         if (top->io_rd && top->io_rd_off * 4 == IO_KEYMAP && !keymap_seen) {
             keymap_seen = true;            // the menu's setting, as the kernel first reads it
-            printf("[keymap] IO_KEYMAP reads %06x at %.6f s\n", top->io_rd_data, (double)cycles / CPU_HZ);
+            printf("[keymap] IO_KEYMAP reads %06x at %.6f s\n", top->io_rd_data, vt());
         }
         if (top->dbg_putc) {
             char c = (char)(top->dbg_data & 0xFF);
@@ -539,6 +676,11 @@ struct Bench {
         top->clk = 1;
         top->eval();
         cycles++;
+        if (restore_pending && !top->rootp->ngvm_sys->cpu_rst) {
+            restore_rtl();
+            restore_pending = false;
+            printf("[restore] the CPU starts at cycle %llu\n", (unsigned long long)cycles);
+        }
 
         // the bus
         top->bus_done = 0;
@@ -618,8 +760,8 @@ struct Bench {
 int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
-    const char *rom = nullptr, *kernel = "build/kernel/kernel.elf", *drive = nullptr;
-    double seconds = 1.0;
+    const char *rom = nullptr, *kernel = "build/kernel/kernel.elf", *drive = nullptr, *restore = nullptr;
+    double seconds = 1.0, prof_s = -1;
     uint32_t keymap = 0;
     Bench b;
     for (int i = 1; i < argc; i++) {
@@ -629,7 +771,8 @@ int main(int argc, char **argv)
         else if (a == "--drive" && i + 1 < argc) drive = argv[++i];
         else if (a == "--seconds" && i + 1 < argc) seconds = atof(argv[++i]);
         else if (a == "--no-uc") b.use_uc = false;
-        else if (a == "--profile" && i + 1 < argc) b.prof_from = (uint64_t)(atof(argv[++i]) * CPU_HZ);
+        else if (a == "--profile" && i + 1 < argc) prof_s = atof(argv[++i]);
+        else if (a == "--restore" && i + 1 < argc) restore = argv[++i];
         else if (a == "--lat" && i + 1 < argc) { b.lat_line = atoi(argv[++i]); b.lat_word = b.lat_line / 2 + 1; }
         else if (a == "--frames-to" && i + 1 < argc) b.frames_to = argv[++i];
         else if (a == "--frame-every" && i + 1 < argc) b.frame_every = atoi(argv[++i]);
@@ -647,8 +790,8 @@ int main(int argc, char **argv)
                 std::string t = s.substr(p, q == std::string::npos ? std::string::npos : q - p);
                 size_t c = t.find(':');
                 if (c != std::string::npos)
-                    b.keys.push_back({(uint64_t)(atof(t.substr(0, c).c_str()) * CPU_HZ),
-                                      (uint32_t)strtoul(t.substr(c + 1).c_str(), nullptr, 0)});
+                    b.key_s.push_back({atof(t.substr(0, c).c_str()),
+                                       (uint32_t)strtoul(t.substr(c + 1).c_str(), nullptr, 0)});
                 if (q == std::string::npos) break;
                 p = q + 1;
             }
@@ -656,7 +799,6 @@ int main(int argc, char **argv)
         else if (a[0] != '+') { fprintf(stderr, "unknown argument %s\n", argv[i]); return 2; }
     }
     if (!rom) { fprintf(stderr, "usage: %s --rom SYM.ROM [--kernel kernel.elf] [--drive img] [--seconds S]\n", argv[0]); return 2; }
-    b.max_cycles = (uint64_t)(seconds * CPU_HZ);
 
     std::vector<Seg> segs;
     std::map<std::string, uint32_t> syms;
@@ -679,12 +821,24 @@ int main(int argc, char **argv)
         memcpy(b.ucm.drive.data(), d.data(), d.size());
         memcpy(b.cram.data(), d.data(), d.size());
     }
-    if (b.use_uc) b.uc_init();
+    if (restore) b.load_ckpt(restore);
+    if (seconds <= b.t_base) { fprintf(stderr, "--seconds %.3f is not after the checkpoint's %.3f\n", seconds, b.t_base); return 2; }
+    b.max_cycles = (uint64_t)((seconds - b.t_base) * CPU_HZ);
+    if (prof_s >= 0) b.prof_from = prof_s > b.t_base ? (uint64_t)((prof_s - b.t_base) * CPU_HZ) : 0;
+    uint32_t keys0 = 0;                     // the keys held at the start
+    for (auto &k : b.key_s) {
+        if (k.first <= b.t_base) keys0 = k.second;
+        else b.keys.push_back({(uint64_t)((k.first - b.t_base) * CPU_HZ), k.second});
+    }
+    if (b.use_uc) {
+        b.uc_init();
+        if (restore) b.uc_restore();
+    }
 
     b.top = new Vngvm_sys;
     b.top->rom_size = (uint32_t)b.rom_size;
     b.top->drive_size = (uint32_t)b.drive_size;
-    b.top->keys = 0;
+    b.top->keys = keys0;
     b.top->keymap = keymap;
     b.top->vblank = 0;
     b.top->bus_done = 0;
@@ -701,7 +855,7 @@ int main(int argc, char **argv)
         if (b.cycles - last_report >= 50000000) {
             last_report = b.cycles;
             fprintf(stderr, "[%.2f s: %llu instructions (%llu idle), %llu line reads, %llu line writes, %llu word reads, %llu screen updates]\n",
-                    (double)b.cycles / CPU_HZ, (unsigned long long)b.retired, (unsigned long long)b.idle_retired,
+                    b.vt(), (unsigned long long)b.retired, (unsigned long long)b.idle_retired,
                     (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1],
                     (unsigned long long)b.nbus[2], (unsigned long long)b.shows);
         }
@@ -711,7 +865,7 @@ int main(int argc, char **argv)
     double host = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     printf("%s: %.3f s at %d MHz; %llu instructions in %llu cycles (%llu in the idle loop); "
            "bus: %llu line reads, %llu line writes (%llu behind a fill), %llu word reads; %.0f s on the host%s\n",
-           ok ? "ok" : "stopped", (double)b.cycles / CPU_HZ, (int)(CPU_HZ / 1000000),
+           ok ? "ok" : "stopped", b.vt(), (int)(CPU_HZ / 1000000),
            (unsigned long long)b.retired, (unsigned long long)b.cycles, (unsigned long long)b.idle_retired,
            (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1], (unsigned long long)b.nbus[3],
            (unsigned long long)b.nbus[2],
@@ -721,7 +875,7 @@ int main(int argc, char **argv)
     for (auto &w : b.watch) printf("[watch] %08x retired %llu times\n", w.first, (unsigned long long)w.second);
     if (b.prof_from != UINT64_MAX) b.print_profile();
     printf("audio: %llu samples played, %llu not silent", (unsigned long long)b.snd_n, (unsigned long long)b.snd_loud);
-    if (b.snd_loud) printf(", the first at %.3f s", (double)b.snd_first / CPU_HZ);
+    if (b.snd_loud) printf(", the first at %.3f s", b.t_base + (double)b.snd_first / CPU_HZ);
     printf("\n");
     delete b.top;
     return ok && !b.mismatches ? 0 : 1;

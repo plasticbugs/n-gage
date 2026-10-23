@@ -153,6 +153,7 @@ class Machine:
         self.frames = 0
         self.keys = 0
         self.key_steps = self.parse_keys(args.keys)
+        self.win_id = 0                # IO_WIN_ID: the RTL's caches tag the data window with it
         self.audio = []                # samples (int16 L, int16 R)
         self.audio_rate = 8000
         self.audio_fifo = 0.0          # samples waiting, drained at audio_rate
@@ -263,6 +264,8 @@ class Machine:
             return self.audio_rate
         if off == IO_AUDIO_SIZE:
             return AUDIO_FIFO_N
+        if off == IO_WIN_ID:
+            return self.win_id
         if off == IO_DRIVE_SIZE:
             return self.drive_size
         if off == IO_ROM_SIZE:
@@ -314,6 +317,8 @@ class Machine:
             self.audio_fifo += 1
         elif off == IO_AUDIO_RATE:
             self.audio_rate = value or 8000
+        elif off == IO_WIN_ID:
+            self.win_id = value & 0x3F
         elif off == IO_PT_INDEX:
             self.pt_index = value
         elif off == IO_PT_DATA:
@@ -627,12 +632,59 @@ class Machine:
                 self.insns - mt['insns0'], nb, nd, mt['path']))
             self.mt = None
 
+    # ---- a checkpoint for the RTL bench -----------------------------------------
+    # sim/sys/tb_sys.cpp --restore reads this (the format is described there):
+    # the registers of every mode in the RTL's physical numbering
+    # (rtl/arm_regs.sv), the SPSRs, the devices, the page table and memory.
+    CKPT_MODES = ((0x1F, range(0, 15), lambda r: r),            # SYS: the user bank
+                  (0x11, range(8, 15), lambda r: 16 + r - 8),   # FIQ r8-r14
+                  (0x13, (13, 14), lambda r: 23 + r - 13),      # SVC
+                  (0x17, (13, 14), lambda r: 25 + r - 13),      # ABT
+                  (0x12, (13, 14), lambda r: 27 + r - 13),      # IRQ
+                  (0x1B, (13, 14), lambda r: 29 + r - 13))      # UND
+    CKPT_SPSR = (0x11, 0x13, 0x17, 0x12, 0x1B)                  # the file's order
+
+    def save(self, path, pc):
+        uc = self.uc
+        cpsr = uc.reg_read(UC_ARM_REG_CPSR)
+        regs, spsr = [0] * 32, {}
+        for mode, rs, phys in self.CKPT_MODES:
+            uc.reg_write(UC_ARM_REG_CPSR, (cpsr & ~0x1F) | mode)
+            for r in rs:
+                regs[phys(r)] = uc.reg_read(REGS[r])
+            if mode != 0x1F:
+                spsr[mode] = uc.reg_read(UC_ARM_REG_SPSR)
+        uc.reg_write(UC_ARM_REG_CPSR, cpsr)
+        pt = array.array('H', [NGVM_PT_NONE]) * NGVM_PT_ENTRIES
+        for i, page in self.pt.items():
+            pt[i] = page
+        t = self.insns / self.mips / 1e6
+        with open(path, 'wb') as f:
+            f.write(b'NGVMCKP1')
+            f.write(struct.pack('<dII', t, pc & ~1, cpsr))
+            f.write(struct.pack('<32I', *regs))
+            f.write(struct.pack('<5I', *(spsr[m] for m in self.CKPT_SPSR)))
+            f.write(struct.pack('<Q12I', self.now_us(), self.irq_status, self.irq_enable,
+                                0 if self.timer_cmp is None else self.timer_cmp, self.timer_cmp is not None,
+                                self.timer_hi_latch, self.lcd_base, self.lcd_ctrl, self.frames, self.keys,
+                                self.audio_rate, self.win_id, self.drive_size))
+            f.write(pt.tobytes())
+            f.write(bytes(self.ram))
+            f.write(bytes(uc.mem_read(NGVM_KSEC_BASE, NGVM_KSEC_SIZE)))
+            f.write(bytes(uc.mem_read(NGVM_DRIVE_BASE, self.drive_size)))
+        print('[save] %.3f s: pc %08x cpsr %08x, %d pages mapped, to %s' % (t, pc, cpsr, len(self.pt), path),
+              flush=True)
+
     def run(self):
         uc = self.uc
         end = self.a.seconds * 1000000 * self.mips
         slice_insns = self.a.slice
         pc = self.pc
         t0 = time.time()
+        self.save_at = None
+        if self.a.save_at:
+            t, path = self.a.save_at.split(':', 1)
+            self.save_at = (float(t) * 1e6 * self.mips, path)
         if self.a.memtrace:
             f, d, path = self.a.memtrace.split(':')
             self.mt = {'from': float(f) * 1e6 * self.mips, 'to': (float(f) + float(d)) * 1e6 * self.mips,
@@ -665,6 +717,9 @@ class Machine:
             if self.a.profile is not None and pc != self.idle_pc and self.insns >= self.a.profile * self.mips * 1e6:
                 self.pc_hist[pc & ~1] = self.pc_hist.get(pc & ~1, 0) + 1
             self.update_devices()
+            if self.save_at and self.insns >= self.save_at[0]:
+                self.save(self.save_at[1], pc)
+                self.save_at = None
         dt = time.time() - t0
         self.report_load()
         runs = self.lcd_stale_runs + ([(self.insns / self.mips / 1e6 - self.lcd_stale / 60, self.lcd_stale)]
@@ -705,6 +760,8 @@ def main():
     ap.add_argument('--stamp', action='store_true',
                     help="prefix each line the kernel prints with virtual time, as sim/run_system.sh does")
     ap.add_argument('--memtrace', help='FROM:SECONDS:FILE: record fetches and data accesses for a cache model')
+    ap.add_argument('--save-at', metavar='SECONDS:FILE',
+                    help='write the machine to FILE at that virtual second, for sim/sys/tb_sys.cpp --restore')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
     ap.add_argument('--keymap', type=lambda x: int(x, 16), default=0,
                     help='(hex) IO_KEYMAP (ngvm_hw.h): 4 bits a button, A in 3:0 to R in 23:20, digit + 1, '
