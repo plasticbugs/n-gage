@@ -564,6 +564,15 @@ Eight stages. Each starts from registers.
   waits there, from where the uops will be next cycle. So forwarding
   and the stall start from flops, not from 5-bit compares. The Verilator
   build checks them against the compares on every cycle.
+- **Multiply:** two stages of DSP blocks. The first takes S's operands
+  at the edge that moves the multiply into A; they are final there,
+  because a multiplier input waits in S until it is registered. The
+  second runs in A's first cycle, and A adds the accumulator and
+  finishes in its second, so a multiply holds A one cycle. Until d15
+  both stages ran in A, which held two. On the bench (section 4.5,
+  86-89 s) the multiplier's waits fell from 0.053 to 0.026 cycles per
+  instruction on Tony Hawk and from 0.040 to 0.020 on Virtua Cop, and
+  each game ran 1.2% more instructions.
 - **Shift by a register:** one extra cycle in S. The amount settles
   into S's own copy of Rs, so the shifter's amount does not come
   through the forwarding mux. Measured cost: under 0.001 CPI.
@@ -801,6 +810,7 @@ failing paths, which were then grouped by their end registers.
 | B | d7, the MMU's trims and the on-screen keypad: 74% | −0.263 / −0.171 ns | the D-cache's tag RAM → its hit → `dc_ok` → M's hold → A's commit → A's redirect → `f1_pc_n` → the BTB's read address; a data abort the same way (section 5.6) |
 | C | B with the BTB read from the redirects as asked, `f1_bi`, and an 8-bit tag: 73% | +0.176 / +0.348 ns | nothing; the least, the walk's `ws` and dirty bits → the tag RAM's write data |
 | D | C with a burst's WRITEs one a clock (section 3) and a 16-bit tag: 72% | +0.425 / +0.260 ns | nothing, holds +0.123 the least; the least setup, the D-cache's `r_va` and tag RAM → A's `a_op2`, and the instruction buffer → `d2_ub` |
+| F | D with the multiplier's first stage at the edge into A (section 5.3): 74% | +0.463 / +0.607 ns | nothing, holds +0.124 the least; no path into the multiplier among the worst; the least, the walk's dirty bits → the tag RAM's write data, and S's match tag `s_ta.m_wa` → M's target and the BTB's write queue |
 | E | D with the D-cache at 64 KB, dirty bits flops: 84%, 274 of 308 RAM blocks | −0.497 / −0.648 ns; `core_pll` −0.391 | everywhere: D2 → S's uop, the SDRAM's `dram_dq` → `dq_in`, the D-cache → its data RAM's write enable, A → CPSR, the dirty bits → `dsome` |
 
 - **Z without the carry.** `x + y + ci` is zero exactly when

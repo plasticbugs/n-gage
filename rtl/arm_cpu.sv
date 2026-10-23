@@ -798,19 +798,22 @@ module arm_cpu
     // flags A may write: what an RRX in S has to wait for
     assign a_wflags = a_valid && (a_u.setflags || a_u.restore || a_u.kind == K_MSR);
 
-    // multiplier: two pipeline stages in the DSP blocks, A holds meanwhile
+    // multiplier: two pipeline stages in the DSP blocks, the first taken
+    // from S's operands at the edge that moves the multiply into A (S waits
+    // until a multiplier input needs nothing late, so sb and sc are final
+    // there), the second in A's first cycle, which holds A one cycle
     logic        a_adv, a_busy, a_commit, a_pass;
-    logic  [1:0] mcnt;
+    logic        mcnt;                      // A's multiply has had its first cycle
     logic [65:0] mp1, mp2;
     logic [63:0] mprod;                     // the product register (K_MULL -> K_MULH)
     logic        a_is_mul;
     assign a_is_mul = a_valid && (a_u.kind == K_MUL || a_u.kind == K_MULL);
-    assign a_busy   = a_is_mul && mcnt != 2'd2;
+    assign a_busy   = a_is_mul && !mcnt;
     always_ff @(posedge clk) begin
-        mp1 <= $signed({a_u.mul_signed && a_u.b[31], a_u.b}) * $signed({a_u.mul_signed && a_u.c[31], a_u.c});
-        mp2 <= mp1;
-        if (rst || !a_valid || a_adv) mcnt <= 2'd0;
-        else if (a_busy) mcnt <= mcnt + 2'd1;
+        mp1 <= $signed({s_u.mul_signed && sb[31], sb}) * $signed({s_u.mul_signed && sc[31], sc});
+        if (!mcnt) mp2 <= mp1;              // a multiply's own product, then held
+        if (rst || !a_valid || a_adv) mcnt <= 1'b0;
+        else if (a_busy) mcnt <= 1'b1;
     end
 
     // LDM/STM base, latched by the first element
