@@ -210,6 +210,7 @@ module arm_cpu
     initial for (int e = 0; e < BTBN; e++) begin btb_e[e] = '0; btb_c[e] = 2'd0; end
     btbe_t       bq;                            // the entry for f1_pc
     logic  [1:0] bc;
+    logic        bmis;                          // ... or for another: read for a redirect that did not go
     logic [31:0] ras [0:7];                     // return addresses, as LR holds them
     logic  [2:0] ras_sp;                        // pushes less pops, mod 8: the top is ras_sp - 1
     logic        rfix_v;                        // a redirect's push, written a cycle late
@@ -220,7 +221,7 @@ module arm_cpu
     logic        f1_thumb_n, f1_tagm, f1_hit, any_redirect;
     assign f1_seq   = f1_pc + (f1_thumb ? 32'd2 : 32'd4);
     assign f1_tagm  = bq.tag == f1_pc[BI+BT:BI+1];
-    assign f1_hit   = f1_tagm && bc[1];
+    assign f1_hit   = f1_tagm && bc[1] && !bmis;
     assign f1_pnext = bq.kind == BK_RET ? ras[ras_sp - 3'd1] : bq.tgt;
     assign any_redirect = w_redirect || m_redirect || a_redirect || d_redirect;
 
@@ -1169,8 +1170,8 @@ module arm_cpu
     // (dc_ok, through m_hold and a_commit) and a data abort are the latest
     // signals in the CPU, and they were on the slowest path, into the BTB's
     // own address.  A redirect asked for that waits, or never comes, has F1
-    // fetch meanwhile what is younger than it, which is killed, or which
-    // carries a prediction checked as any other is.
+    // fetch meanwhile what is younger than it, which is killed; and the
+    // entry read for it predicts nothing (bmis).
     logic [BI:1] f1_bi;
     always_comb begin
         if (rst)                                  f1_bi = '0;
@@ -1187,6 +1188,10 @@ module arm_cpu
     always_ff @(posedge clk) begin
         bq <= btb_e[f1_bi];
         bc <= btb_c[f1_bi];
+        // f1_bi and f1_pc_n part only where A asked and did not commit, or M
+        // took a data abort: then the entry read is another address's, and
+        // its tag, which leaves out the index, may still match
+        bmis <= !w_redirect && !(m_valid && m_red) && ((a_red_ask && !a_redirect) || m_dabt_take);
     end
 
     always_ff @(posedge clk) begin

@@ -99,7 +99,7 @@ CPU's clock through two flops a bit.
 | *(unused)* | 8 MB | SDRAM `0x3800000` | |
 | drive, `0x60000000` | ≤ 32 MB | CRAM0 (16 MB) + CRAM1 (16 MB) | uncached 16-bit words |
 | page table | 16,640 × 16 bits | block RAM | one read a miss |
-| I-cache, D-cache | 64 KB and 32 KB *(section 4)* | block RAM | every cycle |
+| I-cache, D-cache | 64 KB and 64 KB *(section 4)* | block RAM | every cycle |
 | audio FIFO | 1,024 × 32 bits | block RAM | 32–64 ms of sound at 16 kHz |
 | LCD frame store | 36,608 × 12 bits, as 32K + 4K | block RAM | written by a copy from SDRAM, read by the raster |
 
@@ -235,8 +235,8 @@ kernel's hot data needs a faster home than SDRAM.
 
 - I: 16 KB, 2-way, 32-byte lines. Gameplay later made it 32 KB, then
   64 KB (section 4.5).
-- D: 16 KB, 2-way, 32-byte lines, write-back; 32 KB since gameplay was
-  measured (section 4.5). The plan was a one-line
+- D: 16 KB, 2-way, 32-byte lines, write-back; 32 KB, then 64 KB, since
+  gameplay was measured (section 4.5). The plan was a one-line
   write-back buffer, so an eviction would not wait in front of the fill.
   The first builds wrote the victim back and then fetched the line. The
   third sends the victim with the fill, to be written after it (section
@@ -448,6 +448,8 @@ the next sizes were measured on the RTL itself.
 | d11: d10 and D 64 KB | 140.4 M (+1.7%), 1.691 | 130.5 M (+3.7%), 1.839 | |
 | d13: d10, the BTB read as asked, an 8-bit tag (section 5.6) | 137.1 M | 125.1 M | |
 | d14: d13 with a 16-bit tag | 137.3 M | 125.8 M | |
+| d15: d14 and the multiplier's first stage at the edge into A (section 5.3) | 139.0 M | 127.3 M | |
+| d16: d15, D 64 KB with its dirty bits in block RAM, and the BTB's stale entry ignored (section 5.6) | 141.5 M (+3.1% on d14), 1.679 | 132.1 M (+5.0%), 1.816 | |
 
 - **Where it came from.** On Virtua Cop, F2's waits on the I-cache fell
   from 0.079 to 0.027 cycles per instruction, and the cycles with the whole
@@ -468,6 +470,9 @@ the next sizes were measured on the RTL itself.
   commits (section 5.6): about 0.6% on both games. That is no more than
   timing alone moves the games' own states in this window, so only its
   sign is read. 16 tag bits win back Tony Hawk's share, not Virtua Cop's.
+- **d16's memory waits are d11's** to the third decimal, M's for a load's
+  own line 0.178 on Tony Hawk and 0.118 on Virtua Cop: the dirty bits'
+  move to block RAM (section 5.4, G) changed nothing the bench can see.
 
 
 ## 5. The CPU
@@ -811,6 +816,7 @@ failing paths, which were then grouped by their end registers.
 | C | B with the BTB read from the redirects as asked, `f1_bi`, and an 8-bit tag: 73% | +0.176 / +0.348 ns | nothing; the least, the walk's `ws` and dirty bits → the tag RAM's write data |
 | D | C with a burst's WRITEs one a clock (section 3) and a 16-bit tag: 72% | +0.425 / +0.260 ns | nothing, holds +0.123 the least; the least setup, the D-cache's `r_va` and tag RAM → A's `a_op2`, and the instruction buffer → `d2_ub` |
 | F | D with the multiplier's first stage at the edge into A (section 5.3): 74% | +0.463 / +0.607 ns | nothing, holds +0.124 the least; no path into the multiplier among the worst; the least, the walk's dirty bits → the tag RAM's write data, and S's match tag `s_ta.m_wa` → M's target and the BTB's write queue |
+| G | F with the D-cache at 64 KB, its dirty bits in two block RAMs, and the BTB's `bmis` (section 5.6): 63%, 276 RAM blocks | +0.222 / +0.061 ns | nothing, holds +0.125 the least; the least setup, the tag RAM's write enable → the data RAM's, and the D-cache's `r_va` and D2 → S's uop |
 | E | D with the D-cache at 64 KB, dirty bits flops: 84%, 274 of 308 RAM blocks | −0.497 / −0.648 ns; `core_pll` −0.391 | everywhere: D2 → S's uop, the SDRAM's `dram_dq` → `dq_in`, the D-cache → its data RAM's write enable, A → CPSR, the dirty bits → `dsome` |
 
 - **Z without the carry.** `x + y + ci` is zero exactly when
@@ -843,6 +849,15 @@ failing paths, which were then grouped by their end registers.
   badly, as d6 was, not one path. The 2,048 dirty bits as flops, each with
   a write decoder and a 1,024-to-1 mux behind it, go to a block RAM next,
   as the LRU bits did for d7.
+- **G, the dirty bits in RAM.** One 1,024 × 1 RAM per way, read beside
+  the tags, or during a walk a set ahead, so a clean set still takes one
+  cycle. Each is written once a cycle at most: a store hit, a fill's last
+  word or a write-back's end, or the sweep. A store into the line coming
+  in waits out the edge the fill ends at. A wrong bit loses a line, so
+  the write that lands at the edge of a read is kept in flops and put
+  over what the read returns. G uses 2,036 fewer ALMs than F, though its
+  D-cache is twice the size. That is what the 1,024 dirty flops of 32 KB
+  cost, with their write decoders and 512-to-1 muxes.
 
 ### 5.5 Where the cycles go, measured
 
@@ -949,6 +964,13 @@ Section 5.5 showed the BTB is needed. This is the one built
     the games ran share an index and 16 tag bits, so what remains is the
     entry read for a redirect A asked for and did not commit: another
     address's entry, whose tag may still match.
+  - That entry now predicts nothing. A flop, `bmis`, is set at the edge
+    that reads the BTB when A asked for a redirect it did not commit, or
+    M took a data abort: the two cases where the index and F1's next PC
+    part. It holds `f1_hit` low for the cycle that entry is read. The
+    refetches fell to 22,650 and 8,198, where they were before the BTB
+    had an index of its own (d16, section 4.5). `bmis` is a flop in front
+    of the hit, so the read address's path gains nothing.
 - **A hit** (tag match and counter ≥ 2) sends F1 to the stored target. For
   a return, it goes to the top of the return stack instead.
 - **The return stack:** 8 entries in flops.
