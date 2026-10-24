@@ -74,7 +74,7 @@ Reaching the kernel:
 | `0x20000000` | 32 MB | all of RAM, flat, for the kernel's own use; its top MB is C: (section 7) | kernel |
 | `0x40000000` | 256 MB of addresses | chunk space: every heap, stack, DLL data and loaded image, paged in 16 KB pages | user, through the table |
 | `0x50000000` | ≤ 20 MB | `SYM.ROM`, as linked; read-only | everyone |
-| `0x60000000` | ≤ 32 MB | the game's drive image (FAT16, section 7) | kernel (the drive LDD) |
+| `0x60000000` | ≤ 32 MB | the game's drive image (FAT16, section 7); of an image up to 64 MB, a window onto it | kernel (the drive LDD) |
 | `0x80000000` | 4 MB | fixed processes' static data (EFile `0x80100000`, EwSrv `0x80200000`) | user |
 | `0xF0000000` | 4 KB | devices | kernel |
 
@@ -189,6 +189,8 @@ register; what follows is behaviour the header cannot say.
 - `IO_IRQ_STATUS`: writing 1s clears.
 - `IRQ_VBLANK` is set at the start of each LCD frame.
 - `IRQ_AUDIO` is a level: the FIFO is at or below half full.
+- `IRQ_FETCH` is set when a fetch's bytes are in the drive's window
+  (section 7).
 - One IRQ line reaches the CPU: the OR of `STATUS & ENABLE`.
 
 ### LCD
@@ -308,6 +310,45 @@ The game's MMC card, E:, built by `tools/mkdrive.py` from the game's files:
   the `.app` path), which the kernel reads to start the game;
 - writes land in the loaded image in memory and are lost at power-off.
   Games do not keep their saves there.
+
+**An image larger than the window.** The window at `0x60000000` is
+32 MB, the Pocket's CRAM, and three retail games do not fit: Pathway to
+Glory (its files 55.2 MB, its image 59 MB), Pathway to Glory: Ikusa
+Islands (56.8 MB, 60 MB) and Glimmerati (53.7 MB, 57 MB), which its copy
+protection stops regardless (it asks the memory card's own identity
+interface, `MmcIf`, which NGVM does not imitate). `NGVM_IMAGE_MAX` is
+64 MB. The Pocket loads the image's first 32 MB into
+the window, and the rest stays on the SD card. `IO_DRIVE_SIZE` is still
+the whole image's size, so FAT sees the whole volume. The kernel reaches
+the rest through the window:
+
+- `IO_FETCH_SRC`, `IO_FETCH_DST`, `IO_FETCH_LEN` (0x080-0x088): a fetch
+  of LEN bytes of the image from SRC into the window at DST, all three
+  multiples of 4, as the Pocket's bridge moves words. Writing LEN starts
+  it. Writes while one is in flight are ignored.
+- `IO_FETCH_STAT` (0x08C, read): bit 0 busy; bits 3:1 the last fetch's
+  error, the Pocket's code (0 none, 1 slot not defined, 2 error or out of
+  range). `IRQ_FETCH` is raised when the bytes are in.
+- E: is then a cache (`sw/kernel/drive.c`): the window's 512 slots of
+  64 KB each, slot *i* holding block *i* at the start. A read of a block
+  not held fetches it into the slot a clock chooses. Its hand turns
+  backward from slot 511, because a forward clock evicted the very blocks
+  a sequential read was about to need: on the reference's traces, 41 and
+  54 fetches forward against 13 and 17 backward. A slot written by the
+  game is never evicted (no retail game was seen to write E:).
+- The exec call that reads E: returns at once, and the request completes
+  from `IRQ_FETCH`, as EUser's `TBusLocalDrive::Read` waits for its
+  status: the kernel never spins with IRQs off while the Pocket answers.
+- A fetch the Pocket refuses, or does not answer in 5 s, paints the LCD
+  and panics the kernel: red with one white band per unit of the error
+  code, or blue for no answer (`docs/bringup.md`).
+
+Measured in the reference with the Pocket's rate (1 ms and then 4 bytes a
+µs, 17.4 ms for a 64 KB block), over 75 s: Pathway to Glory read 83
+blocks, 13 beyond 32 MB, and fetched those 13, nearly all as the game
+started; Ikusa Islands 103 and 15 (fetched 17). Both reached what they
+reach with the whole image mapped (the mission map; the briefing), with
+1,410 and 1,524 screen updates against 1,416 and 1,530.
 
 The phone's internal drive, C:, is where they keep them
 (`C:\System\Apps\<game>\`, `C:\System\Shareddata\`). On the phone it is

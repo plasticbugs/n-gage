@@ -79,6 +79,12 @@ the core's README when it ships with the adapter enabled.
   every pixel and every press against them. Its L + R + Select chord, and
   the MSX2 core's (`rtl/osk_overlay.v`), are where SELECT + R came from.
   The RTL and the glyphs are this core's own.
+- **The slots bench** (`sim/run_slots.sh`) takes `sim/mf_datatable_model.v`
+  unchanged from this author's PC-88 core, and its Pocket host
+  (`sim/apf_host.h`) and `target/pocket/ngage_slots.sv`'s wait for a target
+  read follow that core's (`pc88_slots.sv` and its bench). Both drive
+  Marcus Andrade's `core_bridge_cmd` and `data_io`, compiled as he wrote
+  them.
 - **The card page** (`pkg/pocket/Assets/ngage/common/Add N-Gage games.html`)
   sets its type in **Barlow** and **Barlow Condensed** by Jeremy Tribby
   ([github.com/jpt/barlow](https://github.com/jpt/barlow)), embedded under

@@ -14,6 +14,13 @@ someone decodes squares off a screen.
 - `sim/run_system.sh` (the whole machine on the real memory glue) loads
   every byte in place and boots to the phone's start-up screens with no
   memory protocol error.
+- `sim/run_slots.sh`: the drive's fetches and the save's writes through
+  core_bridge_cmd and data_io, against a host that varies what the
+  Pocket's firmware may: every fetch answered after its last byte, with
+  the image's bytes.
+- `sim/run_system.sh --drive <an image over 32 MB>` (the host on the
+  bridge, by itself): the game gets past its start, every fetch's bytes
+  are the image's, every save readout is right.
 - **`tools/check_frames.py` passes on three CONSECUTIVE frames of a STILL
   picture** from `sim/run_system.sh` (`--snap N,N+1,N+2` on the Nokia logo).
   If neighbours differ while frames two apart are identical, the core is
@@ -106,6 +113,44 @@ build's first kernel, the Nokia logo stayed on screen for the rest of the
 run (56 s) instead, and the bench printed
 `PANIC ... PhoneServer: PhSrvFault 2` at 15.4 s
 (`docs/hardware.md`, open questions).
+
+## Games larger than 32 MB
+
+Pathway to Glory (59 MB) and Pathway to Glory: Ikusa Islands (60 MB). The
+Pocket loads the whole image, which takes a while longer than a 16–18 MB
+card: about 80 MB go through the loader. The core keeps the first 32 MB,
+and the kernel asks the Pocket for the rest, 64 KB at a time, as the game
+reads it (`docs/core-design.md` section 7). Most of those reads come as
+the game starts, and each takes some 17 ms if the Pocket answers at the
+loader's rate.
+
+What it should do: the phone's start-up screens as for any game, then
+the game's own, and then its menu. A game that fits in 32 MB asks for
+nothing and should run exactly as on v1.2.0.
+
+On the bench (`sim/run_system.sh`, Pathway to Glory, no keys pressed, the
+host answering at the loader's rate) the game asked for 13 blocks in
+45 s: 12 at 10.6 s, as it started, and one at 13.4 s, each in 16.6 ms.
+The Nokia screen was still up at 10 s. "Published by N-Gage" came at
+20 s, RedLynx at 25 s, the title at 30 s and the intro's pictures from
+35 s (`artifacts/system/ptg_fetch`). A Pocket that answers more slowly
+adds about 13 times the difference to the start. Play, which the bench did
+not do, will ask for more.
+
+If a fetch goes wrong, the kernel stops and the whole screen says so:
+
+| screen | what it means |
+|---|---|
+| **blue** | the Pocket never answered a fetch, in 5 s. The target read (0x0180) was not taken, or its "ok" never came. |
+| **red, with white bands** | the Pocket answered with an error. Count the white bands from the top: that is the error code. 1: slot not defined. 2: error or out of range, which is what a slot the Pocket refuses to read past its first 32 MB would give. |
+| the game hangs on a screen of its own, not blue or red | the fetch was answered but the bytes were wrong or lost. The bench would show it. Say which screen. |
+
+A red or blue screen is the core's own, after the kernel has stopped:
+note it, then quit the core.
+
+What to report: the game, and how far it got (the screen it stopped on,
+or the menu); a blue or red screen and its band count; roughly how long
+the load took.
 
 ## Saves
 

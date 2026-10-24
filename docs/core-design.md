@@ -127,7 +127,7 @@ CPU's clock through two flops a bit.
 | ROM, `0x50000000` | ≤ 20 MB (`SYM.ROM` is 18.6) | SDRAM `0x2000000` | line bursts, read-only |
 | KSEC, `0x80000000` | 4 MB | SDRAM `0x3400000` | line bursts |
 | *(unused)* | 8 MB | SDRAM `0x3800000` | |
-| drive, `0x60000000` | ≤ 32 MB | CRAM0 (16 MB) + CRAM1 (16 MB) | uncached 16-bit words |
+| drive, `0x60000000` | ≤ 32 MB, a window onto an image of ≤ 64 MB | CRAM0 (16 MB) + CRAM1 (16 MB) | uncached 16-bit words |
 | page table | 16,640 × 16 bits | block RAM | one read a miss |
 | I-cache, D-cache | 64 KB and 64 KB *(section 4)* | block RAM | every cycle |
 | audio FIFO | 1,024 × 32 bits | block RAM | 32–64 ms of sound at 16 kHz |
@@ -141,12 +141,17 @@ costs least.
 The seven games first tested unpack to 1.9–14.9 MB. Up to the fourth build
 the drive stopped at 24 MB, which 20 of the 51 retail games read from a
 phone did not fit: most unpack to 23.8–30.1 MB. The drive now takes all
-32 MB of CRAM, which every one of them but two fits (Glimmerati, 53.7 MB,
-and Pathway to Glory, 56.8 MB). `tools/mkdrive.py` makes the content plus
-2 MB, at least 16 and at most 32. Checked: lockstep with Unicorn over the
-first 12 s of Worms World Party on a 31 MB image (575.5 M instructions),
-which passes the 3,000 reads the reference makes between 24.7 and 25.8 MB
-before the game starts; the 24 MB decode would have aborted the first.
+32 MB of CRAM, which every one of them but three fits (Pathway to Glory,
+55.2 MB; Pathway to Glory: Ikusa Islands, 56.8 MB; Glimmerati, 53.7 MB).
+An image of those is up to 64 MB (`NGVM_IMAGE_MAX`): the CRAM holds its
+first 32 MB, and the kernel fetches the rest from the SD card into the
+window as the game reads it (section 7, and `docs/hardware.md` section 7).
+`tools/mkdrive.py` makes the content plus 2 MB, at least 16 and at most 32,
+or, when the files do not fit in 32, up to 64. Checked: lockstep with
+Unicorn over the first 12 s of Worms World Party on a 31 MB image (575.5 M
+instructions), which passes the 3,000 reads the reference makes between 24.7
+and 25.8 MB before the game starts; the 24 MB decode would have aborted the
+first.
 
 The Pocket's 256 KB SRAM is unused. It is the first place to look if the
 kernel's hot data needs a faster home than SDRAM.
@@ -1450,6 +1455,58 @@ Still unexercised:
   up to four times as late, with an LCD on the same port, a pause partway, a
   write to C: during a pause and during a readout, a readout stopped short
   and a big-endian one: 0 wrong words. Six planted faults each fail it.
+- **Fetches** (an image larger than the window). The drive's slot is
+  loaded whole, as every slot is; `ngage_mem` keeps the first 32 MB and
+  drops the halfwords beyond (their CRAM address would wrap onto the
+  drive's first sector), while `drive_size` still counts the whole file.
+  The kernel then asks for 64 KB blocks through `IO_FETCH_*`, crossed out
+  of the CPU's clock as a toggle with its three words held, and
+  `target/pocket/ngage_slots.sv` reads them with the APF's target read
+  (0x0180) of slot 3, `slotoffset` the block, `bridgeaddr` `0x04000000`
+  plus the slot in the window. The Pocket writes the words to the bridge,
+  and they come in as the load's did, through `data_io` and `ngage_mem`.
+  `data_io` raises its download only for a load the host starts, so a
+  fetch opens the download path itself (`fetching`) and its bytes leave
+  `drive_size` where it is.
+- **One command at a time.** The save's write and the drive's reads share
+  core_bridge_cmd's one target interface. `ngage_slots` latches whose
+  command it issued and takes the ack and done that follow as that one's
+  (METHODOLOGY 5.17); a fetch goes first when both wait. The save's
+  command waits for ack and then done, as v1.2.0's did on the Pocket. A
+  fetch's waits for done to fall (the command taken) and rise, which
+  needs no "bu" from the host.
+- **The drain.** The host's "ok" can come before its last bytes are out
+  of `data_loader`'s FIFO and `ngage_mem`'s. A fetch is answered once,
+  after the "ok", 255 clocks of clk_sys pass with no byte strobed and
+  `ngage_mem`'s queues empty (`dl_idle`). After the last word, `data_loader`
+  gives out its bytes within some 60 clocks.
+- **What the Pocket's firmware may do differently.** It may send a request
+  write (0x0082) for the slot before it answers a fetch. `data_io`'s
+  download would then stay up until an all-complete that may never come.
+  `ngage_mem` does not care, as the fetch's spans are whole words. But
+  the save's readout took the download as "the save is loading" and would
+  have stopped fetching C:, so its buffers now go stale on the save's own
+  bytes (`nv_wr`) instead.
+- **Checked.** `sim/run_slots.sh`: 400 fetches, 4 bytes to 64 KB, a few at
+  the window's end and the image's, against a host that varies, at each
+  command, whether "bu" comes, whether a request write comes first and an
+  all-complete after, how soon "ok" follows the last word (often at once),
+  the gap between words, and 4% errors with no bytes. Meanwhile saves are
+  written and the menu is opened. The bytes reach a memory 2-20 clocks
+  apart, now and then 400 late: every fetch is answered after its last
+  byte and holds the image's bytes, with no byte anywhere else and none
+  lost. Three broken drains each fail it: no wait, no `dl_idle`, no
+  `fetching` gate. `sim/run_mem.sh`: the tail beyond 32 MB is dropped and
+  counted (a gate that keeps it fails, on the drive's first sector), and
+  12 KB fetched at the loader's fastest while the bus reads and writes
+  the rest of the drive. `sim/run_sys.sh --restore` from the reference at
+  7 s: Pathway to Glory in lockstep with Unicorn to 10 s, its 12 fetches
+  answered by the bench, no difference. `sim/run_system.sh` with the
+  Pocket's host on the bridge (`--apf`, on by itself for an image over
+  32 MB): Pathway to Glory for 45 s, 13 fetches right, its title at 30 s,
+  three save readouts right (`docs/bringup.md`). The kernel's two
+  failure screens, from the lockstep bench's `--fetch-fail`, are in
+  `artifacts/big_drive`.
 - **Reset.** The CPU is held in reset until every slot is loaded.
 - **Running again.** A menu reset runs the kernel again over memory as the
   last run left it. Its `.data` therefore comes from a copy in the image,

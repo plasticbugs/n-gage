@@ -205,11 +205,15 @@ The page and `mkdrive.py` make the same bytes from the same game:
 `tools/check_mkdrive.py` builds every case with both and fails on any
 difference.
 
-A game's files must come to 32 MB at most, the size of the core's drive: of
-the retail games, only Glimmerati and Pathway to Glory are larger. The game
-list (`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`. The page
-writes these entries for you. By hand, copy one of the files, name the copy
-after the game, and change its `filename` to the game's `.img`.
+A game's card holds up to 64 MB. The core's drive is 32 MB, and a card
+larger than that (Pathway to Glory and its Ikusa Islands, of the retail
+games) is read from the SD card as the game needs it: new since v1.2.0,
+checked in simulation and not yet on a Pocket (`docs/bringup.md`).
+Glimmerati, which also needs more than 32 MB, does not run: its copy
+protection checks the memory card itself. The game list
+(`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`. The page writes
+these entries for you. By hand, copy one of the files, name the copy after
+the game, and change its `filename` to the game's `.img`.
 
 ## Building the core
 
