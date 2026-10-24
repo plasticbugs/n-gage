@@ -1,0 +1,15 @@
+[restore] 7.000 s: pc 00002108 cpsr 200000d3 from /private/tmp/claude-501/-Users-scottmoschella-work-n-gage/5d1b2937-b792-405f-96a4-0b37b3e00d89/scratchpad/big/ptg7.ckp
+[restore] the CPU starts at cycle 16641
+[keymap] IO_KEYMAP reads 000000 at 7.016869 s
+[launch] starting AppRun
+[7.63 s: 22575436 instructions (0 idle), 306636 line reads, 59908 line writes, 22871 word reads, 0 screen updates, 0 fetches]
+[kern] process SplashScreen exits: type 0 reason 0
+[8.25 s: 53890137 instructions (14380555 idle), 508199 line reads, 95544 line writes, 28182 word reads, 1 screen updates, 12 fetches]
+[kern] process Loadersrv exits: type 0 reason -37
+[8.88 s: 79436988 instructions (14380555 idle), 718397 line reads, 129150 line writes, 43327 word reads, 1 screen updates, 12 fetches]
+[kern] process RfsServer exits: type 0 reason 0
+[9.50 s: 104280720 instructions (14380555 idle), 886104 line reads, 176038 line writes, 118715 word reads, 1 screen updates, 12 fetches]
+[kern] process MailInit exits: type 0 reason 0
+ok: 10.000 s at 80 MHz; 125678387 instructions in 239984223 cycles (14380555 in the idle loop); bus: 1025432 line reads, 192367 line writes (124950 behind a fill), 124291 word reads; 364 s on the host, lockstep with Unicorn
+drive: 12 fetches from the image beyond the window
+audio: 0 samples played, 0 not silent

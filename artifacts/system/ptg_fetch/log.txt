@@ -1,0 +1,434 @@
+kernel     71944 bytes, 71944 through the loader
+ROM     18612224 bytes, 65538 through the loader
+drive   61865984 bytes, 65538 through the loader
+load   every byte in place; rom_size 18612224, drive_size 61865984, save_size 0
+host: all-complete answered after 0.02 ms
+[  0.011 s] NGVM kernel
+[  0.015 s] frame 0, pc 00000068, 654136 instructions, 20.2 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 32%, write-back 0%, uncached 0%, combining 6%; 65 I fills, 20491 D fills, 0 write-backs; 30.7 clocks a bus request
+           an I fill 43.5 clocks; on the memory's side a request is 27.7 of its clocks
+           audio FIFO 0-0 samples
+[  0.121 s] [launch] will run E:\system\apps\6R72\6R72.app
+[  0.122 s] EFile: entry 503cdbc5 data 80100000+c2c bss 8
+[  0.516 s] frame 30, pc 000002a4, 29415168 instructions, 57.5 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 1%, D fill 2%, write-back 0%, uncached 0%, combining 12%; 14943 I fills, 20010 D fills, 1413 write-backs; 26.9 clocks a bus request
+           an I fill 33.3 clocks; on the memory's side a request is 26.3 of its clocks
+           audio FIFO 0-0 samples
+[  1.016 s] frame 60, pc 000002a4, 67915083 instructions, 77.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 2%, write-back 0%, uncached 0%, combining 0%; 5809 I fills, 16137 D fills, 0 write-backs; 29.9 clocks a bus request
+           an I fill 34.0 clocks; on the memory's side a request is 27.5 of its clocks
+           audio FIFO 0-0 samples
+[  1.448 s] [rdebug] auxstart 105
+[  1.516 s] frame 90, pc 000002a4, 106437038 instructions, 77.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 2%, write-back 0%, uncached 0%, combining 0%; 5356 I fills, 18582 D fills, 0 write-backs; 30.0 clocks a bus request
+           an I fill 34.4 clocks; on the memory's side a request is 27.4 of its clocks
+           audio FIFO 0-0 samples
+[  2.017 s] frame 120, pc 00000110, 132691851 instructions, 52.5 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 1%, D fill 2%, write-back 0%, uncached 1%, combining 2%; 6661 I fills, 19215 D fills, 0 write-backs; 25.7 clocks a bus request
+           an I fill 33.8 clocks; on the memory's side a request is 24.4 of its clocks
+           audio FIFO 0-0 samples
+[  2.517 s] frame 150, pc 000002a4, 157512566 instructions, 49.6 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 1%, D fill 1%, write-back 0%, uncached 0%, combining 0%; 12050 I fills, 7310 D fills, 0 write-backs; 27.7 clocks a bus request
+           an I fill 32.2 clocks; on the memory's side a request is 27.2 of its clocks
+           audio FIFO 0-0 samples
+[  3.017 s] frame 180, pc 000002a4, 197521217 instructions, 80.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 0%, write-back 0%, uncached 0%, combining 0%; 1 I fills, 1 D fills, 0 write-backs; 28.0 clocks a bus request
+           an I fill 31.0 clocks; on the memory's side a request is 28.0 of its clocks
+           audio FIFO 0-0 samples
+[  3.517 s] frame 210, pc 000002a4, 237529941 instructions, 80.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 0%, write-back 0%, uncached 0%, combining 0%; 0 I fills, 0 D fills, 0 write-backs; 0.0 clocks a bus request
+           an I fill 0.0 clocks; on the memory's side a request is 0.0 of its clocks
+           audio FIFO 0-0 samples
+[  4.018 s] frame 240, pc 000002a4, 277538665 instructions, 80.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 0%, write-back 0%, uncached 0%, combining 0%; 0 I fills, 0 D fills, 0 write-backs; 0.0 clocks a bus request
+           an I fill 0.0 clocks; on the memory's side a request is 0.0 of its clocks
+           audio FIFO 0-0 samples
+[  4.518 s] frame 270, pc 000002a4, 317547391 instructions, 80.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 0%, write-back 0%, uncached 0%, combining 0%; 0 I fills, 0 D fills, 0 write-backs; 0.0 clocks a bus request
+           an I fill 0.0 clocks; on the memory's side a request is 0.0 of its clocks
+           audio FIFO 0-0 samples
+[  4.749 s] save: the slot written, read back in 282.4 ms, C: last written 0 us before it began; 0 words wrong so far, 1 as they were before that write
+[  5.018 s] frame 300: 36608 pixels -> artifacts/system/ptg_fetch/0300.png
+[  5.018 s] frame 300, pc 000002a4, 357556117 instructions, 80.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 0%, D fill 0%, write-back 0%, uncached 0%, combining 0%; 0 I fills, 0 D fills, 0 write-backs; 0.0 clocks a bus request
+           an I fill 0.0 clocks; on the memory's side a request is 0.0 of its clocks
+           audio FIFO 0-0 samples
+[  5.300 s] save: the slot written, read back in 282.4 ms, C: last written 550103 us before it began; 0 words wrong so far, 1 as they were before that write
+[  5.519 s] frame 330, pc 503e86ee, 393554261 instructions, 72.0 MIPS lately, 0 frames shown, a copy at most 0 clocks
+           waiting: I fill 1%, D fill 1%, write-back 0%, uncached 3%, combining 0%; 6880 I fills, 10928 D fills, 760 write-backs; 28.1 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 27.4 of its clocks
+           audio FIFO 0-0 samples
+[  5.595 s] [kern] process EStart exits: type 0 reason 0
+[  5.696 s] [lcd] control 8193 (406cfce0 406cfcdc) from EwSrv
+[  5.696 s] [lcd] control 4109 (406cfcd4 0) from EwSrv
+[  5.881 s] [kern] process SelfTestServer exits: type 0 reason -37
+[  6.019 s] frame 360, pc 5056043a, 416421480 instructions, 45.7 MIPS lately, 1 frames shown, a copy at most 65129 clocks
+           waiting: I fill 7%, D fill 5%, write-back 1%, uncached 1%, combining 3%; 83696 I fills, 57973 D fills, 7528 write-backs; 27.1 clocks a bus request
+           an I fill 32.7 clocks; on the memory's side a request is 26.5 of its clocks
+           audio FIFO 0-0 samples
+[  6.519 s] frame 390, pc 503e360a, 437533453 instructions, 42.2 MIPS lately, 1 frames shown, a copy at most 66869 clocks
+           waiting: I fill 10%, D fill 6%, write-back 0%, uncached 0%, combining 1%; 127971 I fills, 63504 D fills, 4330 write-backs; 28.2 clocks a bus request
+           an I fill 32.2 clocks; on the memory's side a request is 27.7 of its clocks
+           audio FIFO 0-0 samples
+[  7.020 s] frame 420, pc 503b4470, 458283478 instructions, 41.5 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 10%, D fill 6%, write-back 0%, uncached 0%, combining 0%; 122628 I fills, 64709 D fills, 0 write-backs; 28.6 clocks a bus request
+           an I fill 32.3 clocks; on the memory's side a request is 28.0 of its clocks
+           audio FIFO 0-0 samples
+[  7.287 s] [kern] process DBRECOVERY exits: type 0 reason 0
+[  7.410 s] [LesterDrv] control 1 (0 0)
+[  7.460 s] [NOSDRIVER] request, pending: 2 (44a55ca4 0)
+[  7.520 s] frame 450, pc 503a2b14, 479006504 instructions, 41.4 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 12%, D fill 8%, write-back 0%, uncached 0%, combining 1%; 147162 I fills, 93756 D fills, 4357 write-backs; 28.4 clocks a bus request
+           an I fill 32.7 clocks; on the memory's side a request is 27.8 of its clocks
+           audio FIFO 0-0 samples
+[  7.749 s] [chan] Comm unit 0: not present
+[  8.020 s] frame 480, pc 503b5b64, 500011844 instructions, 42.0 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 11%, D fill 6%, write-back 0%, uncached 1%, combining 1%; 129800 I fills, 67973 D fills, 0 write-backs; 27.6 clocks a bus request
+           an I fill 32.6 clocks; on the memory's side a request is 26.8 of its clocks
+           audio FIFO 0-0 samples
+[  8.099 s] [rdebug] CSysApAppUi::ConstructL: Start listening
+[  8.230 s] [helper] control 7 (0 0): not modelled, accepted
+[  8.239 s] [lcd] control 4099 (405e7d70 0) from EikSrvs
+[  8.239 s] [lcd] control 4100 (0 0) from EikSrvs
+[  8.521 s] frame 510, pc 00001f78, 522633405 instructions, 45.2 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 11%, D fill 7%, write-back 0%, uncached 1%, combining 2%; 133253 I fills, 81243 D fills, 4426 write-backs; 27.4 clocks a bus request
+           an I fill 32.7 clocks; on the memory's side a request is 26.7 of its clocks
+           audio FIFO 0-0 samples
+[  8.714 s] [rdebug] RAdspServerSession::Construct
+[  8.733 s] [kern] PANIC thread Main in AudioServer: SS Audio Server 4
+[  8.733 s]   pc 503b3670 lr 503b3670 sp 4498ff44: 80000001 4498ff70 503b3690 503b8034 ffff8001 4 4498ff70 45efc104 503b4704 ffff8001 510f2a2b 1000000f 510fa42c 45efc080 0 510f0e55 45efc080 0 510f0685 100000 503b6810 503b2884 503acd70 0
+[  8.733 s] [kern] process AudioServer exits: type 2 reason 4
+[  9.021 s] frame 540, pc 503da09a, 542129949 instructions, 39.0 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 13%, D fill 9%, write-back 0%, uncached 0%, combining 1%; 162895 I fills, 104483 D fills, 1989 write-backs; 28.4 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 27.7 of its clocks
+           audio FIFO 0-0 samples
+[  9.426 s] [launch] starting AppRun
+[  9.521 s] frame 570, pc 000020b0, 562084317 instructions, 39.9 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 11%, D fill 9%, write-back 0%, uncached 0%, combining 0%; 138330 I fills, 101074 D fills, 0 write-backs; 28.5 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 27.8 of its clocks
+           audio FIFO 0-0 samples
+[  9.963 s] [kern] process AppRun exits: type 0 reason 0
+[ 10.000 s] [kern] process AppRun exits: type 0 reason 0
+[ 10.021 s] frame 600: 36608 pixels -> artifacts/system/ptg_fetch/0600.png
+[ 10.021 s] frame 600, pc 50389f0e, 581800506 instructions, 39.4 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 13%, D fill 9%, write-back 0%, uncached 0%, combining 0%; 159381 I fills, 106441 D fills, 1123 write-backs; 28.3 clocks a bus request
+           an I fill 33.1 clocks; on the memory's side a request is 27.5 of its clocks
+           audio FIFO 0-0 samples
+[ 10.522 s] frame 630, pc 503a7f34, 601159861 instructions, 38.7 MIPS lately, 0 frames shown, a copy at most 66869 clocks
+           waiting: I fill 14%, D fill 10%, write-back 0%, uncached 1%, combining 1%; 162638 I fills, 116380 D fills, 2183 write-backs; 27.8 clocks a bus request
+           an I fill 33.4 clocks; on the memory's side a request is 27.0 of its clocks
+           audio FIFO 0-0 samples
+[ 10.580 s] [kern] process SplashScreen exits: type 0 reason 0
+[ 10.587 s] fetch 1: 10000 bytes from 3410000 into 1ff0000 in 16.55 ms, error 0, 0 bytes wrong
+[ 10.604 s] fetch 2: 10000 bytes from 3420000 into 1fe0000 in 16.55 ms, error 0, 0 bytes wrong
+[ 10.621 s] fetch 3: 10000 bytes from 3440000 into 1fd0000 in 16.57 ms, error 0, 0 bytes wrong
+[ 10.638 s] fetch 4: 10000 bytes from 3450000 into 1fc0000 in 16.56 ms, error 0, 0 bytes wrong
+[ 10.655 s] fetch 5: 10000 bytes from 3460000 into 1fb0000 in 16.57 ms, error 0, 0 bytes wrong
+[ 10.673 s] fetch 6: 10000 bytes from 3470000 into 1fa0000 in 16.57 ms, error 0, 0 bytes wrong
+[ 10.690 s] fetch 7: 10000 bytes from 3480000 into 1f90000 in 16.57 ms, error 0, 0 bytes wrong
+[ 10.707 s] fetch 8: 10000 bytes from 3490000 into 1f80000 in 16.56 ms, error 0, 0 bytes wrong
+[ 10.724 s] fetch 9: 10000 bytes from 3520000 into 1f70000 in 16.58 ms, error 0, 0 bytes wrong
+[ 10.742 s] fetch 10: 10000 bytes from 3530000 into 1f60000 in 16.58 ms, error 0, 0 bytes wrong
+[ 10.758 s] fetch 11: 10000 bytes from 3540000 into 1f50000 in 16.57 ms, error 0, 0 bytes wrong
+[ 10.775 s] fetch 12: 10000 bytes from 3550000 into 1f40000 in 16.56 ms, error 0, 0 bytes wrong
+[ 11.022 s] frame 660, pc 0000deec, 628586634 instructions, 54.8 MIPS lately, 1 frames shown, a copy at most 69432 clocks
+           waiting: I fill 6%, D fill 6%, write-back 0%, uncached 1%, combining 0%; 69601 I fills, 63975 D fills, 2287 write-backs; 27.9 clocks a bus request
+           an I fill 33.2 clocks; on the memory's side a request is 27.2 of its clocks
+           audio FIFO 0-0 samples
+[ 11.049 s] [kern] process RfsServer exits: type 0 reason 0
+[ 11.059 s] [kern] process Loadersrv exits: type 0 reason -37
+[ 11.522 s] frame 690, pc 50389f1a, 650357682 instructions, 43.5 MIPS lately, 0 frames shown, a copy at most 69432 clocks
+           waiting: I fill 7%, D fill 5%, write-back 0%, uncached 1%, combining 1%; 90741 I fills, 59603 D fills, 1246 write-backs; 26.7 clocks a bus request
+           an I fill 32.5 clocks; on the memory's side a request is 25.9 of its clocks
+           audio FIFO 0-0 samples
+[ 12.023 s] frame 720, pc 503b41ec, 671764337 instructions, 42.8 MIPS lately, 0 frames shown, a copy at most 69432 clocks
+           waiting: I fill 8%, D fill 4%, write-back 0%, uncached 1%, combining 1%; 97096 I fills, 50706 D fills, 667 write-backs; 26.7 clocks a bus request
+           an I fill 32.0 clocks; on the memory's side a request is 26.0 of its clocks
+           audio FIFO 0-0 samples
+[ 12.320 s] [kern] process MailInit exits: type 0 reason 0
+[ 12.510 s] [launch] CommDb modem: 0
+[ 12.523 s] frame 750, pc 00007bc8, 694076463 instructions, 44.6 MIPS lately, 0 frames shown, a copy at most 69432 clocks
+           waiting: I fill 8%, D fill 4%, write-back 0%, uncached 1%, combining 0%; 94187 I fills, 50039 D fills, 1428 write-backs; 27.5 clocks a bus request
+           an I fill 31.9 clocks; on the memory's side a request is 26.9 of its clocks
+           audio FIFO 0-0 samples
+[ 13.023 s] frame 780, pc 503a72d8, 715590924 instructions, 43.0 MIPS lately, 0 frames shown, a copy at most 69432 clocks
+           waiting: I fill 10%, D fill 7%, write-back 0%, uncached 0%, combining 0%; 119975 I fills, 75586 D fills, 1499 write-backs; 28.0 clocks a bus request
+           an I fill 32.1 clocks; on the memory's side a request is 27.4 of its clocks
+           audio FIFO 0-0 samples
+[ 13.395 s] fetch 13: 10000 bytes from 3430000 into 1f30000 in 16.56 ms, error 0, 0 bytes wrong
+[ 13.524 s] frame 810, pc 000000ec, 729194969 instructions, 27.2 MIPS lately, 0 frames shown, a copy at most 69432 clocks
+           waiting: I fill 3%, D fill 8%, write-back 0%, uncached 36%, combining 4%; 38858 I fills, 88156 D fills, 0 write-backs; 28.8 clocks a bus request
+           an I fill 32.0 clocks; on the memory's side a request is 27.8 of its clocks
+           audio FIFO 0-0 samples
+[ 13.865 s] [lcd] control 8193 (4812bc4c 4812bc48) from 6R72
+[ 13.866 s] [lcd] control 4109 (4812bc40 0) from 6R72
+[ 14.024 s] frame 840, pc 503e661a, 749498342 instructions, 40.6 MIPS lately, 2 frames shown, a copy at most 71499 clocks
+           waiting: I fill 9%, D fill 6%, write-back 0%, uncached 3%, combining 2%; 104280 I fills, 73320 D fills, 4029 write-backs; 28.1 clocks a bus request
+           an I fill 32.6 clocks; on the memory's side a request is 27.5 of its clocks
+           audio FIFO 0-0 samples
+[ 14.524 s] frame 870, pc 00008b08, 771743154 instructions, 44.5 MIPS lately, 0 frames shown, a copy at most 71499 clocks
+           waiting: I fill 2%, D fill 6%, write-back 0%, uncached 7%, combining 1%; 26079 I fills, 61693 D fills, 0 write-backs; 28.5 clocks a bus request
+           an I fill 33.1 clocks; on the memory's side a request is 27.8 of its clocks
+           audio FIFO 0-0 samples
+[ 15.025 s] frame 900: 36608 pixels -> artifacts/system/ptg_fetch/0900.png
+[ 15.025 s] frame 900, pc 48a741c4, 796817076 instructions, 50.1 MIPS lately, 0 frames shown, a copy at most 71499 clocks
+           waiting: I fill 1%, D fill 3%, write-back 0%, uncached 0%, combining 0%; 15165 I fills, 38311 D fills, 0 write-backs; 28.7 clocks a bus request
+           an I fill 32.8 clocks; on the memory's side a request is 28.1 of its clocks
+           audio FIFO 0-0 samples
+[ 15.269 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[ 15.269 s] [Audioldd] control 1 (0 0)
+[ 15.271 s] [Audioldd] control 1 (0 0)
+[ 15.278 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[ 15.525 s] frame 930, pc 50559074, 818578059 instructions, 43.5 MIPS lately, 2 frames shown, a copy at most 71499 clocks
+           waiting: I fill 5%, D fill 10%, write-back 0%, uncached 3%, combining 1%; 59613 I fills, 114773 D fills, 2073 write-backs; 29.0 clocks a bus request
+           an I fill 33.1 clocks; on the memory's side a request is 28.0 of its clocks
+           audio FIFO 0-1023 samples
+[ 16.025 s] frame 960, pc 505f0dd6, 838188737 instructions, 39.2 MIPS lately, 12 frames shown, a copy at most 71499 clocks
+           waiting: I fill 5%, D fill 27%, write-back 1%, uncached 0%, combining 0%; 60348 I fills, 305862 D fills, 12409 write-backs; 29.6 clocks a bus request
+           an I fill 34.6 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 16.525 s] frame 990, pc 0000c18c, 857950238 instructions, 39.5 MIPS lately, 17 frames shown, a copy at most 71499 clocks
+           waiting: I fill 5%, D fill 33%, write-back 1%, uncached 0%, combining 0%; 53322 I fills, 374037 D fills, 17716 write-backs; 29.8 clocks a bus request
+           an I fill 35.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 16.954 s] [kern] process FLogSvr exits: type 0 reason 0
+[ 17.026 s] frame 1020, pc 5055907e, 877963867 instructions, 40.0 MIPS lately, 16 frames shown, a copy at most 71499 clocks
+           waiting: I fill 5%, D fill 33%, write-back 1%, uncached 0%, combining 0%; 52216 I fills, 374779 D fills, 17360 write-backs; 29.8 clocks a bus request
+           an I fill 35.1 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 17.526 s] frame 1050, pc 4894fd24, 898253928 instructions, 40.6 MIPS lately, 16 frames shown, a copy at most 71499 clocks
+           waiting: I fill 5%, D fill 32%, write-back 1%, uncached 0%, combining 0%; 54924 I fills, 359137 D fills, 16773 write-backs; 29.8 clocks a bus request
+           an I fill 34.9 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 511-1023 samples
+[ 18.026 s] frame 1080, pc 503a725c, 919342943 instructions, 42.2 MIPS lately, 15 frames shown, a copy at most 71499 clocks
+           waiting: I fill 4%, D fill 31%, write-back 1%, uncached 0%, combining 0%; 49676 I fills, 348943 D fills, 15678 write-backs; 29.8 clocks a bus request
+           an I fill 34.7 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 506-1023 samples
+[ 18.367 s] save: the slot written, read back in 282.4 ms, C: last written 0 us before it began; 0 words wrong so far, 1 as they were before that write
+[ 18.527 s] frame 1110, pc 503a726c, 940887715 instructions, 43.1 MIPS lately, 15 frames shown, a copy at most 72801 clocks
+           waiting: I fill 4%, D fill 30%, write-back 1%, uncached 0%, combining 0%; 50123 I fills, 330379 D fills, 15665 write-backs; 30.2 clocks a bus request
+           an I fill 35.3 clocks; on the memory's side a request is 29.2 of its clocks
+           audio FIFO 512-1023 samples
+[ 19.027 s] frame 1140, pc 4894fce8, 961808238 instructions, 41.8 MIPS lately, 15 frames shown, a copy at most 72801 clocks
+           waiting: I fill 4%, D fill 32%, write-back 1%, uncached 0%, combining 0%; 49092 I fills, 355003 D fills, 15613 write-backs; 29.8 clocks a bus request
+           an I fill 35.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 19.116 s] [kern] process EDbsrv exits: type 0 reason 0
+[ 19.527 s] frame 1170, pc 5039e2e4, 983335512 instructions, 43.0 MIPS lately, 14 frames shown, a copy at most 72801 clocks
+           waiting: I fill 4%, D fill 29%, write-back 1%, uncached 0%, combining 0%; 51120 I fills, 325539 D fills, 15230 write-backs; 29.7 clocks a bus request
+           an I fill 34.9 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 20.028 s] frame 1200: 36608 pixels -> artifacts/system/ptg_fetch/1200.png
+[ 20.028 s] frame 1200, pc 00005848, 1005010785 instructions, 43.3 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 4%, D fill 14%, write-back 0%, uncached 0%, combining 0%; 43741 I fills, 161643 D fills, 5228 write-backs; 29.6 clocks a bus request
+           an I fill 33.3 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 20.528 s] frame 1230, pc 4894fd84, 1027633235 instructions, 45.2 MIPS lately, 1 frames shown, a copy at most 72801 clocks
+           waiting: I fill 4%, D fill 7%, write-back 0%, uncached 0%, combining 0%; 57071 I fills, 81433 D fills, 1061 write-backs; 28.9 clocks a bus request
+           an I fill 31.3 clocks; on the memory's side a request is 28.1 of its clocks
+           audio FIFO 506-1023 samples
+[ 21.028 s] frame 1260, pc 000058a0, 1050408265 instructions, 45.5 MIPS lately, 11 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 27%, write-back 1%, uncached 0%, combining 0%; 33167 I fills, 305897 D fills, 11515 write-backs; 29.8 clocks a bus request
+           an I fill 34.3 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 21.529 s] frame 1290, pc 50561790, 1073022384 instructions, 45.2 MIPS lately, 14 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 33%, write-back 1%, uncached 0%, combining 0%; 34740 I fills, 364880 D fills, 14713 write-backs; 29.9 clocks a bus request
+           an I fill 35.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 22.029 s] frame 1320, pc 4894fcec, 1093136550 instructions, 40.2 MIPS lately, 18 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 36%, write-back 1%, uncached 0%, combining 0%; 35266 I fills, 399353 D fills, 18827 write-backs; 30.2 clocks a bus request
+           an I fill 35.7 clocks; on the memory's side a request is 28.8 of its clocks
+           audio FIFO 512-1023 samples
+[ 22.529 s] frame 1350, pc 503a7264, 1113077256 instructions, 39.9 MIPS lately, 17 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 34%, write-back 1%, uncached 2%, combining 0%; 38055 I fills, 373901 D fills, 17774 write-backs; 30.1 clocks a bus request
+           an I fill 35.3 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 23.029 s] frame 1380, pc 4894fd24, 1133225063 instructions, 40.3 MIPS lately, 19 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 36%, write-back 1%, uncached 0%, combining 0%; 35190 I fills, 397298 D fills, 19835 write-backs; 30.2 clocks a bus request
+           an I fill 35.7 clocks; on the memory's side a request is 28.8 of its clocks
+           audio FIFO 512-1023 samples
+[ 23.530 s] frame 1410, pc 00007bc8, 1154059621 instructions, 41.6 MIPS lately, 16 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 33%, write-back 1%, uncached 0%, combining 0%; 34609 I fills, 361724 D fills, 16726 write-backs; 30.2 clocks a bus request
+           an I fill 35.3 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 24.030 s] frame 1440, pc 503a6b34, 1175198734 instructions, 42.3 MIPS lately, 7 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 18%, write-back 1%, uncached 0%, combining 0%; 31358 I fills, 200944 D fills, 7336 write-backs; 29.7 clocks a bus request
+           an I fill 33.3 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 24.530 s] frame 1470, pc 5059d1b2, 1196659920 instructions, 42.9 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 17%, write-back 0%, uncached 0%, combining 0%; 31469 I fills, 191047 D fills, 6298 write-backs; 29.6 clocks a bus request
+           an I fill 33.2 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 25.031 s] frame 1500: 36608 pixels -> artifacts/system/ptg_fetch/1500.png
+[ 25.031 s] frame 1500, pc 00000108, 1219185973 instructions, 45.0 MIPS lately, 12 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 29%, write-back 1%, uncached 0%, combining 0%; 34112 I fills, 329461 D fills, 12544 write-backs; 29.8 clocks a bus request
+           an I fill 34.6 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 25.531 s] frame 1530, pc 48a1ee18, 1239367530 instructions, 40.3 MIPS lately, 19 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 36%, write-back 1%, uncached 0%, combining 0%; 35693 I fills, 401298 D fills, 19859 write-backs; 29.9 clocks a bus request
+           an I fill 35.7 clocks; on the memory's side a request is 28.8 of its clocks
+           audio FIFO 512-1023 samples
+[ 26.031 s] frame 1560, pc 4894fce0, 1259367207 instructions, 40.0 MIPS lately, 16 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 33%, write-back 1%, uncached 2%, combining 0%; 38428 I fills, 369261 D fills, 16749 write-backs; 29.7 clocks a bus request
+           an I fill 35.1 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 26.532 s] frame 1590, pc 505f14bc, 1279540045 instructions, 40.3 MIPS lately, 19 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 36%, write-back 1%, uncached 0%, combining 0%; 35377 I fills, 404644 D fills, 20090 write-backs; 29.9 clocks a bus request
+           an I fill 35.6 clocks; on the memory's side a request is 28.8 of its clocks
+           audio FIFO 512-1023 samples
+[ 27.032 s] frame 1620, pc 00008a54, 1300729498 instructions, 42.4 MIPS lately, 14 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 29%, write-back 1%, uncached 0%, combining 0%; 34347 I fills, 325323 D fills, 14680 write-backs; 29.7 clocks a bus request
+           an I fill 34.8 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 27.532 s] frame 1650, pc 00000250, 1321876142 instructions, 42.3 MIPS lately, 7 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 19%, write-back 0%, uncached 0%, combining 0%; 31992 I fills, 216953 D fills, 7289 write-backs; 29.4 clocks a bus request
+           an I fill 33.4 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 28.033 s] frame 1680, pc 4894fde0, 1343153481 instructions, 42.5 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 17%, write-back 0%, uncached 0%, combining 0%; 31010 I fills, 199582 D fills, 6385 write-backs; 29.4 clocks a bus request
+           an I fill 33.1 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 28.533 s] frame 1710, pc 48a1ef08, 1365035509 instructions, 43.7 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 16%, write-back 0%, uncached 0%, combining 0%; 30298 I fills, 186273 D fills, 6314 write-backs; 29.4 clocks a bus request
+           an I fill 33.0 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 29.033 s] frame 1740, pc 4894fda8, 1387114589 instructions, 44.1 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 29205 I fills, 170902 D fills, 5231 write-backs; 29.3 clocks a bus request
+           an I fill 32.7 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 29.533 s] frame 1770, pc 48a1ef8c, 1410560518 instructions, 46.9 MIPS lately, 7 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 19%, write-back 1%, uncached 0%, combining 0%; 30633 I fills, 214608 D fills, 7330 write-backs; 29.4 clocks a bus request
+           an I fill 33.4 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 30.034 s] frame 1800: 36608 pixels -> artifacts/system/ptg_fetch/1800.png
+[ 30.034 s] frame 1800, pc 503bccf0, 1433316352 instructions, 45.5 MIPS lately, 10 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 21%, write-back 1%, uncached 0%, combining 0%; 31173 I fills, 239158 D fills, 10493 write-backs; 29.7 clocks a bus request
+           an I fill 34.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 30.534 s] frame 1830, pc 48b400a0, 1455691795 instructions, 44.7 MIPS lately, 9 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 20%, write-back 1%, uncached 1%, combining 0%; 35118 I fills, 227743 D fills, 9393 write-backs; 29.6 clocks a bus request
+           an I fill 33.8 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 31.034 s] frame 1860, pc 4894fce0, 1478395826 instructions, 45.4 MIPS lately, 10 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 21%, write-back 1%, uncached 0%, combining 0%; 31154 I fills, 237429 D fills, 10477 write-backs; 29.7 clocks a bus request
+           an I fill 34.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 31.535 s] frame 1890, pc 48a1ee1c, 1501334383 instructions, 45.8 MIPS lately, 9 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 20%, write-back 1%, uncached 0%, combining 0%; 30805 I fills, 226981 D fills, 9401 write-backs; 29.6 clocks a bus request
+           an I fill 33.9 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 32.035 s] frame 1920, pc 4894fdd8, 1523563525 instructions, 44.4 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 29143 I fills, 168561 D fills, 5254 write-backs; 29.3 clocks a bus request
+           an I fill 32.7 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 32.535 s] frame 1950, pc 4894fd70, 1545698234 instructions, 44.2 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 30150 I fills, 171084 D fills, 5212 write-backs; 29.3 clocks a bus request
+           an I fill 33.0 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 33.036 s] frame 1980, pc 4894da44, 1567366082 instructions, 43.3 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 16%, write-back 0%, uncached 0%, combining 0%; 29915 I fills, 184021 D fills, 6287 write-backs; 29.4 clocks a bus request
+           an I fill 33.0 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 33.536 s] frame 2010, pc 503a7384, 1590252991 instructions, 45.7 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 18%, write-back 0%, uncached 1%, combining 0%; 34612 I fills, 201902 D fills, 6313 write-backs; 29.3 clocks a bus request
+           an I fill 33.3 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 34.036 s] frame 2040, pc 48a1eec0, 1612967393 instructions, 45.4 MIPS lately, 10 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 21%, write-back 1%, uncached 0%, combining 0%; 31007 I fills, 232407 D fills, 10514 write-backs; 29.7 clocks a bus request
+           an I fill 34.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 34.537 s] frame 2070, pc 0000008c, 1635996523 instructions, 46.0 MIPS lately, 9 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 20%, write-back 1%, uncached 0%, combining 0%; 30939 I fills, 228683 D fills, 9394 write-backs; 29.6 clocks a bus request
+           an I fill 33.9 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 35.037 s] frame 2100: 36608 pixels -> artifacts/system/ptg_fetch/2100.png
+[ 35.037 s] frame 2100, pc 48a1f004, 1658341473 instructions, 44.7 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 14%, write-back 0%, uncached 0%, combining 0%; 29521 I fills, 160935 D fills, 5215 write-backs; 29.4 clocks a bus request
+           an I fill 32.8 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 35.537 s] frame 2130, pc 4894fd94, 1680426548 instructions, 44.1 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 30346 I fills, 173852 D fills, 5262 write-backs; 29.3 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 36.037 s] frame 2160, pc 4894fd2c, 1702277258 instructions, 43.7 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 15%, write-back 0%, uncached 1%, combining 0%; 34476 I fills, 175904 D fills, 5224 write-backs; 29.3 clocks a bus request
+           an I fill 33.0 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 36.538 s] frame 2190, pc 4894fce4, 1725095880 instructions, 45.6 MIPS lately, 7 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 18%, write-back 1%, uncached 0%, combining 0%; 31009 I fills, 205416 D fills, 7346 write-backs; 29.4 clocks a bus request
+           an I fill 33.3 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 37.038 s] frame 2220, pc 4894ecf4, 1748066417 instructions, 45.9 MIPS lately, 9 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 20%, write-back 1%, uncached 0%, combining 0%; 31004 I fills, 228055 D fills, 9407 write-backs; 29.6 clocks a bus request
+           an I fill 33.9 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 37.538 s] frame 2250, pc 00009fa0, 1770320668 instructions, 44.5 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 30375 I fills, 168986 D fills, 5230 write-backs; 29.4 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 38.039 s] frame 2280, pc 48a1eee4, 1792636963 instructions, 44.6 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 30079 I fills, 171662 D fills, 5236 write-backs; 29.3 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 38.539 s] frame 2310, pc 48a1ee00, 1814797388 instructions, 44.3 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 14%, write-back 0%, uncached 0%, combining 0%; 29837 I fills, 165674 D fills, 5229 write-backs; 29.3 clocks a bus request
+           an I fill 32.8 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 39.039 s] frame 2340, pc 48a1ef00, 1837077690 instructions, 44.5 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 16%, write-back 0%, uncached 2%, combining 0%; 33951 I fills, 180139 D fills, 5256 write-backs; 29.2 clocks a bus request
+           an I fill 33.0 clocks; on the memory's side a request is 28.4 of its clocks
+           audio FIFO 512-1023 samples
+[ 39.540 s] frame 2370, pc 505b3f2c, 1859799034 instructions, 45.4 MIPS lately, 10 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 21%, write-back 1%, uncached 0%, combining 0%; 31200 I fills, 232005 D fills, 10480 write-backs; 29.7 clocks a bus request
+           an I fill 34.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 40.040 s] frame 2400: 36608 pixels -> artifacts/system/ptg_fetch/2400.png
+[ 40.040 s] frame 2400, pc 4894fd5c, 1882868533 instructions, 46.1 MIPS lately, 9 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 20%, write-back 1%, uncached 0%, combining 0%; 30606 I fills, 230359 D fills, 9451 write-backs; 29.6 clocks a bus request
+           an I fill 33.8 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 40.540 s] frame 2430, pc 4894fd6c, 1905189718 instructions, 44.6 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 14%, write-back 0%, uncached 0%, combining 0%; 29914 I fills, 161610 D fills, 5215 write-backs; 29.3 clocks a bus request
+           an I fill 32.8 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 41.041 s] frame 2460, pc 000000b8, 1926854817 instructions, 43.3 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 17%, write-back 0%, uncached 0%, combining 0%; 30597 I fills, 188669 D fills, 6274 write-backs; 29.4 clocks a bus request
+           an I fill 33.1 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 41.541 s] frame 2490, pc 4894fde4, 1948432157 instructions, 43.1 MIPS lately, 4 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 14%, write-back 0%, uncached 2%, combining 0%; 33548 I fills, 157035 D fills, 4208 write-backs; 29.1 clocks a bus request
+           an I fill 32.7 clocks; on the memory's side a request is 28.4 of its clocks
+           audio FIFO 512-1023 samples
+[ 42.041 s] frame 2520, pc 48a1eefc, 1971512051 instructions, 46.1 MIPS lately, 7 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 18%, write-back 1%, uncached 0%, combining 0%; 30812 I fills, 205794 D fills, 7335 write-backs; 29.5 clocks a bus request
+           an I fill 33.4 clocks; on the memory's side a request is 28.6 of its clocks
+           audio FIFO 512-1023 samples
+[ 42.541 s] frame 2550, pc 48a1effc, 1994160361 instructions, 45.3 MIPS lately, 10 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 21%, write-back 1%, uncached 0%, combining 0%; 31080 I fills, 234463 D fills, 10555 write-backs; 29.7 clocks a bus request
+           an I fill 34.0 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+[ 43.042 s] frame 2580, pc 4894fd70, 2016954284 instructions, 45.6 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 16%, write-back 0%, uncached 0%, combining 0%; 29540 I fills, 177799 D fills, 5226 write-backs; 29.3 clocks a bus request
+           an I fill 33.0 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 43.542 s] frame 2610, pc 4894fd50, 2038973113 instructions, 44.0 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 2%, D fill 15%, write-back 0%, uncached 0%, combining 0%; 30320 I fills, 169625 D fills, 5234 write-backs; 29.3 clocks a bus request
+           an I fill 32.9 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 44.042 s] frame 2640, pc 48a1ef50, 2060842316 instructions, 43.7 MIPS lately, 5 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 15%, write-back 0%, uncached 1%, combining 0%; 34012 I fills, 176432 D fills, 5238 write-backs; 29.3 clocks a bus request
+           an I fill 33.1 clocks; on the memory's side a request is 28.4 of its clocks
+           audio FIFO 512-1023 samples
+[ 44.543 s] frame 2670, pc 503a2f88, 2083400969 instructions, 45.1 MIPS lately, 6 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 17%, write-back 0%, uncached 0%, combining 0%; 30314 I fills, 190916 D fills, 6284 write-backs; 29.4 clocks a bus request
+           an I fill 33.2 clocks; on the memory's side a request is 28.5 of its clocks
+           audio FIFO 512-1023 samples
+[ 45.043 s] frame 2700: 36608 pixels -> artifacts/system/ptg_fetch/2700.png
+[ 45.043 s] frame 2700, pc 0000042c, 2106191809 instructions, 45.6 MIPS lately, 10 frames shown, a copy at most 72801 clocks
+           waiting: I fill 3%, D fill 21%, write-back 1%, uncached 0%, combining 0%; 31580 I fills, 238853 D fills, 10480 write-backs; 29.7 clocks a bus request
+           an I fill 34.1 clocks; on the memory's side a request is 28.7 of its clocks
+           audio FIFO 512-1023 samples
+save: C: written or erased 3652 times
+fetches: 13, 851968 bytes, the longest 16.58 ms, 0 failed; the host: 13 reads, 3 writes, 0 failures, the loader's FIFO overflowed 0 times
+save: 3 readouts by the host, 0 words changed before the bridge took them, 0 of them read as they were, 1 as they were before a write just before; 0 wrong
+2701 frames in 45.043 s of machine time; 2106191809 instructions; 564 frames shown, the longest copy 72801 clocks; 0 memory protocol errors

@@ -1,0 +1,6 @@
+fail2: [fetch] the first answered with error 2
+fail2: KERNEL PANIC: E: the fetch of block 341 failed, error 2
+fail2: stopped: 7.847 s at 80 MHz; 30763609 instructions in 67752064 cycles (0 in the idle loop); bus: 421351 line reads, 83131 line writes (56086 behind a fill), 22871 word reads; 109 s on the host, lockstep with Unicorn
+fail0: [fetch] the first answered never
+fail0: KERNEL PANIC: E: the fetch of block 341 was not answered in 5000 ms
+fail0: stopped: 12.839 s at 80 MHz; 428763592 instructions in 467069543 cycles (396981858 in the idle loop); bus: 435488 line reads, 85467 line writes (57192 behind a fill), 24288 word reads; 680 s on the host, lockstep with Unicorn

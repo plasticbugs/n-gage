@@ -2,10 +2,12 @@
 # The whole machine through the Pocket's real memory glue: ngage_core against
 # ngage_mem, sdram_ctrl and cram_ctrl with behavioural chips beyond the pins,
 # and the three slots pushed through the download port at the APF loader's
-# rate (sim/tb_system.cpp says how much of each).
+# rate (sim/tb_system.cpp says how much of each).  The APF side is core_top's
+# (sim/tb_apf.sv), and with --apf, or a drive larger than its 32 MB window,
+# the bench plays the Pocket's host on the bridge (sim/apf_host.h).
 #
 #   sim/run_system.sh --rom SYM.ROM [--drive game.img] [--frames N]
-#                     [--snap a,b,c] [--gap N] [--dl BYTES | --full]
+#                     [--snap a,b,c] [--gap N] [--dl BYTES | --full] [--apf]
 #
 # Slower than the lockstep bench with ideal memories (sim/run_sys.sh) -- keep
 # both -- but this is the one to run before a flash: it is the only
@@ -26,6 +28,7 @@ make -s -C "$root"/sw/kernel >/dev/null
 MODS=$(ls "$root"/modules/*/*.v "$root"/modules/*/*.sv 2>/dev/null || true)
 PKGS=$(ls "$root"/rtl/*_pkg.sv)
 SRCS="$PKGS $(ls "$root"/rtl/*.sv | grep -v '_pkg\.sv$')"
+P=$root/platform/pocket
 
 # --no-assert-case: a CPU core may hold a `unique case` that does not match
 # while it is still in reset, which Verilator would otherwise stop on.
@@ -37,7 +40,9 @@ verilator --cc --exe --build -j "${JOBS:-8}" -O2 \
     $SRCS $MODS \
     "$root"/target/pocket/ngage_mem.sv "$root"/target/pocket/sdram_ctrl.sv \
     "$root"/target/pocket/cram_ctrl.sv "$root"/target/pocket/sram_port.sv \
-    "$root"/target/pocket/ngage_save.sv \
+    "$root"/target/pocket/ngage_save.sv "$root"/target/pocket/ngage_slots.sv \
+    "$P"/helpers/synch_3.sv "$P"/interface/data_loader.sv "$P"/support/data_io.sv \
+    "$P"/peripherals/core_bridge_cmd.sv dcfifo_model.v mf_datatable_model.v tb_apf.sv \
     sdram_model.sv cram_model.sv sram_model.sv tb_system_top.sv tb_system.cpp > "$OBJ.log" 2>&1 \
     || { tail -40 "$OBJ.log"; exit 1; }
 

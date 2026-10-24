@@ -119,6 +119,10 @@ localparam logic [9:0] IO_DRIVE_SIZE  = 10'h01C;
 localparam logic [9:0] IO_ROM_SIZE    = 10'h01D;
 localparam logic [9:0] IO_SAVE_SIZE   = 10'h01E;
 localparam logic [9:0] IO_SAVE_DIRTY  = 10'h01F;
+localparam logic [9:0] IO_FETCH_SRC   = 10'h020;
+localparam logic [9:0] IO_FETCH_DST   = 10'h021;
+localparam logic [9:0] IO_FETCH_LEN   = 10'h022;
+localparam logic [9:0] IO_FETCH_STAT  = 10'h023;
 
 endpackage
 

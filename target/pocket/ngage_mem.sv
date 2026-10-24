@@ -10,7 +10,12 @@
 // the chip with no adder.  The loader's three slots (data.json) write the
 // same bus addresses: the kernel at 0, SYM.ROM at 0x2000000, the drive at
 // 0x4000000, and the game's save, C:, into the top MB of RAM at 0x1F00000
-// (NGVM_SAVE_BASE).
+// (NGVM_SAVE_BASE).  A drive image larger than the CRAM's 32 MB still
+// arrives whole, at bus 0x4000000 to 0x7FFFFFF: its first 32 MB go to the
+// CRAM, the rest is counted into drive_size and dropped, and the kernel
+// fetches it from the SD card when the game reads it (ngage_slots.sv).  A
+// fetch's bytes come the same way (dl_fetch), into the CRAM, and are not
+// counted.
 //
 // The bus port is ngvm_sys's, crossed into this clock (ngvm_xbus.sv): one
 // request at a time, held until m_done.  A line read is one 16-halfword
@@ -56,8 +61,10 @@ module ngage_mem (
     input  logic  [26:0] dl_addr,
     input  logic   [7:0] dl_data,
     input  logic         dl_active,
+    input  logic         dl_fetch,      // the bytes are a fetch's: drive_size stays
+    output logic         dl_idle,       // no byte is waiting for its memory
     output logic  [31:0] rom_size,      // bytes loaded from 0x2000000 on
-    output logic  [31:0] drive_size,    // bytes loaded from 0x4000000 on
+    output logic  [31:0] drive_size,    // bytes loaded from 0x4000000 on: the image's size
     output logic  [31:0] save_size,     // bytes loaded from 0x1F00000 on, below the ROM
 
     // NGVM's bus (ngvm_sys.sv), level request held until the done pulse
@@ -122,7 +129,9 @@ module ngage_mem (
     // a row change (METHODOLOGY 5.16), one for each memory.  Each byte is
     // taken once, on the rising edge of the strobe, which the loader holds
     // for several clocks.  An even byte still waiting when the download ends
-    // (a file of odd length) is written alone.
+    // (a file of odd length) is written alone.  A halfword at drive offset
+    // 32 MB or more has no place in the CRAM, and is dropped: kept, its
+    // address would wrap onto the drive's first sector.
     localparam int DLQ = 64;
     logic        dl_we_d, dl_act_d, lo_v;
     logic  [7:0] lo_b;
@@ -147,12 +156,15 @@ module ngage_mem (
         if (nb && !dl_addr[0]) begin lo_v <= 1'b1; lo_b <= dl_data; lo_a <= dl_addr[26:1]; end
         else if (q_push) lo_v <= 1'b0;
         // the sizes: one past the last byte loaded into each region
-        if (nb && dl_addr >= BUS_DRIVE) drive_size <= {5'd0, dl_addr - BUS_DRIVE} + 32'd1;
-        else if (nb && dl_addr >= BUS_ROM) rom_size <= {5'd0, dl_addr - BUS_ROM} + 32'd1;
-        else if (nb && dl_addr >= BUS_SAVE) save_size <= {5'd0, dl_addr - BUS_SAVE} + 32'd1;
+        if (nb && !dl_fetch) begin
+            if (dl_addr >= BUS_DRIVE) drive_size <= {5'd0, dl_addr - BUS_DRIVE} + 32'd1;
+            else if (dl_addr >= BUS_ROM) rom_size <= {5'd0, dl_addr - BUS_ROM} + 32'd1;
+            else if (dl_addr >= BUS_SAVE) save_size <= {5'd0, dl_addr - BUS_SAVE} + 32'd1;
+        end
         if (init) begin lo_v <= 1'b0; rom_size <= '0; drive_size <= '0; save_size <= '0; end
     end
     wire q_cram = q_word[41];           // halfword address 26:1 >= 0x2000000
+    wire q_tail = q_word[41] && q_word[40];     // drive offset >= 32 MB: dropped
 
     // SDRAM side
     logic [43:0] sq [DLQ];
@@ -165,9 +177,10 @@ module ngage_mem (
     wire         cq_empty = cq_wp == cq_rp;
     wire  [43:0] cq_head  = cq[cq_rp[5:0]];
     logic        sq_pop, cq_pop;
+    assign       dl_idle  = sq_empty && cq_empty;
     always_ff @(posedge clk) begin
         if (q_push && !q_cram) begin sq[sq_wp[5:0]] <= q_word; sq_wp <= sq_wp + 7'd1; end
-        if (q_push &&  q_cram) begin cq[cq_wp[5:0]] <= q_word; cq_wp <= cq_wp + 7'd1; end
+        if (q_push &&  q_cram && !q_tail) begin cq[cq_wp[5:0]] <= q_word; cq_wp <= cq_wp + 7'd1; end
         if (sq_pop) sq_rp <= sq_rp + 7'd1;
         if (cq_pop) cq_rp <= cq_rp + 7'd1;
         if (init) begin sq_wp <= '0; sq_rp <= '0; cq_wp <= '0; cq_rp <= '0; end
@@ -259,8 +272,9 @@ module ngage_mem (
     // drive halfword h: h[23] the chip, h[22] its half (cram_ctrl.sv)
     wire  [23:0] c_ha   = c_word ? {m_addr[24:2], c_n[0]} : {m_addr[24:5], c_n};
 
-    // The download's halfwords first (the CPU is held in reset while there
-    // are any), then the CPU's, one at a time.  The download's are taken
+    // The download's halfwords first, then the CPU's, one at a time.  The
+    // CPU is held in reset through the load; a fetch's halfwords come while
+    // it runs, and its accesses wait between them.  The download's are taken
     // back to back, straight from the FIFO, so the CRAM keeps ahead of the
     // loader (cram_ctrl.sv).
     wire         cr_dlreq  = !cq_empty;
@@ -366,7 +380,7 @@ module ngage_mem (
         .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n)
     );
 
-    wire _unused = &{1'b0, rdata, b_widx[9:4], b_idx[9:5], m_addr[26], q_word[40], 1'b0};
+    wire _unused = &{1'b0, rdata, b_widx[9:4], b_idx[9:5], m_addr[26], 1'b0};
 endmodule
 
 `default_nettype wire

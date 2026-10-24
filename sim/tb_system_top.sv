@@ -3,7 +3,12 @@
 // ngage_mem, sdram_ctrl and cram_ctrl, with behavioural chips beyond the
 // pins and the slots sent in through the download port at the APF loader's
 // rate.  The save readout (ngage_save) sits on the LCD's port as in
-// core_top, and the bridge reads the save through it.
+// core_top, and the bridge reads the save through it.  The APF side is
+// core_top's too (tb_apf.sv: core_bridge_cmd, data_io, ngage_slots), so a
+// drive larger than the window is fetched as on the Pocket: the C++ side
+// plays the host on the bridge (apf_host.h), and the fetch's bytes come
+// through data_io's loader into ngage_mem, gated as core_top gates them.
+// The bench's own load stands in for the two data_ios during the load.
 //
 // This is the bench two shipped cores did without, and both paid for it: a
 // whole-machine bench that answers the CPUs from plain arrays never exercises
@@ -41,12 +46,20 @@ module tb_system_top #(
     output logic        mem_ready,
     output logic [31:0] rom_size, drive_size, save_size,
 
-    // the save slot read back over the APF bridge, and C:'s writes
+    // the APF bridge, and C:'s writes
     input  logic        clk_74a,
+    input  logic        setup_done,
     input  logic        bridge_rd,
+    input  logic        bridge_wr,
     input  logic [31:0] bridge_addr,
+    input  logic [31:0] bridge_wr_data,
     output logic [31:0] bridge_rd_data,
     output logic        save_t,
+    // the drive's fetches, as the core asks (clk_cpu) and is answered (clk_74a)
+    output logic        fetch_t, fetch_done_t, fetching, io_download, allcomplete,
+    output logic [31:0] fetch_src, fetch_dst, fetch_len,
+    output logic  [2:0] fetch_err,
+    output logic [31:0] fifo_overflows,
 
     // the kernel's debug port, in clk_cpu's domain
     output logic        putc,
@@ -103,10 +116,34 @@ module tb_system_top #(
     end
     wire mem_init = !seen_reset || !(&por);
 
+    // the APF side; its bytes join the bench's as core_top's two data_ios'
+    // join (core_top: dl_open, dl_we)
+    logic        io_wr, dl_idle;
+    logic [26:0] io_addr;
+    logic  [7:0] io_data;
+    logic [31:0] sv_rd_data;
+    tb_apf apf (
+        .clk_74a(clk_74a), .clk(clk), .setup_done(setup_done),
+        .bridge_wr(bridge_wr), .bridge_rd(bridge_rd), .bridge_addr(bridge_addr),
+        .bridge_wr_data(bridge_wr_data), .bridge_rd_data(bridge_rd_data), .sv_rd_data(sv_rd_data),
+        .save_t(save_t), .fetch_t(fetch_t), .fetch_src(fetch_src), .fetch_dst(fetch_dst),
+        .fetch_len(fetch_len), .fetch_done_t(fetch_done_t), .fetch_err(fetch_err),
+        .io_wr(io_wr), .io_addr(io_addr), .io_data(io_data), .io_download(io_download),
+        .fetching(fetching), .dl_idle(dl_idle),
+        .allcomplete(allcomplete), .inmenu(), .fifo_overflows(fifo_overflows)
+    );
+    wire        m_open = dl_active || io_download || fetching;
+    wire        m_we   = m_open && (dl_we || io_wr);
+    wire [26:0] m_dla  = dl_we ? dl_addr : io_addr;
+    wire  [7:0] m_dld  = dl_we ? dl_data : io_data;
+    // the save's own bytes make its readout stale (core_top: nv_wr)
+    wire        sv_ld  = dl_we && dl_addr >= 27'h1F00000 && dl_addr < 27'h2000000;
+
     ngage_mem u_mem (
         .clk(clk), .clk_sdram(clk), .init(mem_init), .ready(mem_ready),
         .rd_late(rd_late), .burst_slow(1'b0), .rd_fast(rd_fast), .wr_fast(wr_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
-        .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
+        .dl_we(m_we), .dl_addr(m_dla), .dl_data(m_dld), .dl_active(m_open),
+        .dl_fetch(fetching), .dl_idle(dl_idle),
         .rom_size(rom_size), .drive_size(drive_size), .save_size(save_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
@@ -144,8 +181,8 @@ module tb_system_top #(
 
     ngage_save u_save (
         .clk_74a(clk_74a), .bridge_rd(bridge_rd), .bridge_endian_little(1'b1),
-        .bridge_addr(bridge_addr), .bridge_rd_data(bridge_rd_data),
-        .clk(clk), .rst(~mem_ready), .dl_active(dl_active), .save_t(save_t),
+        .bridge_addr(bridge_addr), .bridge_rd_data(sv_rd_data),
+        .clk(clk), .rst(~mem_ready), .dl_active(sv_ld), .save_t(save_t),
         .a_req(c_l_req), .a_addr(c_l_addr), .a_len(c_l_len),
         .a_wr(c_l_wr), .a_idx(c_l_idx), .a_data(c_l_data), .a_done(c_l_done),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
@@ -162,6 +199,8 @@ module tb_system_top #(
         .l_wr(c_l_wr), .l_idx(c_l_idx), .l_data(c_l_data), .l_done(c_l_done),
         .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
         .save_size(save_size), .save_t(save_t),
+        .fetch_t(fetch_t), .fetch_src(fetch_src), .fetch_dst(fetch_dst), .fetch_len(fetch_len),
+        .fetch_done_t(fetch_done_t), .fetch_err(fetch_err),
         .rgb(rgb_c), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank),
         .pix_ce(pix_ce), .de(de),
         .tate(2'b00), .t_cen(), .t_rgb(), .t_hsync(), .t_vsync(), .t_hblank(), .t_vblank(), .t_de(),

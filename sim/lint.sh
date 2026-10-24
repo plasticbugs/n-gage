@@ -63,6 +63,15 @@ if [ -z "$out" ]; then echo ok
 else echo; echo "$out" | sed 's/^/    /'; fail=1
 fi
 
+printf '%-20s ' "slots"
+out=$(verilator --lint-only $OPTS "$WAIVE" --top-module ngage_slots \
+      "$root"/target/pocket/ngage_slots.sv "$root"/platform/pocket/helpers/synch_3.sv 2>&1 \
+      | grep -E '^%(Error|Warning)' | grep -v 'Exiting due to' \
+      | grep -v -E '^%Warning[^ ]*: [^ ]*/platform/pocket/' || true)
+if [ -z "$out" ]; then echo ok
+else echo; echo "$out" | sed 's/^/    /'; fail=1
+fi
+
 printf '%-20s ' "sram self-test"
 out=$(verilator --lint-only $OPTS "$WAIVE" --top-module sram_selftest \
       "$root"/target/pocket/sram_selftest.sv 2>&1 \

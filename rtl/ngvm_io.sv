@@ -2,7 +2,7 @@
 // NGVM's devices (docs/hardware.md 6, sw/include/ngvm_hw.h): the timer and
 // the interrupt status, the LCD's registers, the keys, the audio FIFO, the
 // page table's write port, the data window's number, the save's size and
-// its dirty signal, and the debug port.
+// its dirty signal, the drive's fetches, and the debug port.
 //
 // The D-cache presents an access in its compare cycle (io_req); a read's
 // value is combinational from the registers, and a write takes effect at the
@@ -48,6 +48,16 @@ module ngvm_io
     input  logic [31:0] drive_size,
     input  logic [31:0] save_size,      // IO_SAVE_SIZE: set by the load, before reset ends
     output logic        save_t,         // toggles at each IO_SAVE_DIRTY write; never reset
+
+    // a fetch into the drive's window (IO_FETCH_*): fetch_t toggles to ask,
+    // with the three words held from before it until fetch_done_t, from
+    // another clock, toggles to match; fetch_err is held with that
+    output logic        fetch_t,
+    output logic [31:0] fetch_src,
+    output logic [31:0] fetch_dst,
+    output logic [31:0] fetch_len,
+    input  logic        fetch_done_t,
+    input  logic  [2:0] fetch_err,
 
     output logic [31:0] snd,            // the sample playing: L 15:0, R 31:16
     output logic        snd_tog,        // toggles when it changes
@@ -100,13 +110,23 @@ module ngvm_io
         end
     end
 
+    // ------------------------------------------------------------ fetches
+    // Busy while the two toggles differ, so neither side needs a reset: a
+    // fetch in flight across one still ends (ngvm_xbus.sv).  fd_s[2] is the
+    // answer crossed in; the step from fd_s[3] to it raises IRQ_FETCH.
+    logic  [3:0] fd_s;
+    logic  [2:0] fetch_err_q;
+    always_ff @(posedge clk) fd_s <= {fd_s[2:0], fetch_done_t};
+    wire         fetch_busy = fetch_t != fd_s[2];
+    wire         fetch_end  = fd_s[3] != fd_s[2];
+
     // ------------------------------------------------------------ registers
-    logic  [1:0] status;                // timer, vblank; audio is a level
+    logic  [2:0] status;                // fetch, vblank, timer; audio is a level
     logic [31:0] enable, lcd_frame;
     logic [14:0] pt_index;
     logic        pt_index_ok;
     wire         audio_low = a_lvl <= (AW+1)'(AUDIO_N / 2);
-    wire  [31:0] status_r  = {29'd0, audio_low, status};
+    wire  [31:0] status_r  = {28'd0, status[2], audio_low, status[1:0]};
 
     always_comb begin
         case (io_off)
@@ -126,6 +146,10 @@ module ngvm_io
             IO_DRIVE_SIZE:  io_rdata = drive_size;
             IO_ROM_SIZE:    io_rdata = rom_size;
             IO_SAVE_SIZE:   io_rdata = save_size;
+            IO_FETCH_SRC:   io_rdata = fetch_src;
+            IO_FETCH_DST:   io_rdata = fetch_dst;
+            IO_FETCH_LEN:   io_rdata = fetch_len;
+            IO_FETCH_STAT:  io_rdata = {28'd0, fetch_err_q, fetch_busy};
             default:        io_rdata = 32'd0;
         endcase
     end
@@ -141,7 +165,9 @@ module ngvm_io
         dbg_hex  <= 1'b0;
         if (io_req && !io_we && io_off == IO_TIMER_US) hi_latch <= us[63:32];
         // a source setting its bit wins over a write clearing it
-        status <= status & ~(wr && io_off == IO_IRQ_STATUS ? io_wdata[1:0] : 2'b00) | {vblank, fire};
+        status <= status & ~(wr && io_off == IO_IRQ_STATUS ? {io_wdata[3], io_wdata[1:0]} : 3'b000)
+                | {fetch_end, vblank, fire};
+        if (fetch_end) fetch_err_q <= fetch_err;
         if (fire) armed <= 1'b0;
         if (vblank) lcd_frame <= lcd_frame + 32'd1;
         if (wr) case (io_off)
@@ -158,11 +184,16 @@ module ngvm_io
             IO_PT_DATA:    begin pt_we <= pt_index_ok; pt_idx <= pt_index; pt_data <= io_wdata[15:0]; end
             IO_WIN_ID:     win_id <= io_wdata[5:0];
             IO_SAVE_DIRTY: save_t <= !save_t;
+            // ignored while a fetch is in flight: its words are held still
+            IO_FETCH_SRC:  if (!fetch_busy) fetch_src <= io_wdata;
+            IO_FETCH_DST:  if (!fetch_busy) fetch_dst <= io_wdata;
+            IO_FETCH_LEN:  if (!fetch_busy) begin fetch_len <= io_wdata; fetch_t <= !fetch_t; end
             default: ;
         endcase
         irq <= (status_r & enable) != 32'd0;
         if (rst) begin
-            status <= 2'b00; enable <= 32'd0; armed <= 1'b0; cmp <= 32'd0; hi_latch <= 32'd0;
+            status <= 3'b000; enable <= 32'd0; armed <= 1'b0; cmp <= 32'd0; hi_latch <= 32'd0;
+            fetch_err_q <= 3'd0;
             lcd_base <= 32'd0; lcd_on <= 1'b0; lcd_frame <= 32'd0; a_rate <= 32'd8000;
             pt_index <= 15'd0; pt_index_ok <= 1'b0; win_id <= 6'd0; irq <= 1'b0;
         end

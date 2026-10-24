@@ -5,7 +5,7 @@
 //   obj_system/Vtb_system_top --rom SYM.ROM [--kernel kernel.bin]
 //       [--drive game.img] [--frames N] [--snap a,b,c] [-o DIR]
 //       [--gap N] [--dl BYTES | --full] [--keys "S:MASK ..."] [--wav FILE]
-//       [--halfrd] [--halfwr] [--late] [--save FILE] [--save-out FILE]
+//       [--halfrd] [--halfwr] [--late] [--save FILE] [--save-out FILE] [--apf]
 //
 // Every byte of the kernel goes through the download port, a byte every
 // --gap clocks (the APF loader's rate is one per 7-8); of the ROM and the
@@ -32,10 +32,25 @@
 // or when the bridge took the word: the machine may write C: meanwhile,
 // and a word fetched ahead is as C: was when it was fetched.  It is wrong
 // only if it is neither.
+//
+// --apf runs clk_74a throughout and plays the Pocket's host on the bridge
+// (apf_host.h): all-complete after the load, the core's "ready to run",
+// and the target commands, a word a microsecond.  It is on by itself for a
+// drive larger than the window, of which the load puts the first 32 MB in
+// the CRAM, as the Pocket's does; the rest the kernel fetches, through
+// ngage_slots and data_io.  Each fetch is checked when it is answered: the
+// window's span must hold the image's bytes.  Each write of the save slot
+// the core asks for is read back and checked as --save-out's readout is,
+// but for one thing: ngage_save fetches C: again only once a write has had
+// some 75 us to settle, so a readout that begins sooner may give a word as
+// it was before that write.  The bench keeps what each word of C: held,
+// noted at each IO_SAVE_DIRTY, and takes a word C: held up to 200 us before
+// the readout began.  --save-out writes the last readout.
 #include "Vtb_system_top.h"
 #include "Vtb_system_top___024root.h"
 #include "Vtb_system_top_tb_system_top.h"
 #include "verilated.h"
+#include "apf_host.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -52,12 +67,14 @@ static const double CPU_HZ = SYS_HZ, MEM_HZ = 96e6;
 static const int W = 176, H = 208;
 static const uint32_t BUS_ROM = 0x2000000, BUS_DRIVE = 0x4000000;
 static const uint32_t BUS_SAVE = 0x1F00000, SAVE_WORDS = 0x40000;
+static const uint32_t WINDOW = 0x2000000;         // the drive's: the CRAM
 
 static Vtb_system_top *dut;
 static uint64_t sys_cycles, cpu_cycles;
 static uint64_t a_cycles;
 static double t_sys, t_cpu, t_a = 1e30;        // the next rising edge of each, in ns;
-                                               // clk_74a runs only for a readout
+                                               // clk_74a runs only for a readout, or --apf
+static ApfHost *host;                          // --apf: the Pocket on the bridge
 
 // advance to the next rising edge of any clock (all, if they coincide)
 static void step()
@@ -71,7 +88,7 @@ static void step()
     dut->eval();
     if (s) { sys_cycles++; t_sys += 2 * sh; }
     if (c) { cpu_cycles++; t_cpu += 2 * ch; }
-    if (a) { a_cycles++; t_a += 2 * ah; }
+    if (a) { a_cycles++; t_a += 2 * ah; if (host) host->edge(); }
     // the falling edges, before the next rising one
     dut->clk = 0; dut->clk_cpu = 0; dut->clk_74a = 0;
     dut->eval();
@@ -122,7 +139,7 @@ int main(int argc, char **argv)
     const char *save = nullptr, *save_out = nullptr;
     int frames = 10, gap = 8, hold = 4;
     size_t dl = 0x10000;
-    bool full = false, fastrd = true, fastwr = true, late = false;
+    bool full = false, fastrd = true, fastwr = true, late = false, apf = false;
     std::string out = ".";
     std::set<int> snaps;
     std::vector<std::pair<double, unsigned>> keys;
@@ -141,6 +158,7 @@ int main(int argc, char **argv)
         else if (a == "--halfrd") fastrd = false;
         else if (a == "--halfwr") fastwr = false;
         else if (a == "--late") late = true;
+        else if (a == "--apf") apf = true;
         else if (a == "-o") out = next();
         else if (a == "--wav") wav = argv[++i];
         else if (a == "--snap") {
@@ -171,10 +189,70 @@ int main(int argc, char **argv)
     if (drive) slots.push_back({"drive", BUS_DRIVE, slurp(drive)});
     if (save) slots.push_back({"save", BUS_SAVE, slurp(save)});
 
+    const std::vector<uint8_t> *img = drive ? &slots[2].data : nullptr;
+    if (img && img->size() > WINDOW) apf = true;
     dut = new Vtb_system_top;
     t_sys = 0; t_cpu = 0.37;                       // the two clocks are unrelated in phase
     dut->reset = 1; dut->dl_we = 0; dut->dl_active = 0; dut->keys = 0; dut->keymap = 0; dut->rd_fast = fastrd; dut->wr_fast = fastwr; dut->rd_late = late;
-    dut->clk_74a = 0; dut->bridge_rd = 0; dut->bridge_addr = 0;
+    dut->clk_74a = 0; dut->bridge_rd = 0; dut->bridge_wr = 0; dut->bridge_addr = 0; dut->bridge_wr_data = 0; dut->setup_done = 0;
+    ApfHost the_host;
+    // the save slot's readouts the host makes, checked as --save-out's is
+    std::vector<uint32_t> sv_start(SAVE_WORDS), sv_got(SAVE_WORDS);
+    int sv_bad = 0, sv_older = 0, sv_moved = 0, sv_outs = 0, sv_recent = 0;
+    uint64_t sv_t0 = 0, sv_gap = 0;
+    auto c_word = [](uint32_t k) {
+        uint32_t h = (BUS_SAVE >> 1) + 2 * k;
+        return sdram_hw(h) | (uint32_t)sdram_hw(h + 1) << 16;
+    };
+    // what each word of C: held before, and until when (in 96 MHz clocks)
+    const uint64_t SV_SETTLE_CLKS = 19200;         // 200 us
+    std::vector<uint32_t> c_shadow(SAVE_WORDS);
+    std::vector<std::vector<std::pair<uint64_t, uint32_t>>> c_was(SAVE_WORDS);
+    uint64_t c_last = 0;
+    auto c_scan = [&] {
+        for (uint32_t k = 0; k < SAVE_WORDS; k++) {
+            uint32_t w = c_word(k);
+            if (w == c_shadow[k]) continue;
+            auto &h = c_was[k];
+            while (!h.empty() && h.front().first + 96000000 < sys_cycles) h.erase(h.begin());
+            h.push_back({sys_cycles, c_shadow[k]});
+            c_shadow[k] = w;
+            c_last = sys_cycles;
+        }
+    };
+    if (apf) {
+        host = &the_host;
+        host->wr = &dut->bridge_wr; host->rd = &dut->bridge_rd;
+        host->addr = &dut->bridge_addr; host->wdata = &dut->bridge_wr_data; host->rdata = &dut->bridge_rd_data;
+        host->image_size = img ? img->size() : 0;
+        host->image = [img](uint64_t o) -> uint8_t { return img && o < img->size() ? (*img)[o] : 0; };
+        host->save_begin = [&] {
+            c_scan();
+            sv_t0 = sys_cycles;
+            sv_gap = sv_t0 - c_last;
+            sv_start = c_shadow;
+        };
+        host->save_word = [&](uint32_t k, uint32_t w) {
+            if (k >= SAVE_WORDS) return;
+            uint32_t then = c_word(k);
+            sv_got[k] = w;
+            if (sv_start[k] != then) sv_moved++;
+            if (w == then) return;
+            if (w == sv_start[k]) { sv_older++; return; }
+            for (auto &e : c_was[k])
+                if (e.second == w && e.first + SV_SETTLE_CLKS >= sv_t0) { sv_recent++; return; }
+            if (sv_bad++ < 6)
+                printf("FAIL  save word %x: read %08x; C: held %08x at the start, %08x when it was read\n",
+                       k, w, sv_start[k], then);
+        };
+        host->save_end = [&] {
+            sv_outs++;
+            printf("[%7.3f s] save: the slot written, read back in %.1f ms, C: last written %.0f us before it began; "
+                   "%d words wrong so far, %d as they were before that write\n",
+                   sys_cycles / MEM_HZ, (sys_cycles - sv_t0) / 96e3, sv_gap / 96.0, sv_bad, sv_recent);
+        };
+        t_a = 0.11;
+    }
     tick_sys(16);
     long t = 0; while (!dut->mem_ready && t++ < 200000) tick_sys(1);
     if (!dut->mem_ready) { printf("FAIL  the memory never came ready\n"); return 1; }
@@ -186,10 +264,12 @@ int main(int argc, char **argv)
         // counts the size from the last
         size_t len = s.data.size();
         size_t n = (full || s.base == 0) ? len : std::min(dl, len);
+        // of a drive larger than the window, what the CRAM holds
+        size_t held = s.base == BUS_DRIVE ? std::min<size_t>(len, WINDOW) : len;
         std::vector<size_t> sent;
         for (size_t i = 0; i < n; i++) sent.push_back(i);
         for (size_t i = std::max(n, len < 2 ? 0 : len - 2); i < len; i++) sent.push_back(i);
-        for (size_t i = n; i < len; i++) bus_poke(s.base + i, s.data[i]);
+        for (size_t i = n; i < held; i++) bus_poke(s.base + i, s.data[i]);
         for (size_t i : sent) {
             dut->dl_addr = s.base + i; dut->dl_data = s.data[i]; dut->dl_we = 1;
             tick_sys(hold);
@@ -202,7 +282,7 @@ int main(int argc, char **argv)
     tick_sys(400);
     int bad = 0;
     for (auto &s : slots)
-        for (size_t i = 0; i < s.data.size(); i++)
+        for (size_t i = 0; i < (s.base == BUS_DRIVE ? std::min<size_t>(s.data.size(), WINDOW) : s.data.size()); i++)
             if (bus_byte(s.base + i) != s.data[i]) {
                 if (bad < 8) printf("FAIL  %s byte %zx: %02x, the file has %02x\n", s.name, i, bus_byte(s.base + i), s.data[i]);
                 bad++;
@@ -214,8 +294,18 @@ int main(int argc, char **argv)
         || dut->save_size != (save ? slots.back().data.size() : 0)) {
         printf("FAIL  the sizes the loader counted are wrong\n"); return 1;
     }
+    if (apf) {
+        // the Pocket's all-complete, which releases core_top's reset
+        dut->setup_done = 1;
+        host->boot();
+        uint64_t a0 = a_cycles;
+        while (!host->loaded && a_cycles - a0 < 7425000) step();
+        if (!host->loaded) { printf("FAIL  the host's all-complete was not answered in 100 ms\n"); return 1; }
+        printf("host: all-complete answered after %.2f ms\n", (a_cycles - a0) / 74250.0);
+    }
 
     // ------------------------------------------------------------ the run
+    for (uint32_t k = 0; k < SAVE_WORDS; k++) c_shadow[k] = c_word(k);
     dut->reset = 0;
     uint64_t sys0 = sys_cycles;
     std::vector<uint8_t> frame(W * H * 3, 0);
@@ -236,6 +326,12 @@ int main(int argc, char **argv)
     uint64_t played = 0;
     bool snd_tog_d = dut->snd_tog, save_t_d = dut->save_t;
     uint64_t c_writes = 0;                         // IO_SAVE_DIRTY: writes and erases of C:
+    // the fetches: asked (clk_cpu) and answered
+    bool ft_d = dut->fetch_t, fd_d = dut->fetch_done_t;
+    uint32_t f_src = 0, f_dst = 0, f_len = 0;
+    uint64_t f_t0 = 0, f_n = 0, f_bytes = 0;
+    int f_bad = 0;
+    double f_max = 0;
     while (frame_no <= frames) {
         // the colour and de are registered together at the edge that ends a
         // pix_ce cycle, as core_top's clk_vid flops then take them
@@ -266,8 +362,25 @@ int main(int argc, char **argv)
         exit_d = dut->dexit;
         if (dut->snd_tog != snd_tog_d) played++;
         snd_tog_d = dut->snd_tog;
-        if (dut->save_t != save_t_d) c_writes++;
+        if (dut->save_t != save_t_d) { c_writes++; if (apf) c_scan(); }
         save_t_d = dut->save_t;
+        if (dut->fetch_t != ft_d) {
+            ft_d = dut->fetch_t;
+            f_src = dut->fetch_src; f_dst = dut->fetch_dst; f_len = dut->fetch_len; f_t0 = sys_cycles;
+            if (!apf) { printf("[%7.3f s] FAIL  a fetch with no host to answer it\n", secs); f_bad++; break; }
+        }
+        if (dut->fetch_done_t != fd_d) {
+            fd_d = dut->fetch_done_t;
+            int wrong = 0, err = dut->fetch_err;
+            for (uint32_t i = 0; i < f_len && !err; i++)
+                if (f_dst + i >= WINDOW || f_src + i >= img->size() || bus_byte(BUS_DRIVE + f_dst + i) != (*img)[f_src + i]) wrong++;
+            double ms = (sys_cycles - f_t0) / 96e3;
+            f_max = std::max(f_max, ms);
+            f_n++; f_bytes += f_len;
+            if (err || wrong) f_bad++;
+            printf("[%7.3f s] fetch %llu: %x bytes from %x into %x in %.2f ms, error %d, %d bytes wrong\n",
+                   secs, (unsigned long long)f_n, f_len, f_src, f_dst, ms, err, wrong);
+        }
         if (sys_cycles == sc) continue;            // a CPU edge only: the picture did not move
         if (wav && (sys_cycles - sys0) % 2000 == 0) audio.push_back(dut->snd);
         a_min = std::min<unsigned>(a_min, dut->a_lvl); a_max = std::max<unsigned>(a_max, dut->a_lvl);
@@ -325,12 +438,26 @@ int main(int argc, char **argv)
 
     // ------------------------------------------------------------ the readout
     int save_bad = 0;
-    if (save_out) {
+    if (apf) {
+        printf("fetches: %llu, %llu bytes, the longest %.2f ms, %d failed; the host: %llu reads, %llu writes, "
+               "%llu failures, the loader's FIFO overflowed %u times\n",
+               (unsigned long long)f_n, (unsigned long long)f_bytes, f_max, f_bad,
+               (unsigned long long)host->reads, (unsigned long long)host->writes,
+               (unsigned long long)host->failures, dut->fifo_overflows);
+        printf("save: %d readouts by the host, %d words changed before the bridge took them, %d of them read as they were, "
+               "%d as they were before a write just before; %d wrong\n", sv_outs, sv_moved, sv_older, sv_recent, sv_bad);
+        save_bad = sv_bad + f_bad + (int)host->failures + (int)dut->fifo_overflows;
+        if (save_out && sv_outs) {
+            std::vector<uint8_t> bytes(4 * SAVE_WORDS);
+            for (uint32_t k = 0; k < SAVE_WORDS; k++) for (int b = 0; b < 4; b++) bytes[4 * k + b] = sv_got[k] >> 8 * b;
+            FILE *f = fopen(save_out, "wb");
+            if (!f) { perror(save_out); return 2; }
+            fwrite(bytes.data(), 1, bytes.size(), f);
+            fclose(f);
+            printf("save: the last readout -> %s\n", save_out);
+        }
+    } else if (save_out) {
         std::vector<uint32_t> got(SAVE_WORDS), start(SAVE_WORDS), then(SAVE_WORDS);
-        auto c_word = [](uint32_t k) {
-            uint32_t h = (BUS_SAVE >> 1) + 2 * k;
-            return sdram_hw(h) | (uint32_t)sdram_hw(h + 1) << 16;
-        };
         for (uint32_t k = 0; k < SAVE_WORDS; k++) start[k] = c_word(k);
         uint32_t r = 1;
         uint64_t c0 = c_writes, s0 = sys_cycles;

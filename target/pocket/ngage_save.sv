@@ -50,7 +50,8 @@ module ngage_save #(
     input  logic        clk,                // ngage_mem's
     input  logic        rst,                // the memories', not the core's: a readout
                                             // may come while the core is held in reset
-    input  logic        dl_active,          // a slot is loading (clk)
+    input  logic        dl_active,          // the save is loading: high at least while
+                                            // each of its bytes is strobed in (clk)
     input  logic        save_t,             // toggles at each write to C: (any domain)
 
     // the LCD's port, passed through

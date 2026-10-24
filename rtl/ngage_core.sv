@@ -22,6 +22,11 @@
 //   size
 //   save_t         CPU -> core_top a toggle: the kernel wrote C:, whose save
 //                                  core_top has the Pocket write back
+//   fetch_*        CPU -> core_top a toggle, its three words held still until
+//                                  it is answered: a fetch into the drive's
+//                                  window (ngage_slots.sv)
+//   fetch_done_t   core_top -> CPU a toggle that answers it, its error held
+//                                  with it; three flops (ngvm_io.sv)
 //   lcd_base, on   CPU -> 96 MHz   two flops, taken once a frame (ngvm_lcd.sv)
 //   show           CPU -> 96 MHz   a toggle: the D-cache has written back what
 //                                  IO_LCD_SHOW is to show; the LCD copies it
@@ -70,6 +75,12 @@ module ngage_core #(
     input  logic  [31:0] drive_size,
     input  logic  [31:0] save_size,     // IO_SAVE_SIZE: bytes of the save file loaded
     output logic         save_t,        // toggles, in clk_cpu's domain: C: was written
+    output logic         fetch_t,       // toggles, in clk_cpu's domain: a fetch (IO_FETCH_*)
+    output logic  [31:0] fetch_src,
+    output logic  [31:0] fetch_dst,
+    output logic  [31:0] fetch_len,
+    input  logic         fetch_done_t,  // toggles, from any clock: it is done
+    input  logic   [2:0] fetch_err,
 
     // ---------------- video, one pixel per pix_ce in the clk domain
     output logic  [23:0] rgb,
@@ -137,6 +148,8 @@ module ngage_core #(
         .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show_t(show_t), .vblank(vb_c), .keys(keys_s1), .keymap(keymap_s1),
         .rom_size(rom_size), .drive_size(drive_size),
         .save_size(save_size), .save_t(save_t),
+        .fetch_t(fetch_t), .fetch_src(fetch_src), .fetch_dst(fetch_dst), .fetch_len(fetch_len),
+        .fetch_done_t(fetch_done_t), .fetch_err(fetch_err),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data),
         .rt_valid(rt_valid), .rt_irq(rt_irq), .rt_pc(rt_pc), .rt_instr(rt_instr),

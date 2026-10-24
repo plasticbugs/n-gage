@@ -49,6 +49,12 @@ module ngvm_sys
     input  logic  [31:0] drive_size,
     input  logic  [31:0] save_size,
     output logic         save_t,        // toggles: the kernel wrote C: (IO_SAVE_DIRTY)
+    output logic         fetch_t,       // toggles: a fetch into the drive's window (IO_FETCH_*)
+    output logic  [31:0] fetch_src,
+    output logic  [31:0] fetch_dst,
+    output logic  [31:0] fetch_len,
+    input  logic         fetch_done_t,  // toggles, from another clock: that fetch is done
+    input  logic   [2:0] fetch_err,
     output logic  [31:0] snd,
     output logic         snd_tog,
 
@@ -151,6 +157,8 @@ module ngvm_sys
         .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show(lcd_show), .vblank(vblank),
         .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
         .save_size(save_size), .save_t(save_t),
+        .fetch_t(fetch_t), .fetch_src(fetch_src), .fetch_dst(fetch_dst), .fetch_len(fetch_len),
+        .fetch_done_t(fetch_done_t), .fetch_err(fetch_err),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data)
     );

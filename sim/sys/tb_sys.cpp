@@ -17,7 +17,13 @@
 // a second.  Each value the RTL reads from a device is replayed to Unicorn's
 // read of it; IRQ entries are matched as in sim/cpu/tb_cpu.cpp.  The bench
 // pulses vblank at 60 Hz of cycles; the D-cache's clean is the kernel's
-// (IO_LCD_SHOW).
+// (IO_LCD_SHOW).  A drive larger than its window (up to NGVM_IMAGE_MAX) has
+// its first 32 MB there, and the bench answers each fetch (IO_FETCH_*) as
+// tools/ngvm/ngvm.py's default does, 1 ms and then 4 bytes a microsecond
+// later: the image's bytes into both copies of the window at once, then
+// the answer.  --fetch-fail CODE answers the first fetch with that error
+// and no bytes, or, with 0, never: the screen the kernel paints then is
+// written to --frames-to when it stops.
 //
 //   obj_sys/Vngvm_sys --rom SYM.ROM --kernel build/kernel/kernel.elf
 //       [--drive game.img] [--seconds S] [--no-uc] [--lat CYCLES]
@@ -128,6 +134,11 @@ struct Bench {
     uint32_t idle_pc = 0;
     uint64_t idle_retired = 0;
     size_t rom_size = 0, drive_size = 0;
+    std::vector<uint8_t> image;                     // the whole drive, for fetches
+    bool fetch_seen = false;
+    uint64_t fetch_end = ~0ull, fetches = 0;
+    uint32_t f_src = 0, f_dst = 0, f_len = 0;
+    int fetch_fail = -1;                            // --fetch-fail: the first fetch's answer
     int exit_code = -1;
     std::string con;
     double t_base = 0;                              // virtual s at cycle 0 (--restore)
@@ -550,11 +561,17 @@ struct Bench {
         take(ck.pt.data(), 2 * NGVM_PT_ENTRIES);
         take(ucm.ram.data(), NGVM_RAM_SIZE);
         take(ucm.ksec.data(), NGVM_KSEC_SIZE);
-        if (ck.drive_size > NGVM_DRIVE_MAX) { fprintf(stderr, "%s: drive too large\n", path); exit(2); }
-        take(ucm.drive.data(), ck.drive_size);
+        if (ck.drive_size > NGVM_IMAGE_MAX) { fprintf(stderr, "%s: drive too large\n", path); exit(2); }
+        // the window as it was; of a larger drive the rest is --drive's
+        size_t held = std::min<size_t>(ck.drive_size, NGVM_DRIVE_MAX);
+        if (ck.drive_size > held && image.size() != ck.drive_size) {
+            fprintf(stderr, "%s: a drive of %u bytes, larger than its window: --drive must give it\n", path, ck.drive_size);
+            exit(2);
+        }
+        take(ucm.drive.data(), held);
         memcpy(&sdram[0], ucm.ram.data(), NGVM_RAM_SIZE);
         memcpy(&sdram[BUS_KSEC], ucm.ksec.data(), NGVM_KSEC_SIZE);
-        memcpy(&cram[0], ucm.drive.data(), ck.drive_size);
+        memcpy(&cram[0], ucm.drive.data(), held);
         drive_size = ck.drive_size;
         t_base = ck.t;
         restore_pending = true;
@@ -682,6 +699,33 @@ struct Bench {
             printf("[restore] the CPU starts at cycle %llu\n", (unsigned long long)cycles);
         }
 
+        // a fetch: asked, then answered
+        if (top->fetch_t != fetch_seen) {
+            fetch_seen = top->fetch_t;
+            f_src = top->fetch_src; f_dst = top->fetch_dst; f_len = top->fetch_len;
+            fetch_end = cycles + CPU_HZ / 1000 + (uint64_t)f_len * CPU_HZ / 4000000;
+        }
+        if (cycles == fetch_end && fetch_fail >= 0 && !fetches) {
+            fetch_end = ~0ull;
+            fetches++;
+            if (fetch_fail) { top->fetch_err = fetch_fail; top->fetch_done_t = fetch_seen; }
+            printf("[fetch] the first answered %s\n", fetch_fail ? ("with error " + std::to_string(fetch_fail)).c_str() : "never");
+        }
+        if (cycles == fetch_end) {
+            fetch_end = ~0ull;
+            if ((f_src | f_dst | f_len) & 3 || (uint64_t)f_src + f_len > image.size() || (uint64_t)f_dst + f_len > NGVM_DRIVE_MAX) {
+                printf("[fetch] FAIL  %x bytes from %x to %x: not a span of the image and the window\n", f_len, f_src, f_dst);
+                top->fetch_err = 2;
+            } else {
+                memcpy(&cram[f_dst], &image[f_src], f_len);
+                memcpy(&ucm.drive[f_dst], &image[f_src], f_len);
+                if (uc) uc_ctl_remove_cache(uc, NGVM_DRIVE_BASE + f_dst, NGVM_DRIVE_BASE + f_dst + f_len);
+                top->fetch_err = 0;
+            }
+            top->fetch_done_t = fetch_seen;
+            fetches++;
+        }
+
         // the bus
         top->bus_done = 0;
         if (bus_hold) { if (!breq) bus_hold = false; }
@@ -776,6 +820,7 @@ int main(int argc, char **argv)
         else if (a == "--lat" && i + 1 < argc) { b.lat_line = atoi(argv[++i]); b.lat_word = b.lat_line / 2 + 1; }
         else if (a == "--frames-to" && i + 1 < argc) b.frames_to = argv[++i];
         else if (a == "--frame-every" && i + 1 < argc) b.frame_every = atoi(argv[++i]);
+        else if (a == "--fetch-fail" && i + 1 < argc) b.fetch_fail = atoi(argv[++i]);
         else if (a == "--watch-pc" && i + 1 < argc) {
             for (char *t = strtok(argv[++i], ","); t; t = strtok(nullptr, ","))
                 b.watch[(uint32_t)strtoul(t, nullptr, 16) & ~1u] = 0;
@@ -815,11 +860,12 @@ int main(int argc, char **argv)
         memcpy(&b.sdram[s.addr], s.data.data(), s.data.size());
     }
     if (drive) {
-        auto d = slurp(drive);
-        if (d.size() > NGVM_DRIVE_MAX) { fprintf(stderr, "drive image too large\n"); return 2; }
-        b.drive_size = d.size();
-        memcpy(b.ucm.drive.data(), d.data(), d.size());
-        memcpy(b.cram.data(), d.data(), d.size());
+        b.image = slurp(drive);
+        if (b.image.size() > NGVM_IMAGE_MAX) { fprintf(stderr, "drive image too large\n"); return 2; }
+        b.drive_size = b.image.size();
+        size_t held = std::min<size_t>(b.drive_size, NGVM_DRIVE_MAX);
+        memcpy(b.ucm.drive.data(), b.image.data(), held);
+        memcpy(b.cram.data(), b.image.data(), held);
     }
     if (restore) b.load_ckpt(restore);
     if (seconds <= b.t_base) { fprintf(stderr, "--seconds %.3f is not after the checkpoint's %.3f\n", seconds, b.t_base); return 2; }
@@ -838,6 +884,7 @@ int main(int argc, char **argv)
     b.top = new Vngvm_sys;
     b.top->rom_size = (uint32_t)b.rom_size;
     b.top->drive_size = (uint32_t)b.drive_size;
+    b.top->fetch_done_t = 0; b.top->fetch_err = 0;
     b.top->keys = keys0;
     b.top->keymap = keymap;
     b.top->vblank = 0;
@@ -854,13 +901,14 @@ int main(int argc, char **argv)
         if (b.cycles >= b.max_cycles) break;
         if (b.cycles - last_report >= 50000000) {
             last_report = b.cycles;
-            fprintf(stderr, "[%.2f s: %llu instructions (%llu idle), %llu line reads, %llu line writes, %llu word reads, %llu screen updates]\n",
+            fprintf(stderr, "[%.2f s: %llu instructions (%llu idle), %llu line reads, %llu line writes, %llu word reads, %llu screen updates, %llu fetches]\n",
                     b.vt(), (unsigned long long)b.retired, (unsigned long long)b.idle_retired,
                     (unsigned long long)b.nbus[0], (unsigned long long)b.nbus[1],
-                    (unsigned long long)b.nbus[2], (unsigned long long)b.shows);
+                    (unsigned long long)b.nbus[2], (unsigned long long)b.shows, (unsigned long long)b.fetches);
         }
         if (b.cycles > 100000 && b.hist.empty()) { fprintf(stderr, "nothing retires\n"); return 1; }
     }
+    if (b.exit_code >= 0 && b.frames_to) b.dump_frame();     // what the screen was left showing
     bool ok = !b.failed && (b.exit_code < 0 || b.exit_code == 0);
     double host = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
     printf("%s: %.3f s at %d MHz; %llu instructions in %llu cycles (%llu in the idle loop); "
@@ -874,6 +922,7 @@ int main(int argc, char **argv)
         printf("%llu user-mode MOVS pc / LDM ^ met, run by the RTL as plain writes to pc\n", Bench::n_invalid);
     for (auto &w : b.watch) printf("[watch] %08x retired %llu times\n", w.first, (unsigned long long)w.second);
     if (b.prof_from != UINT64_MAX) b.print_profile();
+    if (b.fetches) printf("drive: %llu fetches from the image beyond the window\n", (unsigned long long)b.fetches);
     printf("audio: %llu samples played, %llu not silent", (unsigned long long)b.snd_n, (unsigned long long)b.snd_loud);
     if (b.snd_loud) printf(", the first at %.3f s", b.t_base + (double)b.snd_first / CPU_HZ);
     printf("\n");

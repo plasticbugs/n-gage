@@ -16,7 +16,16 @@
 // repo may not hold.  It goes to the kernel's, the ROM's and the drive's bus
 // addresses as the three slots do, the drive in pieces that cross each of
 // CRAM's half and chip boundaries, and the ROM and the last drive piece
-// with an odd length, so an even byte is left alone at the end.
+// with an odd length, so an even byte is left alone at the end.  Two more
+// pieces lie past the drive's 32 MB, as an image larger than the window
+// does: they must be dropped, though counted in drive_size, and each would
+// land on a piece already loaded if its address wrapped.
+//
+// Then a fetch (ngage_slots.sv): bytes into part of the drive with dl_fetch
+// up, at the loader's rate, while the bus reads the rest of the drive and
+// writes lines of it, as the CPU does while a fetch is in flight.  The bus
+// must get what the drive holds, the fetched bytes must all land, and
+// drive_size must not move.
 //
 // -gap   clocks between download bytes.  The loader delivers one per 7 at its
 //        fastest (core_top's DIO_DELAY); smaller is harder.  A core that
@@ -43,6 +52,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -88,10 +98,26 @@ static void lcd_edge()
     dut->l_req = l_req; dut->l_addr = l_hw; dut->l_len = l_len;
 }
 
+// ---- the download: a byte every g_gap clocks, its strobe held g_hold
+static std::deque<std::pair<uint32_t, uint8_t>> dlq;
+static int dl_ph = 0, g_gap = 7, g_hold = 4;
+static void dl_edge()
+{
+    if (!dl_ph) {
+        if (dlq.empty()) return;
+        dut->dl_addr = dlq.front().first; dut->dl_data = dlq.front().second; dut->dl_we = 1;
+        dl_ph = 1;
+        return;
+    }
+    if (++dl_ph > g_hold) dut->dl_we = 0;
+    if (dl_ph >= g_gap) { dlq.pop_front(); dl_ph = 0; }
+}
+
 static void tick()
 {
     dut->clk = 0; dut->eval(); dut->clk = 1; dut->eval();
     lcd_edge();
+    dl_edge();
 }
 
 // one bus request, held until m_done, taken only while m_free (as
@@ -180,10 +206,11 @@ int main(int argc, char **argv)
     }
     if (hold >= gap) hold = gap - 1;
     if (hold < 1) hold = 1;
+    g_gap = gap; g_hold = hold;
 
     dut = new Vtb_mem_top;
     dut->init = 1; dut->rd_late = late; dut->burst_slow = slow; dut->rd_fast = fastrd; dut->wr_fast = fastwr;
-    dut->dl_we = 0; dut->dl_active = 0; dut->m_req = 0; dut->l_req = 0; dut->vram_req = 0;
+    dut->dl_we = 0; dut->dl_active = 0; dut->dl_fetch = 0; dut->m_req = 0; dut->l_req = 0; dut->vram_req = 0;
     for (int i = 0; i < 16; i++) tick();
     dut->init = 0;
     long t = 0; while (!dut->ready && t++ < 200000) tick();
@@ -191,7 +218,7 @@ int main(int argc, char **argv)
     if (!dut->ready) { printf("FAIL  the controller never came ready\n"); return 1; }
 
     // ---- the download: each piece a slot of its own, as the loader sends them
-    struct Piece { uint32_t base, len; const char *what; };
+    struct Piece { uint32_t base, len; const char *what; bool tail = false; };
     const Piece pieces[] = {
         {0x0000000, 0x10000, "kernel"},
         {BUS_ROM,   0x20001, "ROM, odd length"},
@@ -200,6 +227,8 @@ int main(int argc, char **argv)
         {BUS_DRIVE + 0x0FFF000, 0x2000, "drive, across the chips"},
         {BUS_DRIVE + 0x17FF000, 0x1801, "drive, across CRAM1's halves, odd length"},
         {BUS_DRIVE + 0x1FFE000, 0x1FFF, "drive, CRAM1's last 8 KB, odd length"},
+        {BUS_DRIVE + 0x2000000, 0x1000, "drive past 32 MB, onto the first piece if it wrapped", true},
+        {BUS_DRIVE + 0x37FF000, 0x1801, "drive past 32 MB, odd length, onto CRAM1's halves", true},
     };
     uint32_t want_rom = 0, want_drive = 0;
     for (const Piece &p : pieces) {
@@ -209,12 +238,10 @@ int main(int argc, char **argv)
         for (int i = 0; i < 20; i++) tick();
         for (uint32_t a = p.base; a < p.base + p.len; a++) {
             uint8_t b = rnd() >> 11;
-            mem[a] = b;
-            dut->dl_addr = a; dut->dl_data = b; dut->dl_we = 1;
-            for (int i = 0; i < hold; i++) tick();
-            dut->dl_we = 0;
-            for (int i = hold; i < gap; i++) tick();
+            if (!p.tail) mem[a] = b;
+            dlq.push_back({a, b});
         }
+        while (!dlq.empty()) tick();
         dut->dl_active = 0;
         for (int i = 0; i < 2000; i++) tick();
         if (p.base >= BUS_DRIVE) want_drive = p.base + p.len - BUS_DRIVE;
@@ -230,6 +257,7 @@ int main(int argc, char **argv)
     const uint32_t step = quick ? 61 : 1;               // a prime stride still visits every row
     long lines = 0;
     for (const Piece &p : pieces) {
+        if (p.tail) continue;
         uint32_t lo = p.base & ~31u, hi = (p.base + p.len + 31) & ~31u;
         for (uint32_t a = lo; a < hi; a += 32 * step, lines++) {
             check(BC_RDLINE, a, p.base >= BUS_DRIVE ? "cram" : "sdram");
@@ -244,7 +272,7 @@ int main(int argc, char **argv)
     long wbad = bad;
     std::vector<uint32_t> targets;
     for (const Piece &p : pieces)
-        for (uint32_t a = (p.base + 31) & ~31u; a + 32 <= p.base + p.len; a += 32)
+        for (uint32_t a = (p.base + 31) & ~31u; a + 32 <= p.base + p.len && !p.tail; a += 32)
             if (a >= 0x8000) targets.push_back(a);
     for (int n = 0; n < 2000; n++) {
         uint32_t a = targets[rnd() % targets.size()];
@@ -293,6 +321,42 @@ int main(int argc, char **argv)
             printf("  the first wrong: fill %d, %07X, writing back %07X\n", n, ra, wa);
     }
     printf("fills with write-backs: 2000, %ld wrong\n", bad - fbad);
+
+    // ---- a fetch, while the bus reads and writes the rest of the drive
+    long xbad = bad;
+    const uint32_t f_lo = BUS_DRIVE + 0x800, f_hi = BUS_DRIVE + 0x3800;
+    std::vector<uint8_t> fbytes;
+    dut->dl_active = 1; dut->dl_fetch = 1;
+    for (uint32_t a = f_lo; a < f_hi; a++) { fbytes.push_back(rnd() >> 11); dlq.push_back({a, fbytes.back()}); }
+    std::vector<uint32_t> dlines;
+    for (uint32_t a : targets) if (a >= BUS_DRIVE && (a + 32 <= f_lo || a >= f_hi)) dlines.push_back(a);
+    for (uint32_t a = BUS_DRIVE; a < BUS_DRIVE + 0x4000; a += 32)
+        if (a + 32 <= f_lo || a >= f_hi) dlines.push_back(a);
+    long xr = 0, xw = 0;
+    while (!dlq.empty()) {
+        uint32_t a = dlines[rnd() % dlines.size()];
+        if (rnd() % 4 == 0) {
+            uint32_t be = rnd() | 1;
+            uint8_t wd[32];
+            for (int i = 0; i < 32; i++) { wd[i] = rnd() >> 7; if (be >> i & 1) mem[a + i] = wd[i]; }
+            bus(BC_WRLINE, a, be, wd);
+            xw++;
+        }
+        check(rnd() & 1 ? BC_RDLINE : BC_RDWORD, rnd() & 1 ? a : a + 4 * (rnd() % 8), "cram, fetching");
+        xr++;
+    }
+    int idle_wait = 0;
+    while (!dut->dl_idle && idle_wait < 2000) { tick(); idle_wait++; }
+    for (int i = 0; i < 300; i++) tick();
+    dut->dl_fetch = 0; dut->dl_active = 0;
+    for (int i = 0; i < 100; i++) tick();
+    for (uint32_t a = f_lo; a < f_hi; a++) mem[a] = fbytes[a - f_lo];
+    for (uint32_t a = f_lo; a < f_hi; a += 32) check(BC_RDLINE, a, "cram, fetched");
+    for (uint32_t a : dlines) check(BC_RDLINE, a, "cram, beside the fetch");
+    if (dut->drive_size != want_drive) { printf("  drive_size %u after the fetch, want %u\n", dut->drive_size, want_drive); sbad++; }
+    if (!dut->dl_idle) { printf("  dl_idle never rose after the fetch\n"); sbad++; }
+    printf("fetch: %u bytes in while the bus read %ld times and wrote %ld lines; idle %d clocks after the last; %ld wrong\n",
+           f_hi - f_lo, xr, xw, idle_wait, bad - xbad);
     lcd_on = false;
     for (int i = 0; i < 400; i++) tick();
     printf("LCD agent: %ld fetches, %ld halfwords alongside the bus\n", l_fetches, l_words);

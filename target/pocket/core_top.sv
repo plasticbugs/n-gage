@@ -413,20 +413,20 @@ module core_top
     wire        osnotify_inmenu;
 
     // bridge target commands
-    // synchronous to clk_74a
-    reg         target_dataslot_read;
-    reg         target_dataslot_write;
-    reg         target_dataslot_getfile;    // require additional param/resp structs to be mapped
-    reg         target_dataslot_openfile;   // require additional param/resp structs to be mapped
+    // synchronous to clk_74a; the save's and the drive's (ngage_slots, below)
+    wire        target_dataslot_read;
+    wire        target_dataslot_write;
+    wire        target_dataslot_getfile  = 1'b0;   // require additional param/resp structs to be mapped
+    wire        target_dataslot_openfile = 1'b0;   // require additional param/resp structs to be mapped
 
     wire        target_dataslot_ack;
     wire        target_dataslot_done;
     wire  [2:0] target_dataslot_err;
 
-    reg  [15:0] target_dataslot_id;
-    reg  [31:0] target_dataslot_slotoffset;
-    reg  [31:0] target_dataslot_bridgeaddr;
-    reg  [31:0] target_dataslot_length;
+    wire [15:0] target_dataslot_id;
+    wire [31:0] target_dataslot_slotoffset;
+    wire [31:0] target_dataslot_bridgeaddr;
+    wire [31:0] target_dataslot_length;
 
     wire [31:0] target_buffer_param_struct; // to be mapped/implemented when using some Target commands
     wire [31:0] target_buffer_resp_struct;  // to be mapped/implemented when using some Target commands
@@ -902,8 +902,12 @@ module core_top
     //! SYM.ROM at 0x2000000, the game's drive image at 0x4000000, and the
     //! save (its own loader, bridge 0x20000000) at 0x1F00000, the top MB of
     //! NGVM's RAM.  ngage_mem.sv routes each by its address and takes a byte
-    //! on its strobe's rising edge; change the two together.
-    wire        dl_we   = ioctl_download && (ioctl_wr || nv_wr);
+    //! on its strobe's rising edge; change the two together.  A fetch into
+    //! the drive's window (ngage_slots, below) comes the same way, with or
+    //! without data_io's download raised: dl_fetch lets it in.
+    wire        dl_fetch;
+    wire        dl_open = ioctl_download || dl_fetch;
+    wire        dl_we   = dl_open && (ioctl_wr || nv_wr);
     wire [26:0] dl_addr = nv_wr ? 27'h1F00000 + 27'(nv_addr) : ioctl_addr[26:0];
     wire  [7:0] dl_data = nv_wr ? nv_data : ioctl_data;
 
@@ -977,18 +981,23 @@ module core_top
     wire   [4:0] l_idx;
     wire  [15:0] l_data;
     wire  [31:0] rom_size, drive_size, save_size;
+    wire         dl_idle;
     wire         c_l_req, c_l_wr, c_l_done;     // the LCD's side of ngage_save
     wire  [25:1] c_l_addr;
     wire   [5:0] c_l_len;
     wire   [4:0] c_l_idx;
     wire  [15:0] c_l_data;
     wire         save_t;
+    wire         fetch_t, fetch_done_t;         // a fetch into the drive's window
+    wire  [31:0] fetch_src, fetch_dst, fetch_len;
+    wire   [2:0] fetch_err;
 
     ngage_mem u_mem (
         .clk(clk_sys), .clk_sdram(clk_sdram), .init(mem_init), .ready(mem_ready),
         .rd_late(g_rd_late), .burst_slow(g_burst_slow), .rd_fast(g_rd_fast), .wr_fast(g_wr_fast),
         .sram_slow(1'b0), .sram_slow_wr(1'b0),
-        .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_download),
+        .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_open),
+        .dl_fetch(dl_fetch), .dl_idle(dl_idle),
         .rom_size(rom_size), .drive_size(drive_size), .save_size(save_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
@@ -1020,60 +1029,44 @@ module core_top
     //! The game's save: its C: drive, the top MB of NGVM's RAM, which the
     //! kernel keeps when the slot loaded an LFFS image into it and erases
     //! otherwise (sw/kernel/drive.c).  The Pocket reads it back through
-    //! ngage_save, which shares the LCD's port to the memories.  The core
-    //! writes the slot itself (METHODOLOGY 5.24): 2 s after the kernel last
-    //! wrote C: (IO_SAVE_DIRTY, save_t), when the Pocket's menu opens with a
-    //! write pending, and once 5 s after the load, so that the file exists
-    //! from the first run.
+    //! ngage_save, which shares the LCD's port to the memories.  Its
+    //! buffers go stale on the save's own bytes, not on data_io's download:
+    //! if the Pocket sends a request write (0x0082) before it answers a
+    //! drive fetch, the download stays up until an all-complete that may
+    //! never come, and the buffers would never be fetched again.
     //! ------------------------------------------------------------------
     ngage_save u_save (
         .clk_74a(clk_74a), .bridge_rd(bridge_rd), .bridge_endian_little(bridge_endian_little),
         .bridge_addr(bridge_addr), .bridge_rd_data(sv_bridge_rd_data),
-        .clk(clk_sys), .rst(~mem_ready), .dl_active(ioctl_download), .save_t(save_t),
+        .clk(clk_sys), .rst(~mem_ready), .dl_active(nv_wr), .save_t(save_t),
         .a_req(c_l_req), .a_addr(c_l_addr), .a_len(c_l_len),
         .a_wr(c_l_wr), .a_idx(c_l_idx), .a_data(c_l_data), .a_done(c_l_done),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done)
     );
 
-    wire        sv_dirty_s;
-    synch_3 sync_svd(save_t, sv_dirty_s, clk_74a);
-    reg         sv_dirty_d = 1'b0, sv_menu_d = 1'b0, sv_pending = 1'b0, sv_loaded = 1'b0;
-    reg  [27:0] sv_timer = 28'd0;
-    reg  [28:0] sv_boot  = 29'd0;
-    reg   [1:0] sv_state = 2'd0;
-    localparam  SV_SETTLE = 28'd148_500_000;    // 2 s at 74.25 MHz
-    localparam  SV_BOOT   = 29'd371_250_000;    // 5 s
-    always @(posedge clk_74a) begin
-        sv_dirty_d <= sv_dirty_s; sv_menu_d <= osnotify_inmenu;
-        target_dataslot_read       <= 1'b0;
-        target_dataslot_getfile    <= 1'b0;
-        target_dataslot_openfile   <= 1'b0;
-        target_dataslot_id         <= 16'd4;
-        target_dataslot_slotoffset <= 32'd0;
-        target_dataslot_bridgeaddr <= 32'h2000_0000;
-        target_dataslot_length     <= NV_BYTES;
-        // all-complete cannot gate the writes: the bridge clears it when the
-        // Pocket reads the slot for one of them.  Its first rising edge can.
-        if (dataslot_allcomplete) sv_loaded <= 1'b1;
-        if (sv_loaded && sv_boot != SV_BOOT) sv_boot <= sv_boot + 29'd1;
-        if (sv_dirty_s != sv_dirty_d) begin sv_pending <= 1'b1; sv_timer <= 28'd0; end
-        else if (sv_timer != SV_SETTLE) sv_timer <= sv_timer + 28'd1;
-        case (sv_state)
-            2'd0: begin
-                target_dataslot_write <= 1'b0;
-                if ((sv_pending && sv_loaded && (sv_timer == SV_SETTLE || (osnotify_inmenu && !sv_menu_d)))
-                    || sv_boot == SV_BOOT - 29'd1) begin
-                    target_dataslot_write <= 1'b1;      // its rising edge starts the command
-                    sv_pending <= 1'b0;
-                    sv_state   <= 2'd1;
-                end
-            end
-            2'd1: if (target_dataslot_ack) begin target_dataslot_write <= 1'b0; sv_state <= 2'd2; end
-            2'd2: if (target_dataslot_done) sv_state <= 2'd0;
-            default: sv_state <= 2'd0;
-        endcase
-    end
+    //! ------------------------------------------------------------------
+    //! The slots the core reads and writes itself (target/pocket/
+    //! ngage_slots.sv), by APF target commands.  The save: the core has the
+    //! Pocket write it (METHODOLOGY 5.24) 2 s after the kernel last wrote C:
+    //! (IO_SAVE_DIRTY, save_t), when the Pocket's menu opens with a write
+    //! pending, and once 5 s after the load, so that the file exists from the
+    //! first run.  The drive: for an image larger than its 32 MB window, the
+    //! kernel has blocks of the rest read into the window (IO_FETCH_*).
+    //! ------------------------------------------------------------------
+    ngage_slots #(.NV_BYTES(NV_BYTES)) u_slots (
+        .clk_74a(clk_74a), .dataslot_allcomplete(dataslot_allcomplete), .osnotify_inmenu(osnotify_inmenu),
+        .save_t(save_t),
+        .fetch_t(fetch_t), .fetch_src(fetch_src), .fetch_dst(fetch_dst), .fetch_len(fetch_len),
+        .fetch_done_t(fetch_done_t), .fetch_err(fetch_err),
+        .clk(clk_sys), .dl_wr(ioctl_wr), .dl_idle(dl_idle), .fetching(dl_fetch),
+        .target_dataslot_read(target_dataslot_read), .target_dataslot_write(target_dataslot_write),
+        .target_dataslot_ack(target_dataslot_ack), .target_dataslot_done(target_dataslot_done),
+        .target_dataslot_err(target_dataslot_err), .target_dataslot_id(target_dataslot_id),
+        .target_dataslot_slotoffset(target_dataslot_slotoffset),
+        .target_dataslot_bridgeaddr(target_dataslot_bridgeaddr),
+        .target_dataslot_length(target_dataslot_length)
+    );
 
     wire        g_pix_ce, g_hs, g_vs, g_de, g_vb, g_hb;
     wire [23:0] g_rgb;
@@ -1119,6 +1112,8 @@ module core_top
         .l_wr(c_l_wr), .l_idx(c_l_idx), .l_data(c_l_data), .l_done(c_l_done),
         .keys(g_keys), .keymap(g_keymap), .rom_size(rom_size), .drive_size(drive_size),
         .save_size(save_size), .save_t(save_t),
+        .fetch_t(fetch_t), .fetch_src(fetch_src), .fetch_dst(fetch_dst), .fetch_len(fetch_len),
+        .fetch_done_t(fetch_done_t), .fetch_err(fetch_err),
         .rgb(g_rgb), .hsync(g_hs), .vsync(g_vs),
         .hblank(g_hb), .vblank(g_vb), .pix_ce(g_pix_ce), .de(g_de),
         .tate(tate_s), .t_cen(t_cen), .t_rgb(t_rgb),
