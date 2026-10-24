@@ -102,6 +102,16 @@ if {$::quartus(nameofexecutable) eq "quartus_fit"} {
                   -to   [get_keepers {*|arm_cpu:u_cpu|altsyncram:btb_*|*}] 0.3
 }
 
+# The CPU's clock has had 0.8 ns of setup slack at 80 MHz, and placement
+# alone moves it by more: adding the save readout, which has no logic on the
+# CPU's paths, put the ALU's operand path at -0.170 ns.  So the fitter alone
+# is asked for 0.3 ns more on the CPU's own paths, and leaves that margin
+# for the next change; the timing analysis checks the true 12.5 ns.
+if {$::quartus(nameofexecutable) eq "quartus_fit"} {
+    set CPU_CLK [get_clocks {ic|cpu_pll|altera_pll_i|general[0].gpll~PLL_OUTPUT_COUNTER|divclk}]
+    set_clock_uncertainty -setup -add -from $CPU_CLK -to $CPU_CLK 0.3
+}
+
 # ------------------------------------------------------------------------------
 # Multicycle exceptions for clock-enabled blocks go here.  None are claimed
 # yet, because the skeleton has nothing that needs one.  Before adding any,
