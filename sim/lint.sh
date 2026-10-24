@@ -55,6 +55,14 @@ if [ -z "$out" ]; then echo ok
 else echo; echo "$out" | sed 's/^/    /'; fail=1
 fi
 
+printf '%-20s ' "save readout"
+out=$(verilator --lint-only $OPTS "$WAIVE" --top-module ngage_save \
+      "$root"/target/pocket/ngage_save.sv 2>&1 \
+      | grep -E '^%(Error|Warning)' | grep -v 'Exiting due to' || true)
+if [ -z "$out" ]; then echo ok
+else echo; echo "$out" | sed 's/^/    /'; fail=1
+fi
+
 printf '%-20s ' "sram self-test"
 out=$(verilator --lint-only $OPTS "$WAIVE" --top-module sram_selftest \
       "$root"/target/pocket/sram_selftest.sv 2>&1 \

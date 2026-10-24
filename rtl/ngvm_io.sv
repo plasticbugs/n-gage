@@ -1,7 +1,8 @@
 //------------------------------------------------------------------------------
 // NGVM's devices (docs/hardware.md 6, sw/include/ngvm_hw.h): the timer and
 // the interrupt status, the LCD's registers, the keys, the audio FIFO, the
-// page table's write port, the data window's number and the debug port.
+// page table's write port, the data window's number, the save's size and
+// its dirty signal, and the debug port.
 //
 // The D-cache presents an access in its compare cycle (io_req); a read's
 // value is combinational from the registers, and a write takes effect at the
@@ -45,6 +46,8 @@ module ngvm_io
     input  logic [23:0] keymap,         // IO_KEYMAP: the phone key for A B X Y L R
     input  logic [31:0] rom_size,
     input  logic [31:0] drive_size,
+    input  logic [31:0] save_size,      // IO_SAVE_SIZE: set by the load, before reset ends
+    output logic        save_t,         // toggles at each IO_SAVE_DIRTY write; never reset
 
     output logic [31:0] snd,            // the sample playing: L 15:0, R 31:16
     output logic        snd_tog,        // toggles when it changes
@@ -122,6 +125,7 @@ module ngvm_io
             IO_WIN_ID:      io_rdata = {26'd0, win_id};
             IO_DRIVE_SIZE:  io_rdata = drive_size;
             IO_ROM_SIZE:    io_rdata = rom_size;
+            IO_SAVE_SIZE:   io_rdata = save_size;
             default:        io_rdata = 32'd0;
         endcase
     end
@@ -153,6 +157,7 @@ module ngvm_io
             IO_PT_INDEX:   begin pt_index <= io_wdata[14:0]; pt_index_ok <= io_wdata < 32'(PT_ENTRIES); end
             IO_PT_DATA:    begin pt_we <= pt_index_ok; pt_idx <= pt_index; pt_data <= io_wdata[15:0]; end
             IO_WIN_ID:     win_id <= io_wdata[5:0];
+            IO_SAVE_DIRTY: save_t <= !save_t;
             default: ;
         endcase
         irq <= (status_r & enable) != 32'd0;

@@ -438,12 +438,14 @@ module core_top
     logic [31:0] datatable_data;
     wire  [31:0] datatable_q;
 
-    // the save slot's size for the APF, written continuously as the NES core
-    // does (slot index 1 -> size entry 1*2+1): the 128-byte EEPROM
-    localparam [31:0] NV_BYTES = 32'h80;
+    //! The save slot's size for the APF, written continuously as the NES
+    //! core does, at entry position * 2 + 1 (METHODOLOGY 5.24).  The save is
+    //! data.json's fifth slot (game list, kernel, firmware, drive, save), so
+    //! entry 9: the game's C: drive, 1 MB (target/pocket/ngage_save.sv).
+    localparam [31:0] NV_BYTES = 32'h100000;
     always_ff @(posedge clk_74a) begin
         datatable_wren <= 1'b1;
-        datatable_addr <= 10'd3;
+        datatable_addr <= 10'd9;
         datatable_data <= NV_BYTES;
     end
 
@@ -539,8 +541,10 @@ module core_top
     wire [31:0] int_bridge_rd_data;
     wire [31:0] ana_bridge_rd_data;
     wire [31:0] km_bridge_rd_data;
+    wire [31:0] sv_bridge_rd_data;
     always_comb begin
         casex(bridge_addr)
+            32'h2xxxxxxx: begin bridge_rd_data <= sv_bridge_rd_data;    end // The save (slot 4)
             32'hF0000000: begin bridge_rd_data <= int_bridge_rd_data;   end // Reset
             32'hF0000010: begin bridge_rd_data <= int_bridge_rd_data;   end // Service Mode Switch
             32'hF1000000: begin bridge_rd_data <= int_bridge_rd_data;   end // DIP Switches
@@ -727,6 +731,30 @@ module core_top
         .ioctl_data               ( ioctl_data               )  // [o]
     );
 
+    //! The save (data.json slot 4) at bridge 0x20000000, with a loader of its
+    //! own (METHODOLOGY 5.24); the dl mux below puts it at bus 0x1F00000.
+    wire        nv_wr;
+    wire [19:0] nv_addr;
+    wire  [7:0] nv_data;
+
+    data_io #(.MASK(4'h2),.AW(20),.DW(8),.DELAY(DIO_DELAY),.HOLD(DIO_HOLD)) pocket_nv_io
+    (
+        .clk_74a                  ( clk_74a                  ),
+        .clk_memory               ( clk_sys                  ),
+        .dataslot_requestwrite    ( dataslot_requestwrite    ), // [i]
+        .dataslot_requestwrite_id ( dataslot_requestwrite_id ), // [i]
+        .dataslot_allcomplete     ( dataslot_allcomplete     ), // [i]
+        .bridge_endian_little     ( bridge_endian_little     ), // [i]
+        .bridge_addr              ( bridge_addr              ), // [i]
+        .bridge_wr                ( bridge_wr                ), // [i]
+        .bridge_wr_data           ( bridge_wr_data           ), // [i]
+        .ioctl_download           (                          ), // [o] as pocket_data_io's
+        .ioctl_index              (                          ), // [o]
+        .ioctl_wr                 ( nv_wr                    ), // [o]
+        .ioctl_addr               ( nv_addr                  ), // [o]
+        .ioctl_data               ( nv_data                  )  // [o]
+    );
+
     //! ------------------------------------------------------------------------
     //! Gamepad/Analog Stick
     //! ------------------------------------------------------------------------
@@ -870,12 +898,14 @@ module core_top
     always_ff @(posedge clk_sys) if (allc_s) loaded <= 1'b1;
     wire  g_reset = reset_sw_s | ~loaded | ~mem_ready | ~pll_cpu_locked_sys;
 
-    //! The three slots (data.json) arrive at their bus addresses: the kernel
-    //! at 0, SYM.ROM at 0x2000000, the game's drive image at 0x4000000.
-    //! ngage_mem.sv routes each by its address; change the two together.
-    wire        dl_we   = ioctl_download && ioctl_wr;
-    wire [26:0] dl_addr = ioctl_addr[26:0];
-    wire  [7:0] dl_data = ioctl_data;
+    //! The slots (data.json) arrive at their bus addresses: the kernel at 0,
+    //! SYM.ROM at 0x2000000, the game's drive image at 0x4000000, and the
+    //! save (its own loader, bridge 0x20000000) at 0x1F00000, the top MB of
+    //! NGVM's RAM.  ngage_mem.sv routes each by its address and takes a byte
+    //! on its strobe's rising edge; change the two together.
+    wire        dl_we   = ioctl_download && (ioctl_wr || nv_wr);
+    wire [26:0] dl_addr = nv_wr ? 27'h1F00000 + 27'(nv_addr) : ioctl_addr[26:0];
+    wire  [7:0] dl_data = nv_wr ? nv_data : ioctl_data;
 
     //! Controls, as the kernel reads them (IO_KEYS, sw/include/ngvm_hw.h):
     //! bit 0 up, 1 down, 2 left, 3 right, 4 A, 5 B, 6 X, 7 Y, 8 L, 9 R,
@@ -946,14 +976,20 @@ module core_top
     wire   [5:0] l_len;
     wire   [4:0] l_idx;
     wire  [15:0] l_data;
-    wire  [31:0] rom_size, drive_size;
+    wire  [31:0] rom_size, drive_size, save_size;
+    wire         c_l_req, c_l_wr, c_l_done;     // the LCD's side of ngage_save
+    wire  [25:1] c_l_addr;
+    wire   [5:0] c_l_len;
+    wire   [4:0] c_l_idx;
+    wire  [15:0] c_l_data;
+    wire         save_t;
 
     ngage_mem u_mem (
         .clk(clk_sys), .clk_sdram(clk_sdram), .init(mem_init), .ready(mem_ready),
         .rd_late(g_rd_late), .burst_slow(g_burst_slow), .rd_fast(g_rd_fast), .wr_fast(g_wr_fast),
         .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(ioctl_download),
-        .rom_size(rom_size), .drive_size(drive_size),
+        .rom_size(rom_size), .drive_size(drive_size), .save_size(save_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
@@ -979,6 +1015,65 @@ module core_top
         .sram_oe_n(sram_oe_n), .sram_we_n(sram_we_n),
         .sram_ub_n(sram_ub_n), .sram_lb_n(sram_lb_n)
     );
+
+    //! ------------------------------------------------------------------
+    //! The game's save: its C: drive, the top MB of NGVM's RAM, which the
+    //! kernel keeps when the slot loaded an LFFS image into it and erases
+    //! otherwise (sw/kernel/drive.c).  The Pocket reads it back through
+    //! ngage_save, which shares the LCD's port to the memories.  The core
+    //! writes the slot itself (METHODOLOGY 5.24): 2 s after the kernel last
+    //! wrote C: (IO_SAVE_DIRTY, save_t), when the Pocket's menu opens with a
+    //! write pending, and once 5 s after the load, so that the file exists
+    //! from the first run.
+    //! ------------------------------------------------------------------
+    ngage_save u_save (
+        .clk_74a(clk_74a), .bridge_rd(bridge_rd), .bridge_endian_little(bridge_endian_little),
+        .bridge_addr(bridge_addr), .bridge_rd_data(sv_bridge_rd_data),
+        .clk(clk_sys), .rst(~mem_ready), .dl_active(ioctl_download), .save_t(save_t),
+        .a_req(c_l_req), .a_addr(c_l_addr), .a_len(c_l_len),
+        .a_wr(c_l_wr), .a_idx(c_l_idx), .a_data(c_l_data), .a_done(c_l_done),
+        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
+        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done)
+    );
+
+    wire        sv_dirty_s;
+    synch_3 sync_svd(save_t, sv_dirty_s, clk_74a);
+    reg         sv_dirty_d = 1'b0, sv_menu_d = 1'b0, sv_pending = 1'b0, sv_loaded = 1'b0;
+    reg  [27:0] sv_timer = 28'd0;
+    reg  [28:0] sv_boot  = 29'd0;
+    reg   [1:0] sv_state = 2'd0;
+    localparam  SV_SETTLE = 28'd148_500_000;    // 2 s at 74.25 MHz
+    localparam  SV_BOOT   = 29'd371_250_000;    // 5 s
+    always @(posedge clk_74a) begin
+        sv_dirty_d <= sv_dirty_s; sv_menu_d <= osnotify_inmenu;
+        target_dataslot_read       <= 1'b0;
+        target_dataslot_getfile    <= 1'b0;
+        target_dataslot_openfile   <= 1'b0;
+        target_dataslot_id         <= 16'd4;
+        target_dataslot_slotoffset <= 32'd0;
+        target_dataslot_bridgeaddr <= 32'h2000_0000;
+        target_dataslot_length     <= NV_BYTES;
+        // all-complete cannot gate the writes: the bridge clears it when the
+        // Pocket reads the slot for one of them.  Its first rising edge can.
+        if (dataslot_allcomplete) sv_loaded <= 1'b1;
+        if (sv_loaded && sv_boot != SV_BOOT) sv_boot <= sv_boot + 29'd1;
+        if (sv_dirty_s != sv_dirty_d) begin sv_pending <= 1'b1; sv_timer <= 28'd0; end
+        else if (sv_timer != SV_SETTLE) sv_timer <= sv_timer + 28'd1;
+        case (sv_state)
+            2'd0: begin
+                target_dataslot_write <= 1'b0;
+                if ((sv_pending && sv_loaded && (sv_timer == SV_SETTLE || (osnotify_inmenu && !sv_menu_d)))
+                    || sv_boot == SV_BOOT - 29'd1) begin
+                    target_dataslot_write <= 1'b1;      // its rising edge starts the command
+                    sv_pending <= 1'b0;
+                    sv_state   <= 2'd1;
+                end
+            end
+            2'd1: if (target_dataslot_ack) begin target_dataslot_write <= 1'b0; sv_state <= 2'd2; end
+            2'd2: if (target_dataslot_done) sv_state <= 2'd0;
+            default: sv_state <= 2'd0;
+        endcase
+    end
 
     wire        g_pix_ce, g_hs, g_vs, g_de, g_vb, g_hb;
     wire [23:0] g_rgb;
@@ -1020,9 +1115,10 @@ module core_top
         .clk(clk_sys), .clk_cpu(clk_cpu), .rst(g_reset), .pause(pause_core), .pix_sync(pix_sync),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
-        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
-        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
+        .l_req(c_l_req), .l_addr(c_l_addr), .l_len(c_l_len),
+        .l_wr(c_l_wr), .l_idx(c_l_idx), .l_data(c_l_data), .l_done(c_l_done),
         .keys(g_keys), .keymap(g_keymap), .rom_size(rom_size), .drive_size(drive_size),
+        .save_size(save_size), .save_t(save_t),
         .rgb(g_rgb), .hsync(g_hs), .vsync(g_vs),
         .hblank(g_hb), .vblank(g_vb), .pix_ce(g_pix_ce), .de(g_de),
         .tate(tate_s), .t_cen(t_cen), .t_rgb(t_rgb),

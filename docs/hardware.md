@@ -71,7 +71,7 @@ Reaching the kernel:
 | `0x00000000` | 1 MB | the kernel's code, data and stacks (RAM pages 0–63) | kernel |
 | `0x00400000` | 4 MB | the running EXE's static data, paged per process (EKA1's moving model) | user, through the table |
 | `0x00800000` | 24 MB | the low name of chunk space's `0x40800000`–`0x41FFFFFF`: the game's memory | user, through the table |
-| `0x20000000` | 32 MB | all of RAM, flat, for the kernel's own use | kernel |
+| `0x20000000` | 32 MB | all of RAM, flat, for the kernel's own use; its top MB is C: (section 7) | kernel |
 | `0x40000000` | 256 MB of addresses | chunk space: every heap, stack, DLL data and loaded image, paged in 16 KB pages | user, through the table |
 | `0x50000000` | ≤ 20 MB | `SYM.ROM`, as linked; read-only | everyone |
 | `0x60000000` | ≤ 32 MB | the game's drive image (FAT16, section 7) | kernel (the drive LDD) |
@@ -146,7 +146,8 @@ Distinct 16 KB pages mapped at any one time, sampled every 30 frames for
 
 The phone had 16 MB of RAM, part of it taken by the radio side. NGVM's
 32 MB leaves room for the kernel's coarser pages and for allocation
-patterns not seen yet.
+patterns not seen yet. C: takes the top MB of it (section 7), so 30 MB
+are paged out to games besides the kernel's own MB.
 
 ## 6. Devices
 
@@ -297,16 +298,42 @@ X and start, both OK, did otherwise before.
 implemented by the reference. The gateware has the console and the exit
 code, which the RTL benches use, and the switches read 0.
 
-## 7. The drive image
+## 7. The drives
 
-The game's MMC card, built by `tools/mkdrive.py` from the game's files:
+The game's MMC card, E:, built by `tools/mkdrive.py` from the game's files:
 
 - a FAT16 volume with no partition table, mounted as E: by the real EFile
   through the kernel's drive LDD;
 - the boot sector's boot-code area holds the launch record (`NGVMRUN`, then
   the `.app` path), which the kernel reads to start the game;
-- writes land in the loaded image in memory and are lost at power-off,
-  so high scores and saves do not survive (a save slot is future work).
+- writes land in the loaded image in memory and are lost at power-off.
+  Games do not keep their saves there.
+
+The phone's internal drive, C:, is where they keep them
+(`C:\System\Apps\<game>\`, `C:\System\Shareddata\`). On the phone it is
+NOR flash under Nokia's LFFS (ELOCAL.FSY on this firmware). NGVM gives it
+the top MB of RAM, `NGVM_SAVE_BASE` (0x01F00000): RAM pages 1984-2047,
+which the kernel never allocates and reaches uncached through the flat
+alias at 0x21F00000, so the memory always holds what C: holds. The save
+slot loads it there, and two registers connect it to the slot:
+
+- `IO_SAVE_SIZE` (0x078, read): the bytes the slot loaded. The kernel
+  keeps C: when it is the whole MB and some 64 KB block starts with LFFS's
+  header (word 1 = 0x503B3B60). Otherwise it erases C: to 0xFF, a new
+  phone's flash, which LFFS formats when it is first mounted.
+- `IO_SAVE_DIRTY` (0x07C, write): the kernel writes it after each write or
+  erase of C:. On the Pocket that leads to the slot being written back to
+  the SD card (`docs/core-design.md`, section 7). In the reference
+  (`ngvm.py --save FILE`), C: goes to FILE at the end of a run that changed
+  it.
+
+Measured in the reference: Shadowkey (`C:\system\apps\6R51\game00.sav`),
+Tony Hawk's Pro Skater (`thps_save_*.dat`), SSX: Out of Bounds
+(`options.dat`, `racerecordssave.dat`) and Worms World Party
+(`C:\System\Shareddata\101f8a5a.ini`) save to C:, and no game surveyed
+wrote E:. SSX created its two files in one run and read them back in the
+next. The firmware's boot writes C: some 3,300 times when C: is fresh, and
+300-800 times when it is kept.
 
 ## 8. What the firmware needs, and does not
 

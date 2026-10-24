@@ -9,7 +9,8 @@
 // SDRAM word addresses are bus byte addresses over two, so the bus maps onto
 // the chip with no adder.  The loader's three slots (data.json) write the
 // same bus addresses: the kernel at 0, SYM.ROM at 0x2000000, the drive at
-// 0x4000000.
+// 0x4000000, and the game's save, C:, into the top MB of RAM at 0x1F00000
+// (NGVM_SAVE_BASE).
 //
 // The bus port is ngvm_sys's, crossed into this clock (ngvm_xbus.sv): one
 // request at a time, held until m_done.  A line read is one 16-halfword
@@ -57,6 +58,7 @@ module ngage_mem (
     input  logic         dl_active,
     output logic  [31:0] rom_size,      // bytes loaded from 0x2000000 on
     output logic  [31:0] drive_size,    // bytes loaded from 0x4000000 on
+    output logic  [31:0] save_size,     // bytes loaded from 0x1F00000 on, below the ROM
 
     // NGVM's bus (ngvm_sys.sv), level request held until the done pulse
     input  logic         m_req,
@@ -111,7 +113,7 @@ module ngage_mem (
     output logic         sram_oe_n, sram_we_n, sram_ub_n, sram_lb_n
 );
     localparam logic [1:0] BC_RDLINE = 2'd0, BC_WRLINE = 2'd1, BC_RDWORD = 2'd2, BC_RDWR = 2'd3;
-    localparam logic [26:0] BUS_ROM = 27'h2000000, BUS_DRIVE = 27'h4000000;
+    localparam logic [26:0] BUS_ROM = 27'h2000000, BUS_DRIVE = 27'h4000000, BUS_SAVE = 27'h1F00000;
 
     // ------------------------------------------------------------ download
     // A byte at a time, paired into little-endian halfwords: the even byte
@@ -147,7 +149,8 @@ module ngage_mem (
         // the sizes: one past the last byte loaded into each region
         if (nb && dl_addr >= BUS_DRIVE) drive_size <= {5'd0, dl_addr - BUS_DRIVE} + 32'd1;
         else if (nb && dl_addr >= BUS_ROM) rom_size <= {5'd0, dl_addr - BUS_ROM} + 32'd1;
-        if (init) begin lo_v <= 1'b0; rom_size <= '0; drive_size <= '0; end
+        else if (nb && dl_addr >= BUS_SAVE) save_size <= {5'd0, dl_addr - BUS_SAVE} + 32'd1;
+        if (init) begin lo_v <= 1'b0; rom_size <= '0; drive_size <= '0; save_size <= '0; end
     end
     wire q_cram = q_word[41];           // halfword address 26:1 >= 0x2000000
 

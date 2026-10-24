@@ -117,6 +117,8 @@ localparam logic [9:0] IO_CACHE_FLUSH = 10'h01A;
 localparam logic [9:0] IO_WIN_ID      = 10'h01B;
 localparam logic [9:0] IO_DRIVE_SIZE  = 10'h01C;
 localparam logic [9:0] IO_ROM_SIZE    = 10'h01D;
+localparam logic [9:0] IO_SAVE_SIZE   = 10'h01E;
+localparam logic [9:0] IO_SAVE_DIRTY  = 10'h01F;
 
 endpackage
 

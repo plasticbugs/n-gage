@@ -52,7 +52,7 @@ module tb_mem_top (
         .clk(clk), .clk_sdram(clk), .init(init), .ready(ready),
         .rd_late(rd_late), .burst_slow(burst_slow), .rd_fast(rd_fast), .wr_fast(wr_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
-        .rom_size(rom_size), .drive_size(drive_size),
+        .rom_size(rom_size), .drive_size(drive_size), .save_size(),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),

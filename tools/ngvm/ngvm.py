@@ -119,6 +119,13 @@ class Machine:
             if len(img) > NGVM_DRIVE_MAX:
                 sys.exit('drive image larger than NGVM_DRIVE_MAX')
             uc.mem_write(NGVM_DRIVE_BASE, img)
+        # the game's save file, C: (ngvm_hw.h): loaded as the Pocket loads it,
+        # and written back at the end if C: changed, as the core asks it to
+        self.save_size, self.save_dirty = 0, 0
+        if args.save and os.path.exists(args.save):
+            sav = open(args.save, 'rb').read()[:NGVM_SAVE_SIZE]
+            self.save_size = len(sav)
+            ctypes.memmove(self.ram_addr + NGVM_SAVE_BASE, sav, len(sav))
         uc.mmio_map(NGVM_IO_BASE, 0x1000, self.io_read, None, self.io_write, None)
 
         entry, segs, self.syms = load_elf(args.kernel)
@@ -273,6 +280,8 @@ class Machine:
             return self.drive_size
         if off == IO_ROM_SIZE:
             return self.rom_size
+        if off == IO_SAVE_SIZE:
+            return self.save_size
         return 0
 
     def io_write(self, uc, off, size, value, ud):
@@ -328,6 +337,8 @@ class Machine:
             self.pt_set(self.pt_index, value)
         elif off == IO_CACHE_FLUSH:
             pass
+        elif off == IO_SAVE_DIRTY:
+            self.save_dirty += 1
 
     # Entries LOW_FIRST..LOW_END-1 are mapped at the low name only: the
     # kernel never uses their high name (ngvm_hw.h), so a use of it faults.
@@ -737,6 +748,13 @@ class Machine:
             self.report_profile()
         if self.a.wav:
             self.write_wav(self.a.wav)
+        if self.a.save:
+            if self.save_dirty:
+                with open(self.a.save, 'wb') as f:
+                    f.write(bytes(self.ram[NGVM_SAVE_BASE:NGVM_SAVE_BASE + NGVM_SAVE_SIZE]))
+            print('save: %s, %d writes to C:%s' % (
+                'loaded %d bytes' % self.save_size if self.save_size else 'none loaded', self.save_dirty,
+                ', written to ' + self.a.save if self.save_dirty else ''))
         print('ran %.3f virtual s (%d insns) in %.1f host s; %d frames; exit %s' % (
             self.insns / self.mips / 1e6, self.insns, dt, self.frames, self.exit_code))
         return self.exit_code or 0
@@ -763,6 +781,7 @@ def main():
     ap.add_argument('--profile', nargs='?', type=float, const=0.0, default=None, metavar='FROM',
                     help='sample where the CPU spends its time (from virtual second FROM)')
     ap.add_argument('--wav', help='write what the audio FIFO was given to this WAV file')
+    ap.add_argument('--save', help="the game's save file (C:): loaded if it exists, written at the end if C: changed")
     ap.add_argument('--stamp', action='store_true',
                     help="prefix each line the kernel prints with virtual time, as sim/run_system.sh does")
     ap.add_argument('--memtrace', help='FROM:SECONDS:FILE: record fetches and data accesses for a cache model')

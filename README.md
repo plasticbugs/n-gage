@@ -63,10 +63,17 @@ What is proven, and by what:
 - `sim/run_mem.sh`: every byte the loader sends reads back from SDRAM and
   CRAM, at the loader's fastest rate.
 
+Saves (not yet tried on a Pocket): each game's saves are kept in
+`Saves/ngage/plasticbugs.ngage/<game>.sav` on the card, its phone's C:
+drive, written back a couple of seconds after the game saves and when the
+Pocket's menu opens. Checked in simulation: the whole file read back
+through the Pocket's bridge path, and the kernel keeping it on the next
+boot.
+
 What is not implemented:
 
 - Pausing: the game runs on behind the Pocket's menu.
-- Saving, sleep, the link port.
+- Sleep, the link port.
 - The phone's green, red, menu and pen keys. The on-screen keypad (below)
   leaves them out: the red and menu keys would take the phone out of the
   game, and the green and pen keys are for calls and for editing text.

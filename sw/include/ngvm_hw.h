@@ -27,6 +27,15 @@
 #define NGVM_DRIVE_MAX    0x02000000u   /* 32 MB: all of the Pocket's CRAM      */
 #define NGVM_IO_BASE      0xF0000000u
 
+/* The phone's internal drive, C:, where games keep their saves: the top
+ * 1 MB of RAM, which the kernel never hands out and reaches only through
+ * the physical alias, so what it writes is in RAM at once, not held in the
+ * D-cache.  The Pocket loads the game's save file here before the CPU
+ * starts (IO_SAVE_SIZE says how much), and writes it back from here when
+ * the core asks it to, after IO_SAVE_DIRTY.                               */
+#define NGVM_SAVE_BASE    0x01F00000u   /* RAM address                         */
+#define NGVM_SAVE_SIZE    0x00100000u
+
 /* Chunk space: where every heap, stack and loaded image lives.  Paged in
  * 16 KB pages by a table the kernel writes (IO_PT_*); an access to a page
  * with no entry is a data or prefetch abort.  There is one address space,
@@ -84,6 +93,10 @@
                                      window lines with it                    */
 #define IO_DRIVE_SIZE     0x070  /* R: bytes loaded at NGVM_DRIVE_BASE        */
 #define IO_ROM_SIZE       0x074  /* R: bytes loaded at NGVM_ROM_BASE          */
+#define IO_SAVE_SIZE      0x078  /* R: bytes of save loaded at NGVM_SAVE_BASE */
+#define IO_SAVE_DIRTY     0x07C  /* W: C: has changed; the core writes the save
+                                     back once a couple of seconds pass with
+                                     no further write                        */
 
 /* IO_DBG_FLAGS bits */
 #define DBGF_EXEC         (1u << 0)   /* log every exec call                    */

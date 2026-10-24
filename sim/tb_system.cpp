@@ -5,7 +5,7 @@
 //   obj_system/Vtb_system_top --rom SYM.ROM [--kernel kernel.bin]
 //       [--drive game.img] [--frames N] [--snap a,b,c] [-o DIR]
 //       [--gap N] [--dl BYTES | --full] [--keys "S:MASK ..."] [--wav FILE]
-//       [--halfrd] [--halfwr] [--late]
+//       [--halfrd] [--halfwr] [--late] [--save FILE] [--save-out FILE]
 //
 // Every byte of the kernel goes through the download port, a byte every
 // --gap clocks (the APF loader's rate is one per 7-8); of the ROM and the
@@ -23,6 +23,15 @@
 // every clock, each word caught three clocks after its READ, and a burst
 // WRITE every clock.  --halfrd and --late set the menu's "SDRAM half-rate
 // reads" and "SDRAM read late"; --halfwr a burst WRITE every 2 clocks.
+//
+// --save loads a save into the save slot (bus 0x1F00000, after the drive,
+// as the Pocket loads slot 4).  --save-out reads the save back after the
+// frames, through ngage_save and a 74.25 MHz bridge that reads a word a
+// transaction as io_bridge_peripheral does, while the machine runs on; it
+// writes the file.  Each word must be what C: held when the readout began
+// or when the bridge took the word: the machine may write C: meanwhile,
+// and a word fetched ahead is as C: was when it was fetched.  It is wrong
+// only if it is neither.
 #include "Vtb_system_top.h"
 #include "Vtb_system_top___024root.h"
 #include "Vtb_system_top_tb_system_top.h"
@@ -42,26 +51,33 @@
 static const double CPU_HZ = SYS_HZ, MEM_HZ = 96e6;
 static const int W = 176, H = 208;
 static const uint32_t BUS_ROM = 0x2000000, BUS_DRIVE = 0x4000000;
+static const uint32_t BUS_SAVE = 0x1F00000, SAVE_WORDS = 0x40000;
 
 static Vtb_system_top *dut;
 static uint64_t sys_cycles, cpu_cycles;
-static double t_sys, t_cpu;                    // the next rising edge of each, in ns
+static uint64_t a_cycles;
+static double t_sys, t_cpu, t_a = 1e30;        // the next rising edge of each, in ns;
+                                               // clk_74a runs only for a readout
 
-// advance to the next rising edge of either clock (both, if they coincide)
+// advance to the next rising edge of any clock (all, if they coincide)
 static void step()
 {
-    double sh = 0.5e9 / MEM_HZ, ch = 0.5e9 / CPU_HZ;
-    double t = std::min(t_sys, t_cpu);
-    bool s = t_sys <= t, c = t_cpu <= t;
+    double sh = 0.5e9 / MEM_HZ, ch = 0.5e9 / CPU_HZ, ah = 0.5e9 / 74.25e6;
+    double t = std::min(std::min(t_sys, t_cpu), t_a);
+    bool s = t_sys <= t, c = t_cpu <= t, a = t_a <= t;
     if (s) dut->clk = 1;
     if (c) dut->clk_cpu = 1;
+    if (a) dut->clk_74a = 1;
     dut->eval();
     if (s) { sys_cycles++; t_sys += 2 * sh; }
     if (c) { cpu_cycles++; t_cpu += 2 * ch; }
+    if (a) { a_cycles++; t_a += 2 * ah; }
     // the falling edges, before the next rising one
-    dut->clk = 0; dut->clk_cpu = 0;
+    dut->clk = 0; dut->clk_cpu = 0; dut->clk_74a = 0;
     dut->eval();
 }
+// run until n more 74.25 MHz edges
+static void tick_a(int n) { uint64_t e = a_cycles + n; while (a_cycles < e) step(); }
 // run until n more 96 MHz edges
 static void tick_sys(int n) { uint64_t e = sys_cycles + n; while (sys_cycles < e) step(); }
 
@@ -103,6 +119,7 @@ int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
     const char *rom = nullptr, *kernel = "build/kernel/kernel.bin", *drive = nullptr, *wav = nullptr;
+    const char *save = nullptr, *save_out = nullptr;
     int frames = 10, gap = 8, hold = 4;
     size_t dl = 0x10000;
     bool full = false, fastrd = true, fastwr = true, late = false;
@@ -115,6 +132,8 @@ int main(int argc, char **argv)
         if (a == "--rom") rom = argv[++i];
         else if (a == "--kernel") kernel = argv[++i];
         else if (a == "--drive") drive = argv[++i];
+        else if (a == "--save") save = argv[++i];
+        else if (a == "--save-out") save_out = argv[++i];
         else if (a == "--frames") frames = atoi(next().c_str());
         else if (a == "--gap") gap = atoi(next().c_str());
         else if (a == "--dl") dl = strtoul(next().c_str(), nullptr, 0);
@@ -150,10 +169,12 @@ int main(int argc, char **argv)
     struct Slot { const char *name; uint32_t base; std::vector<uint8_t> data; };
     std::vector<Slot> slots = {{"kernel", 0, slurp(kernel)}, {"ROM", BUS_ROM, slurp(rom)}};
     if (drive) slots.push_back({"drive", BUS_DRIVE, slurp(drive)});
+    if (save) slots.push_back({"save", BUS_SAVE, slurp(save)});
 
     dut = new Vtb_system_top;
     t_sys = 0; t_cpu = 0.37;                       // the two clocks are unrelated in phase
     dut->reset = 1; dut->dl_we = 0; dut->dl_active = 0; dut->keys = 0; dut->keymap = 0; dut->rd_fast = fastrd; dut->wr_fast = fastwr; dut->rd_late = late;
+    dut->clk_74a = 0; dut->bridge_rd = 0; dut->bridge_addr = 0;
     tick_sys(16);
     long t = 0; while (!dut->mem_ready && t++ < 200000) tick_sys(1);
     if (!dut->mem_ready) { printf("FAIL  the memory never came ready\n"); return 1; }
@@ -187,8 +208,10 @@ int main(int argc, char **argv)
                 bad++;
             }
     if (bad) { printf("FAIL  %d bytes differ after the load\n", bad); return 1; }
-    printf("load   every byte in place; rom_size %u, drive_size %u\n", dut->rom_size, dut->drive_size);
-    if (dut->rom_size != slots[1].data.size() || (drive && dut->drive_size != slots[2].data.size())) {
+    printf("load   every byte in place; rom_size %u, drive_size %u, save_size %u\n",
+           dut->rom_size, dut->drive_size, dut->save_size);
+    if (dut->rom_size != slots[1].data.size() || (drive && dut->drive_size != slots[2].data.size())
+        || dut->save_size != (save ? slots.back().data.size() : 0)) {
         printf("FAIL  the sizes the loader counted are wrong\n"); return 1;
     }
 
@@ -211,7 +234,8 @@ int main(int argc, char **argv)
     bool wm_d = false;
     std::vector<uint32_t> audio;                   // 48 kHz: 96 MHz / 2000
     uint64_t played = 0;
-    bool snd_tog_d = dut->snd_tog;
+    bool snd_tog_d = dut->snd_tog, save_t_d = dut->save_t;
+    uint64_t c_writes = 0;                         // IO_SAVE_DIRTY: writes and erases of C:
     while (frame_no <= frames) {
         // the colour and de are registered together at the edge that ends a
         // pix_ce cycle, as core_top's clk_vid flops then take them
@@ -242,6 +266,8 @@ int main(int argc, char **argv)
         exit_d = dut->dexit;
         if (dut->snd_tog != snd_tog_d) played++;
         snd_tog_d = dut->snd_tog;
+        if (dut->save_t != save_t_d) c_writes++;
+        save_t_d = dut->save_t;
         if (sys_cycles == sc) continue;            // a CPU edge only: the picture did not move
         if (wav && (sys_cycles - sys0) % 2000 == 0) audio.push_back(dut->snd);
         a_min = std::min<unsigned>(a_min, dut->a_lvl); a_max = std::max<unsigned>(a_max, dut->a_lvl);
@@ -295,6 +321,53 @@ int main(int argc, char **argv)
         printf("audio: the FIFO gave out %llu samples; %zu at 48 kHz to %s\n",
                (unsigned long long)played, audio.size(), wav);
     }
+    printf("save: C: written or erased %llu times\n", (unsigned long long)c_writes);
+
+    // ------------------------------------------------------------ the readout
+    int save_bad = 0;
+    if (save_out) {
+        std::vector<uint32_t> got(SAVE_WORDS), start(SAVE_WORDS), then(SAVE_WORDS);
+        auto c_word = [](uint32_t k) {
+            uint32_t h = (BUS_SAVE >> 1) + 2 * k;
+            return sdram_hw(h) | (uint32_t)sdram_hw(h + 1) << 16;
+        };
+        for (uint32_t k = 0; k < SAVE_WORDS; k++) start[k] = c_word(k);
+        uint32_t r = 1;
+        uint64_t c0 = c_writes, s0 = sys_cycles;
+        t_a = t_sys + 3.1;
+        for (uint32_t n = 0; n <= SAVE_WORDS; n++) {
+            // the address; its answer 4 clocks later is the read before's; then bridge_rd
+            dut->bridge_addr = 0x20000000u + 4 * n;
+            tick_a(4);
+            if (n) { got[n - 1] = dut->bridge_rd_data; then[n - 1] = c_word(n - 1); }
+            dut->bridge_rd = 1; tick_a(1); dut->bridge_rd = 0;
+            r = r * 1103515245u + 12345u;
+            tick_a(30 + (r >> 8) % 31);
+            if (dut->save_t != save_t_d) c_writes++;
+            save_t_d = dut->save_t;
+        }
+        int lffs = 0, older = 0, moved = 0;
+        std::vector<uint8_t> bytes(4 * SAVE_WORDS);
+        for (uint32_t k = 0; k < SAVE_WORDS; k++) {
+            if (start[k] != then[k]) moved++;
+            if (got[k] != then[k]) {
+                if (got[k] == start[k]) older++;
+                else if (save_bad++ < 6)
+                    printf("FAIL  save word %x: read %08x; C: held %08x at the start, %08x when it was read\n",
+                           k, got[k], start[k], then[k]);
+            }
+            for (int b = 0; b < 4; b++) bytes[4 * k + b] = got[k] >> 8 * b;
+            if (k % 0x4000 == 1 && got[k] == 0x503B3B60u) lffs++;
+        }
+        FILE *f = fopen(save_out, "wb");
+        if (!f) { perror(save_out); return 2; }
+        fwrite(bytes.data(), 1, bytes.size(), f);
+        fclose(f);
+        printf("save: read back in %.1f ms, C: written %llu times meanwhile (%d words changed before the bridge took them, "
+               "%d of them read as they were); %d words wrong; %d of 16 blocks LFFS's; -> %s\n",
+               (sys_cycles - s0) / 96e3, (unsigned long long)(c_writes - c0), moved, older, save_bad, lffs, save_out);
+    }
+
     int errs = dut->rootp->tb_system_top->chip__DOT__errors
              + dut->rootp->tb_system_top->cram0__DOT__errors
              + dut->rootp->tb_system_top->cram1__DOT__errors;
@@ -302,7 +375,7 @@ int main(int argc, char **argv)
            "%d memory protocol errors\n", frame_no, (sys_cycles - sys0) / MEM_HZ, (unsigned long long)insns,
            (unsigned long long)copies, (unsigned long long)fetch_max, errs);
     delete dut;
-    return errs ? 1 : 0;
+    return errs || save_bad ? 1 : 0;
 }
 
 // --- 16-bit stereo WAV: each word is L in 15:0, R in 31:16 -----------------

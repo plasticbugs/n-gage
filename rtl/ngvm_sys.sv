@@ -47,6 +47,8 @@ module ngvm_sys
     input  logic  [23:0] keymap,
     input  logic  [31:0] rom_size,
     input  logic  [31:0] drive_size,
+    input  logic  [31:0] save_size,
+    output logic         save_t,        // toggles: the kernel wrote C: (IO_SAVE_DIRTY)
     output logic  [31:0] snd,
     output logic         snd_tog,
 
@@ -148,6 +150,7 @@ module ngvm_sys
         .pt_we(pt_we), .pt_idx(pt_idx), .pt_data(pt_data), .win_id(win_id),
         .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show(lcd_show), .vblank(vblank),
         .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
+        .save_size(save_size), .save_t(save_t),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data)
     );

@@ -1,8 +1,9 @@
 // Whole-machine bench, through the Pocket's real memory glue: ngage_core
 // (NGVM: the CPU side on its own clock, the bus crossing, the LCD) against
 // ngage_mem, sdram_ctrl and cram_ctrl, with behavioural chips beyond the
-// pins and the three slots sent in through the download port at the APF
-// loader's rate.
+// pins and the slots sent in through the download port at the APF loader's
+// rate.  The save readout (ngage_save) sits on the LCD's port as in
+// core_top, and the bridge reads the save through it.
 //
 // This is the bench two shipped cores did without, and both paid for it: a
 // whole-machine bench that answers the CPUs from plain arrays never exercises
@@ -38,7 +39,14 @@ module tb_system_top #(
     output logic [31:0] snd,
     output logic        snd_tog,
     output logic        mem_ready,
-    output logic [31:0] rom_size, drive_size,
+    output logic [31:0] rom_size, drive_size, save_size,
+
+    // the save slot read back over the APF bridge, and C:'s writes
+    input  logic        clk_74a,
+    input  logic        bridge_rd,
+    input  logic [31:0] bridge_addr,
+    output logic [31:0] bridge_rd_data,
+    output logic        save_t,
 
     // the kernel's debug port, in clk_cpu's domain
     output logic        putc,
@@ -69,6 +77,11 @@ module tb_system_top #(
     logic   [5:0] l_len;
     logic   [4:0] l_idx;
     logic  [15:0] l_data;
+    logic         c_l_req, c_l_wr, c_l_done;    // the LCD's side of ngage_save
+    logic  [25:1] c_l_addr;
+    logic   [5:0] c_l_len;
+    logic   [4:0] c_l_idx;
+    logic  [15:0] c_l_data;
 
     wire [15:0] dram_dq;  wire [12:0] dram_a;  wire [1:0] dram_ba;
     wire        dram_dqml, dram_dqmh, dram_clk, dram_cke;
@@ -94,7 +107,7 @@ module tb_system_top #(
         .clk(clk), .clk_sdram(clk), .init(mem_init), .ready(mem_ready),
         .rd_late(rd_late), .burst_slow(1'b0), .rd_fast(rd_fast), .wr_fast(wr_fast), .sram_slow(1'b0), .sram_slow_wr(1'b0),
         .dl_we(dl_we), .dl_addr(dl_addr), .dl_data(dl_data), .dl_active(dl_active),
-        .rom_size(rom_size), .drive_size(drive_size),
+        .rom_size(rom_size), .drive_size(drive_size), .save_size(save_size),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
@@ -129,15 +142,26 @@ module tb_system_top #(
     sram_model sram (.clk(clk), .a(sram_a), .dq(sram_dq), .oe_n(sram_oe_n),
                      .we_n(sram_we_n), .ub_n(sram_ub_n), .lb_n(sram_lb_n));
 
+    ngage_save u_save (
+        .clk_74a(clk_74a), .bridge_rd(bridge_rd), .bridge_endian_little(1'b1),
+        .bridge_addr(bridge_addr), .bridge_rd_data(bridge_rd_data),
+        .clk(clk), .rst(~mem_ready), .dl_active(dl_active), .save_t(save_t),
+        .a_req(c_l_req), .a_addr(c_l_addr), .a_len(c_l_len),
+        .a_wr(c_l_wr), .a_idx(c_l_idx), .a_data(c_l_data), .a_done(c_l_done),
+        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
+        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done)
+    );
+
     logic [23:0] rgb_c;
     logic        hblank;
     ngage_core #(.CPU_HZ(CPU_HZ)) u_core (
         .clk(clk), .clk_cpu(clk_cpu), .rst(reset | ~mem_ready), .pause(1'b0), .pix_sync(1'b0),
         .m_req(m_req), .m_cmd(m_cmd), .m_addr(m_addr), .m_waddr(m_waddr), .m_be(m_be), .m_wdata(m_wdata),
         .m_done(m_done), .m_rdata(m_rdata), .m_free(m_free), .m_cnt(m_cnt),
-        .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
-        .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
+        .l_req(c_l_req), .l_addr(c_l_addr), .l_len(c_l_len),
+        .l_wr(c_l_wr), .l_idx(c_l_idx), .l_data(c_l_data), .l_done(c_l_done),
         .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
+        .save_size(save_size), .save_t(save_t),
         .rgb(rgb_c), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank),
         .pix_ce(pix_ce), .de(de),
         .tate(2'b00), .t_cen(), .t_rgb(), .t_hsync(), .t_vsync(), .t_hblank(), .t_vblank(), .t_de(),

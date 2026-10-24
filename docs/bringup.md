@@ -107,6 +107,44 @@ run (56 s) instead, and the bench printed
 `PANIC ... PhoneServer: PhSrvFault 2` at 15.4 s
 (`docs/hardware.md`, open questions).
 
+## Saves
+
+Each game's C: drive, 1 MB, is its save file:
+`Saves/ngage/plasticbugs.ngage/<game>.sav` on the card, named in the game
+list (`vcop.img` saves to `vcop.sav`). The core writes it 5 s after the
+load, 2 s after the game last writes C:, and when the Pocket's menu
+opens with a write pending. The first run of a game finds no file and
+starts from an erased C:, as a new phone would; the firmware formats it,
+and that takes some 3,300 writes, so the first boot is slower than the
+next. On the bench (`sim/run_system.sh`, Virtua Cop), the first boot wrote
+C: 3,389 times and had not reached the game's attract at 15 s, where the
+run ended (1.1.0's kernel, which formatted C: at every boot, reached it
+at 16.5 s); the next, from that save, wrote it 329 times and got there at
+13 s.
+
+Check it on a Pocket in three steps, each read off the card
+(METHODOLOGY 5.24):
+
+1. **The file exists.** Start a game that saves, wait until it is past the
+   N-Gage logo and 10 s more, then quit the core. `<game>.sav` is there,
+   1,048,576 bytes. If it is missing, the write never happened (slot id,
+   the table entry, parameters bit 5).
+2. **It changed where the game saved.** In SSX: Out of Bounds, change an
+   option (it keeps `options.dat` on C:) or finish a race (its records),
+   or in Tony Hawk's Pro Skater save a game; wait 5 s, open the Pocket's
+   menu, quit. Bring the card: the file should name the game's file
+   (`options.dat`, `thps_save_...`) in clear text, and differ from step 1's
+   copy.
+3. **A relaunch keeps it.** Start the same game again: the option, the
+   record or the saved game is there. Steps 1 and 2 passing and 3 failing
+   means the load path is wrong (the save's loader, `IO_SAVE_SIZE`, the
+   kernel's LFFS check), not the write.
+
+What to report: which step failed, and the file's size. Opening the
+Pocket's menu writes a save that is still waiting out its 2 s, so quitting
+through the menu should keep it; that is worth one try, quitting within a
+second of a save.
+
 ## The on-screen keypad
 
 On any screen, press SELECT and R together. Within a frame:

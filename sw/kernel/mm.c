@@ -6,6 +6,8 @@
 
 #define NPAGES      (NGVM_RAM_SIZE >> NGVM_PAGE_SHIFT)
 #define KPAGES      (NGVM_KERN_SIZE >> NGVM_PAGE_SHIFT)
+#define SPAGE0      (NGVM_SAVE_BASE >> NGVM_PAGE_SHIFT)     /* C:, never handed out */
+#define SPAGES      (NGVM_SAVE_SIZE >> NGVM_PAGE_SHIFT)
 
 static u32 page_used[NPAGES / 32];
 static u16 pt[NGVM_PT_ENTRIES];
@@ -20,7 +22,8 @@ void mm_init(void)
 {
     for (int i = 0; i < NGVM_PT_ENTRIES; i++) pt[i] = NGVM_PT_NONE;
     for (int i = 0; i < KPAGES; i++) page_used[i / 32] |= 1u << (i % 32);
-    free_pages = NPAGES - KPAGES;
+    for (int i = SPAGE0; i < SPAGE0 + SPAGES; i++) page_used[i / 32] |= 1u << (i % 32);
+    free_pages = NPAGES - KPAGES - SPAGES;
 }
 
 u32 mm_free_bytes(void) { return free_pages << NGVM_PAGE_SHIFT; }

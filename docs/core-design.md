@@ -1420,12 +1420,36 @@ Still unexercised:
 | 1 | `ngvm.bin` (ours: `build/kernel/kernel.bin`, ships in the package) | `0x0000000` | SDRAM, RAM page 0 on |
 | 2 | `sym.rom` (the user's firmware; never shipped) | `0x2000000` | SDRAM |
 | 3 | the game's drive image (`tools/mkdrive.py`) | `0x4000000` | CRAM |
+| 4 | the game's save, `<game>.sav`: its C: drive, 1 MB | `0x20000000` (bus `0x1F00000`) | SDRAM, the top MB of RAM |
 
 - **Routing.** `ngage_mem` routes each byte by its address. Bytes pair into
   little-endian halfwords. Each memory has a 64-deep FIFO, because the
   loader cannot wait.
-- **Sizes.** `IO_ROM_SIZE` and `IO_DRIVE_SIZE` are one past the last byte
-  loaded into each region.
+- **Sizes.** `IO_ROM_SIZE`, `IO_DRIVE_SIZE` and `IO_SAVE_SIZE` are one
+  past the last byte loaded into each region.
+- **The save** (METHODOLOGY 5.24) is a nonvolatile slot at bridge
+  `0x20000000` with a loader of its own (`data_io`, mask 2), which
+  core_top's download mux sends to bus `0x1F00000`. Its size, 1 MB, is
+  written into the slot table at entry 9 (position 4 × 2 + 1). The core
+  issues the write itself, as NBA Jam's does: 2 s after the kernel last
+  wrote C: (`IO_SAVE_DIRTY`, crossed into clk_74a as a toggle), when the
+  Pocket's menu opens with a write pending, and once 5 s after the load,
+  so the file exists after the first run. A game that keeps writing C:
+  is written back 2 s after it stops.
+- **The readout** (`target/pocket/ngage_save.sv`). The bridge samples a
+  read's answer early in the next transaction and cannot be made to wait,
+  too soon for a word queued behind the CPU's and the LCD's bursts. So the
+  save is fetched ahead, 32 halfwords a burst, through the LCD's port to
+  `ngage_mem` (the owner latched at grant, l_done routed by it, turn
+  about; between bursts the LCD's request passes in the clock it is
+  chosen, so with nothing to fetch the port sees the LCD alone). Words 0-63
+  are always held, and a 256-word ring runs ahead of the last read; both
+  are fetched again once a write to C: has settled and no read has come
+  for 21 µs. `sim/run_save.sh` reads the whole MB eight times against a
+  memory that answers 4-250 clocks late (1 in 64 bursts up to 1,000), then
+  up to four times as late, with an LCD on the same port, a pause partway, a
+  write to C: during a pause and during a readout, a readout stopped short
+  and a big-endian one: 0 wrong words. Six planted faults each fail it.
 - **Reset.** The CPU is held in reset until every slot is loaded.
 - **Running again.** A menu reset runs the kernel again over memory as the
   last run left it. Its `.data` therefore comes from a copy in the image,

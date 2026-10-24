@@ -37,6 +37,7 @@ verilator --cc --exe --build -j "${JOBS:-8}" -O2 \
     $SRCS $MODS \
     "$root"/target/pocket/ngage_mem.sv "$root"/target/pocket/sdram_ctrl.sv \
     "$root"/target/pocket/cram_ctrl.sv "$root"/target/pocket/sram_port.sv \
+    "$root"/target/pocket/ngage_save.sv \
     sdram_model.sv cram_model.sv sram_model.sv tb_system_top.sv tb_system.cpp > "$OBJ.log" 2>&1 \
     || { tail -40 "$OBJ.log"; exit 1; }
 

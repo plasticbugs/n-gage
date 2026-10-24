@@ -81,6 +81,11 @@ void *memmove(void *d, const void *s, unsigned n)
 void *memset(void *d, int v, unsigned n)
 {
     u8 *dp = d;
+    if ((((u32)dp | n) & 3) == 0) {            /* a word at a time: C: is uncached */
+        u32 *dw = d, w = (u8)v * 0x01010101u;
+        for (n >>= 2; n; n--) *dw++ = w;
+        return d;
+    }
     while (n--) *dp++ = (u8)v;
     return d;
 }

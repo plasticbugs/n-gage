@@ -18,7 +18,10 @@
 //   keymap         96 MHz -> CPU   two flops: set from the menu, so it holds
 //                                  still for seconds; a read across a change
 //                                  can mix the two settings for one press
-//   rom/drive size 96 MHz -> CPU   none: set by the load, before reset ends
+//   rom/drive/save 96 MHz -> CPU   none: set by the load, before reset ends
+//   size
+//   save_t         CPU -> core_top a toggle: the kernel wrote C:, whose save
+//                                  core_top has the Pocket write back
 //   lcd_base, on   CPU -> 96 MHz   two flops, taken once a frame (ngvm_lcd.sv)
 //   show           CPU -> 96 MHz   a toggle: the D-cache has written back what
 //                                  IO_LCD_SHOW is to show; the LCD copies it
@@ -65,6 +68,8 @@ module ngage_core #(
     input  logic  [23:0] keymap,        // IO_KEYMAP (ngvm_hw.h); 0 = the default keys
     input  logic  [31:0] rom_size,
     input  logic  [31:0] drive_size,
+    input  logic  [31:0] save_size,     // IO_SAVE_SIZE: bytes of the save file loaded
+    output logic         save_t,        // toggles, in clk_cpu's domain: C: was written
 
     // ---------------- video, one pixel per pix_ce in the clk domain
     output logic  [23:0] rgb,
@@ -131,6 +136,7 @@ module ngage_core #(
         .bus_wdata(bus_wdata), .bus_done(bus_done), .bus_rdata(bus_rdata), .bus_cnt(bus_cnt),
         .lcd_base(lcd_base), .lcd_on(lcd_on), .lcd_show_t(show_t), .vblank(vb_c), .keys(keys_s1), .keymap(keymap_s1),
         .rom_size(rom_size), .drive_size(drive_size),
+        .save_size(save_size), .save_t(save_t),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_putc(dbg_putc), .dbg_exit(dbg_exit), .dbg_hex(dbg_hex), .dbg_data(dbg_data),
         .rt_valid(rt_valid), .rt_irq(rt_irq), .rt_pc(rt_pc), .rt_instr(rt_instr),
