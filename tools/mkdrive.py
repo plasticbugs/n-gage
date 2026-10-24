@@ -9,13 +9,18 @@ correct FAT volume, with VFAT long names (`6r29_caption.rsc` is not 8.3).
 Files are laid out contiguously, in path order.  No dependencies.
 
 A game zip as distributed holds the card's contents at its root
-(`system/apps/...`); --from accepts the zip directly.
+(`system/apps/...`); --from accepts the zip directly.  A zip or folder that
+holds one folder, with the card's system/ inside it (a zip of the game's
+folder), is taken from inside that folder, and the __MACOSX folder a Mac
+adds to a zip is left out (card_root).  `Add N-Gage games.html`, beside the
+core's files on the SD card, is this same tool in JavaScript, held to the
+same bytes by tools/check_mkdrive.py.
 
 The boot sector's boot-code area, which FAT never reads, carries the launch
 record the kernel reads (NGVM_LAUNCH_* in sw/include/ngvm_hw.h): the .app to
 run, from the `Path:` line of the card's ngagegamestarter.txt, else the
 card's only .app, else the only one the phone's menu would start (see
-find_app), else --app.
+find_app: a whole program, with an .aif that does not hide it), else --app.
 """
 import argparse, os, struct, sys, time, zipfile
 
@@ -88,9 +93,46 @@ def find_app(tree):
     # Several: the Airplay ports (Tomb Raider, Tony Hawk's, Pandemonium) carry
     # truncated stub .apps and a gsbapp.app shell beside the game.  The phone
     # lists an .app by its .aif, and only a whole image runs.
-    menu = [p for p, n, d in apps if whole_app(n.data) and
-            any(c.lower() == n.name.lower()[:-4] + '.aif' for c in d.children)]
-    return menu[0] if len(menu) == 1 else None
+    def aif(n, d):
+        want = n.name.lower()[:-4] + '.aif'
+        return next((c for k, c in d.children.items() if k.lower() == want), None)
+
+    menu = [(p, aif(n, d)) for p, n, d in apps if whole_app(n.data) and aif(n, d)]
+    if len(menu) == 1:
+        return menu[0][0]
+    # Snakes: its game, 6r45_1.app, is started by 6r45.app, and its .aif
+    # keeps it off the menu
+    shown = [p for p, a in menu if not aif_hidden(a.data)]
+    return shown[0] if len(shown) == 1 else None
+
+
+def cardinality(d, p):
+    """A Symbian TCardinality at d[p]: the count, and the offset after it."""
+    b = d[p]
+    if not b & 1:
+        return b >> 1, p + 1
+    if not b & 2:
+        return struct.unpack_from('<H', d, p)[0] >> 2, p + 2
+    return struct.unpack_from('<I', d, p)[0] >> 3, p + 4
+
+
+def aif_hidden(d):
+    """An .aif that keeps its application off the phone's menu.  The .aif is
+    a direct file store (UIDs 0x10000037 0x10003A38, the root stream's offset
+    at 16); the root holds the caption and the icon tables, 6 bytes an
+    entry, then the TApaAppCapability as 32-bit words: version,
+    embeddability, new file, hidden (apaid.h)."""
+    try:
+        if struct.unpack_from('<2I', d, 0) != (0x10000037, 0x10003A38):
+            return False
+        p = struct.unpack_from('<I', d, 16)[0]
+        for _ in range(2):
+            n, p = cardinality(d, p)
+            p += 6 * n
+        ver, emb, new, hidden = struct.unpack_from('<4i', d, p)
+    except (struct.error, IndexError):
+        return False
+    return 1 <= ver <= 3 and 0 <= emb <= 2 and hidden == 1
 
 
 def whole_app(d):
@@ -237,6 +279,23 @@ def load_tree(src):
     return root
 
 
+JUNK = ('.ds_store', 'thumbs.db', 'desktop.ini')
+
+
+def card_root(tree):
+    """The card's contents in a zip or a folder as people make them: a zip
+    made on a Mac carries __MACOSX beside them, and a zip of the game's
+    folder holds that folder, with the card's system/ inside it."""
+    tree.children.pop('__MACOSX', None)
+    n = tree
+    while not any(k.lower() == 'system' for k in n.children):
+        dirs = [c for c in n.children.values() if c.is_dir]
+        if len(dirs) != 1 or any(not c.is_dir and c.name.lower() not in JUNK for c in n.children.values()):
+            return tree
+        n = dirs[0]
+    return n
+
+
 # the largest drive the core loads: all of the Pocket's CRAM (NGVM_DRIVE_MAX,
 # sw/include/ngvm_hw.h)
 MAX_MB = 32
@@ -251,7 +310,7 @@ def main():
     ap.add_argument('--label', default='NGAGE')
     ap.add_argument('--app', help='the .app to launch (E:\\...); default: from the card')
     a = ap.parse_args()
-    tree = load_tree(a.src)
+    tree = card_root(load_tree(a.src))
     content = 0
 
     def walk(n):
