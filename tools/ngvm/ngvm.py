@@ -355,7 +355,7 @@ class Machine:
             self.fetch_regs[(off - IO_FETCH_SRC) >> 2] = value
             if off == IO_FETCH_LEN:
                 src, dst, n = self.fetch_regs
-                if (src | dst | n) & 1 or not n or dst + n > NGVM_DRIVE_MAX or src + n > len(self.image):
+                if (src | dst | n) & 3 or not n or dst + n > NGVM_DRIVE_MAX or src + n > len(self.image):
                     return self.fault('fetch of %x bytes from %x to %x: not a span of the image and the window'
                                       % (n, src, dst))
                 self.fetch_end = self.insns + self.fetch_time(n)

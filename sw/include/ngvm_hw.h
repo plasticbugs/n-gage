@@ -153,8 +153,9 @@
  * IO_DRIVE_SIZE is still the whole image's size.  The kernel fetches any
  * part of the image into any place in the window: IO_FETCH_SRC is where in
  * the image, IO_FETCH_DST where in the window, and writing IO_FETCH_LEN
- * starts the fetch.  All three are even, and the window's span lies within
- * it.  IO_FETCH_STAT is busy until the bytes are in the window, then holds
+ * starts the fetch.  All three are multiples of 4, as the Pocket's bridge
+ * moves words, and the window's span lies within it.  IO_FETCH_STAT is
+ * busy until the bytes are in the window, then holds
  * the fetch's error (the Pocket's: 0 none), and IRQ_FETCH is raised.  A
  * write to the three while busy is ignored.  With an image that fits, the
  * window is the image and nothing is fetched.                              */

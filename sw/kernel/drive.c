@@ -94,6 +94,9 @@ void drive_init(void)
     cached = media[2].size > NGVM_DRIVE_MAX;
     if (cached) {
         if (media[2].size > NGVM_IMAGE_MAX) media[2].size = media[2].max = NGVM_IMAGE_MAX;
+        /* a fetch is of whole words (ngvm_hw.h), so the last block is too;
+         * an image is whole sectors, and this loses nothing of one */
+        media[2].size = media[2].max = media[2].size & ~3u;
         for (u32 b = 0; b < NBLK; b++) blk_slot[b] = b < NSLOT ? b : NO_SLOT;
         for (u32 s = 0; s < NSLOT; s++) slot_blk[s] = s;
     }
@@ -189,7 +192,7 @@ static int fetch(u32 b)
                                      fetches, b, s, old);
     IO(IO_FETCH_SRC) = src;
     IO(IO_FETCH_DST) = (u32)s << BLK_SHIFT;
-    IO(IO_FETCH_LEN) = len & ~1u;
+    IO(IO_FETCH_LEN) = len;
     return 1;
 }
 
