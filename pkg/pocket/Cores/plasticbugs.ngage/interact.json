@@ -25,35 +25,22 @@
         ]
       },
       {
-        "name": "Scanlines",
+        "name": "Screen Effect",
         "id": 61,
         "type": "list",
         "enabled": true,
         "persist": true,
         "address": "0xF3000000",
         "defaultval": 0,
-        "mask": "0xFFFFFFFC",
+        "mask": "0xFFFFFF8C",
         "options": [
           {"name": "Off", "value": "0x00000000"},
-          {"name": "25%", "value": "0x00000001"},
-          {"name": "50%", "value": "0x00000002"},
-          {"name": "75%", "value": "0x00000003"}
-        ]
-      },
-      {
-        "name": "Shadow Mask",
-        "id": 62,
-        "type": "list",
-        "enabled": true,
-        "persist": true,
-        "address": "0xF3000000",
-        "defaultval": 0,
-        "mask": "0xFFFFFF8F",
-        "options": [
-          {"name": "Off", "value": "0x00000000"},
-          {"name": "1x", "value": "0x00000010"},
-          {"name": "2x", "value": "0x00000020"},
-          {"name": "3x", "value": "0x00000030"}
+          {"name": "Scanlines 25%", "value": "0x00000001"},
+          {"name": "Scanlines 50%", "value": "0x00000002"},
+          {"name": "Scanlines 75%", "value": "0x00000003"},
+          {"name": "Shadow Mask 1x", "value": "0x00000010"},
+          {"name": "Shadow Mask 2x", "value": "0x00000020"},
+          {"name": "Shadow Mask 3x", "value": "0x00000030"}
         ]
       },
       {
