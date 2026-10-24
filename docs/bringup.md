@@ -344,3 +344,10 @@ that died belong here as much as the one that lived.
   so the picture's bottom sat where an NES's bottom overscan is, and the
   slider's ±2 could not lift it clear. Not reported: the video mode,
   the CRT, whether the top or the sides were also lost.
+- 2026-10-23, `b7b65bb3d179257456d0910545397c5a` (`bitstream.rbf_r`,
+  b1c436a: vsync 13 lines later, V Position −16 to +12, TATE) with
+  kernel `9e7b7a4eda38f57a9d22c299288391cf` (1be45ee: a page under
+  FbsLargeChunk, for Rifts), released as v1.1.0: reported as great,
+  after being asked to try Rifts past its cutscenes, the Analogizer's
+  picture at V Position 0, and both TATE options. Not itemised: which of
+  those were tried, the video mode, and the TATE direction used.

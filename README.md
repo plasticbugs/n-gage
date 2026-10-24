@@ -32,7 +32,9 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket**: the current release is v1.0.0. The first flash
+**It runs on the Pocket**: the current release is v1.1.0, which adds
+TATE for the Analogizer, centres the Analogizer's picture on a CRT, and
+gets Rifts: Promise of Power past its cutscenes. The first flash
 (CPU at 64 MHz) booted and ran Sonic N into gameplay, with sound. Since
 then the CPU runs at 80 MHz on a clock of its own, both caches hold
 64 KB, the picture is copied when the firmware updates the display, the
@@ -136,10 +138,10 @@ height, while the Pocket keeps it upright (or blank, with "Pocket off").
 Choose "TATE CW" if the tube's top is turned to the right, "TATE CCW" if
 to the left.
 
-It has been tried on one owner's CRT, which lost the picture's bottom
-lines in its overscan. Since then the picture sits 13 lines higher,
-centred as an NES's is, and V Position moves it 16 lines up or 12 down.
-That, and TATE, have been checked in simulation, not yet on a CRT.
+It has been tried on one owner's CRT. On v1.0.0 the CRT lost the
+picture's bottom lines in its overscan. v1.1.0 puts the picture 13 lines
+higher, centred as an NES's is, lets V Position move it 16 lines up or
+12 down, and adds TATE; its owner reported it as great.
 
 ## What goes on the card
 

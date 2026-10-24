@@ -9,7 +9,7 @@
       "description": "Nokia N-Gage (2003): an ARMv4T running the phone firmware above a small kernel",
       "author": "plasticbugs",
       "url": "https://github.com/plasticbugs/analogue-pocket-ngage",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "date_release": "2026-10-23"
     },
     "framework": {

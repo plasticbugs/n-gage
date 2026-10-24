@@ -1,8 +1,16 @@
-# N-Gage for Analogue Pocket — 1.0.0
+# N-Gage for Analogue Pocket — 1.1.0
 
-The first full release. It boots the Nokia N-Gage's own firmware on the
-Pocket and runs games, the 3D ones about 1.7 times as smoothly as the
-alphas did.
+A feature release for the Analogizer, with one game fixed:
+
+- **TATE** sends the CRT the picture turned a quarter turn, for a tube
+  stood on its side;
+- the Analogizer's picture is now **centred on a CRT**, with nothing lost
+  at the bottom;
+- **Rifts: Promise of Power** no longer stops on a black screen after its
+  intro cutscenes.
+
+The core boots the Nokia N-Gage's own firmware on the Pocket and runs
+games.
 
 This core does not rebuild the phone's board. It runs **NGVM**, a small
 machine with just enough of an ARM phone for the Symbian user side of your
@@ -35,8 +43,9 @@ dump and your own games.
    and the screen stays black until it is done. The phone then boots as it
    would, Nokia logo first.
 
-**From any alpha,** copy the whole zip over: both the bitstream and
-`ngvm.bin` have changed. Your `sym.rom` and `.img` files are not in it.
+**From 1.0.0 or any alpha,** copy the whole zip over: both the bitstream
+and `ngvm.bin` have changed. Your `sym.rom` and `.img` files are not in
+it, and your menu settings are kept.
 
 **Rebuild your `.img` files with this zip's `mkdrive.py`** if you made them
 for 0.1.0-alpha and the game is larger than 24 MB, or is Tomb Raider, Tony
@@ -65,41 +74,45 @@ the highlight, A or B presses the key for as long as you hold it, and Y
 moves the keypad to the top of the screen and back. Select and R together
 put it away. While it is up, the game sees only the keys it presses.
 
-## New since 0.3.1-alpha
+## New since 1.0.0
 
-- **Faster, most of all in 3D.** In a simulation of the Pocket's hardware,
-  Virtua Cop in play draws about 1.7 times as many screens a second as
-  with 0.3.1-alpha (12.5 against 7.5). It runs 43% more instructions a
-  second, and its first level loads well before 0.3.1-alpha's has. That
-  was measured on a build just before this one; over the game's first
-  25 s, this one draws 6% more screens again. What changed:
-  - the CPU runs at 80 MHz, on a clock of its own (73.85 MHz before);
-  - the instruction and data caches are 64 KB each (16 KB before), and a
-    store that misses no longer waits for its line;
-  - branch prediction has twice the entries and predicts returns made by
-    a load (POP with pc), and a multiply holds the pipeline a cycle less;
-  - the memory controller sends a burst's writes one a clock, starts the
-    next burst as soon as the last one's data is in, and puts the CPU's
-    requests on the bus sooner;
-  - the kernel's scheduler and its most frequent calls take less time.
-- **The on-screen keypad** (above), so that games can be given numbers
-  and the keys the buttons do not have.
+- **TATE on the Analogizer.** The N-Gage's screen is taller than it is
+  wide, so on a CRT stood on its side the picture can fill the tube's
+  height. The "Analogizer" menu has four more options:
+  - "On, TATE CW" for a tube turned clockwise (its top to the right);
+  - "On, TATE CCW" for one turned anticlockwise;
+  - each of those again with "Pocket off".
+
+  The CRT gets one line per column of the picture, 176 lines of 208
+  dots, at 15.71 kHz and 59.95 Hz. The Pocket's own screen stays
+  upright. The on-screen keypad turns with the picture.
+- **The Analogizer's picture is centred on a CRT.** On 1.0.0 vertical
+  sync came 3 lines after the picture, so a CRT lost the picture's
+  bottom lines in its overscan, and V Position could move it only 2
+  lines. The picture now sits 13 lines higher, its middle where an NES's
+  is, and V Position moves it from 16 lines up to 12 down.
+- **Rifts: Promise of Power** stopped on a black screen at the end of its
+  story cutscenes. The game reads one row above a bitmap of its own,
+  where the phone would have had other bitmaps; the kernel now keeps a
+  blank page there.
 
 ## What to expect
 
-- **Seen on a Pocket:** with this build, Virtua Cop, SSX: Out of Bounds
-  and Puzzle Bobble VS play. With 0.3.1-alpha's build, The Elder Scrolls
+- **This build** was tried on a Pocket before release and reported as
+  great by its tester, who uses an Analogizer and a CRT.
+- **Seen on a Pocket:** with 1.0.0, Virtua Cop, SSX: Out of Bounds and
+  Puzzle Bobble VS play. With 0.3.1-alpha's build, The Elder Scrolls
   Travels: Shadowkey and The Sims Bustin' Out play, and Call of Duty
   plays slowly; with 0.3.0-alpha's, Pocket Kingdom plays well. With
   0.2.0-alpha's, Atari Masterpieces Vol. 1 and 2, Rayman 3 and The Roots
   play well. On the builds before it, Colin McRae Rally 2005 plays
   perfectly, Tony Hawk's Pro Skater and Ghost Recon play well, and
   Requiem of Hell starts after a long pause. Sonic N played on
-  0.1.0-alpha. The games not named for this build have not been reported
-  on it yet.
+  0.1.0-alpha. The games not named for 1.0.0 have not been reported on
+  it or on this build yet.
 - **The on-screen keypad** has been checked in simulation (every key
-  presses its own, and nothing else reaches the game), not yet on a
-  Pocket.
+  presses its own, and nothing else reaches the game), and has not been
+  reported on from a Pocket.
 - **Tested in the reference emulator only:** of 54 games, 46 run for
   45 s past the boot logos with a picture and sound, with A and X pressed
   a few times from 30 s. Puzzle Bobble VS and Pandemonium reach their
@@ -135,14 +148,13 @@ put it away. While it is up, the game sees only the keys it presses.
 - Key clicks and the phone's tone player are silent. Game music and effects
   play.
 - Bluetooth multiplayer (Snakes and others) has no radio and cannot start.
-- The Analogizer adapter is supported but has not been tried on one.
 
 ## This build
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `0c44e9e693b3c62dfbccbd30da78328f` |
-| `Assets/ngage/common/ngvm.bin` | `4ef9e13431949931c2af713441108b44` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `b7b65bb3d179257456d0910545397c5a` |
+| `Assets/ngage/common/ngvm.bin` | `9e7b7a4eda38f57a9d22c299288391cf` |
 
 CPU at 80 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.
