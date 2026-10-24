@@ -389,3 +389,10 @@ that died belong here as much as the one that lived.
   after being asked to try Rifts past its cutscenes, the Analogizer's
   picture at V Position 0, and both TATE options. Not itemised: which of
   those were tried, the video mode, and the TATE direction used.
+- 2026-10-23, `0c74766f7471e7649a1fbd905d2cf75f` (`bitstream.rbf_r`,
+  04e1128: c16403a's save slot and readout, fitted with seed 2) with
+  kernel `86c89494eae24bf2d0c5932e90dadc51` (c16403a: C: kept in the
+  save slot), released as v1.2.0: "save games work", after being asked
+  to run the three steps under "Saves" with SSX: Out of Bounds. Not
+  itemised: which games, which steps, the files' sizes, or whether a
+  save made just before quitting through the menu was kept.

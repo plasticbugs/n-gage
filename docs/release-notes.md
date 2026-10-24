@@ -1,13 +1,14 @@
-# N-Gage for Analogue Pocket — 1.1.0
+# N-Gage for Analogue Pocket — 1.2.0
 
-A feature release for the Analogizer, with one game fixed:
+A feature release:
 
-- **TATE** sends the CRT the picture turned a quarter turn, for a tube
-  stood on its side;
-- the Analogizer's picture is now **centred on a CRT**, with nothing lost
-  at the bottom;
-- **Rifts: Promise of Power** no longer stops on a black screen after its
-  intro cutscenes.
+- **Game saves.** Each game's saves now live on the SD card and are still
+  there the next time you play;
+- **Add N-Gage games.html**, on the card beside the core's files, turns
+  your game zips into games for the Pocket: drop them on it, all at once,
+  and they go onto the SD card with their names in the Pocket's menu. No
+  Python, no command line, and it works offline;
+- the menu's Scanlines and Shadow Mask are now one list, **Screen Effect**.
 
 The core boots the Nokia N-Gage's own firmware on the Pocket and runs
 games.
@@ -30,22 +31,38 @@ dump and your own games.
      GitHub: the firmware this core was tested on, 18,612,224 bytes, md5
      `64a95a4a884cf4cc15a566b856603193`. Rename it to `sym.rom`, in lower
      case;
-   - one `.img` per game, built from the game's files with the builder in
-     this zip (Python 3 only):
+   - one `.img` per game, made from the game's files.
 
-     ```sh
-     python3 mkdrive.py --from vcop.zip --out vcop.img
-     ```
+   **The easy way** does both. With the SD card in your computer, open
+   `Assets/ngage/common/Add N-Gage games.html` from it in Microsoft Edge
+   or Google Chrome, on Windows or a Mac. Press "Choose my SD card", pick
+   the card's `Assets` folder, then drop your game zips (and `SYM.ROM`)
+   on the page. Each game gets a green tick when it is on the card, with
+   its entry in the Pocket's menu. A short film on the page shows every
+   step. Other browsers download the files for you to copy over.
+
+   Or, with Python 3, the builder in this zip:
+
+   ```sh
+   python3 mkdrive.py --from vcop.zip --out vcop.img
+   ```
 
    The game list (`Assets/ngage/plasticbugs.ngage/*.json`) names the `.img`
-   each game expects. Add a JSON there for any other game.
+   and the `.sav` each game uses. The page writes these entries; by hand,
+   add a JSON there for any other game.
 3. Loading takes a while: up to about 50 MB go through the Pocket's loader,
    and the screen stays black until it is done. The phone then boots as it
    would, Nokia logo first.
 
-**From 1.0.0 or any alpha,** copy the whole zip over: both the bitstream
-and `ngvm.bin` have changed. Your `sym.rom` and `.img` files are not in
-it, and your menu settings are kept.
+**From 1.1.0 or earlier,** copy the whole zip over: the bitstream,
+`ngvm.bin` and the game list have changed. Your `sym.rom` and `.img`
+files are not in it, and your menu settings are kept, except a Shadow
+Mask setting, which goes back to Off: choose it again under Screen Effect.
+
+**Games you added to the list yourself** need a save entry, or they all
+share one save file, `ngage.sav`. In the game's JSON, after the `.img`
+entry, add `{ "id": 4, "filename": "<game>.sav" }`, as the games in this
+zip have.
 
 **Rebuild your `.img` files with this zip's `mkdrive.py`** if you made them
 for 0.1.0-alpha and the game is larger than 24 MB, or is Tomb Raider, Tony
@@ -74,32 +91,34 @@ the highlight, A or B presses the key for as long as you hold it, and Y
 moves the keypad to the top of the screen and back. Select and R together
 put it away. While it is up, the game sees only the keys it presses.
 
-## New since 1.0.0
+## New since 1.1.0
 
-- **TATE on the Analogizer.** The N-Gage's screen is taller than it is
-  wide, so on a CRT stood on its side the picture can fill the tube's
-  height. The "Analogizer" menu has four more options:
-  - "On, TATE CW" for a tube turned clockwise (its top to the right);
-  - "On, TATE CCW" for one turned anticlockwise;
-  - each of those again with "Pocket off".
-
-  The CRT gets one line per column of the picture, 176 lines of 208
-  dots, at 15.71 kHz and 59.95 Hz. The Pocket's own screen stays
-  upright. The on-screen keypad turns with the picture.
-- **The Analogizer's picture is centred on a CRT.** On 1.0.0 vertical
-  sync came 3 lines after the picture, so a CRT lost the picture's
-  bottom lines in its overscan, and V Position could move it only 2
-  lines. The picture now sits 13 lines higher, its middle where an NES's
-  is, and V Position moves it from 16 lines up to 12 down.
-- **Rifts: Promise of Power** stopped on a black screen at the end of its
-  story cutscenes. The game reads one row above a bitmap of its own,
-  where the phone would have had other bitmaps; the kernel now keeps a
-  blank page there.
+- **Game saves.** A game keeps its saves on the phone's own C: drive.
+  Until now that drive was erased at every start, so nothing outlived
+  the Pocket's power. Each game's C: drive is now its save file,
+  `Saves/ngage/plasticbugs.ngage/<game>.sav` on the card (1 MB). The core
+  writes it a couple of seconds after the game saves, and when the
+  Pocket's menu opens with a save still waiting. A game's first start on
+  this release formats its new drive, as a new phone would, so that start
+  is slower. Later starts skip that, and are quicker than on 1.1.0, which
+  formatted the drive every time.
+- **Add N-Gage games.html** makes the same `.img` files as `mkdrive.py`,
+  byte for byte, in the browser. It takes any number of game zips or
+  unzipped game folders at once, checks `SYM.ROM` and saves it as
+  `sym.rom`, and never overwrites a file already on the card.
+- **Screen Effect.** The Pocket allows 20 menu entries and data slots
+  together, and the save slot is a new data slot. Scanlines (25, 50, 75%)
+  and Shadow Mask (1x, 2x, 3x) are now options of one list, so the two
+  can no longer be on at once.
+- **`mkdrive.py`** takes a zip of the game's folder, and a zip made on a
+  Mac, as well as a zip of the card's contents. Snakes no longer needs
+  `--app`.
 
 ## What to expect
 
-- **This build** was tried on a Pocket before release and reported as
-  great by its tester, who uses an Analogizer and a CRT.
+- **This build** was tried on a Pocket before release: its tester
+  reported that save games work. Which games, and whether the Analogizer
+  was used, was not said; 1.1.0's Analogizer output is unchanged.
 - **Seen on a Pocket:** with 1.0.0, Virtua Cop, SSX: Out of Bounds and
   Puzzle Bobble VS play. With 0.3.1-alpha's build, The Elder Scrolls
   Travels: Shadowkey and The Sims Bustin' Out play, and Call of Duty
@@ -143,8 +162,7 @@ put it away. While it is up, the game sees only the keys it presses.
   Splinter Cell: Chaos Theory stop during startup, and the Payload trial
   does not get past its first screens.
 - The game keeps running behind the Pocket's menu (no pause).
-- Saves last until the Pocket is switched off: nothing is written back to
-  the SD card. No sleep or link port.
+- No sleep or link port.
 - Key clicks and the phone's tone player are silent. Game music and effects
   play.
 - Bluetooth multiplayer (Snakes and others) has no radio and cannot start.
@@ -153,8 +171,8 @@ put it away. While it is up, the game sees only the keys it presses.
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `b7b65bb3d179257456d0910545397c5a` |
-| `Assets/ngage/common/ngvm.bin` | `9e7b7a4eda38f57a9d22c299288391cf` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `0c74766f7471e7649a1fbd905d2cf75f` |
+| `Assets/ngage/common/ngvm.bin` | `86c89494eae24bf2d0c5932e90dadc51` |
 
 CPU at 80 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.

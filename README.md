@@ -32,9 +32,11 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket**: the current release is v1.1.0, which adds
-TATE for the Analogizer, centres the Analogizer's picture on a CRT, and
-gets Rifts: Promise of Power past its cutscenes. The first flash
+**It runs on the Pocket**: the current release is v1.2.0, which keeps
+each game's saves on the SD card and ships a page, on the card, that
+turns game zips into games. v1.1.0 added TATE for the Analogizer, centred
+the Analogizer's picture on a CRT, and got Rifts: Promise of Power past
+its cutscenes. The first flash
 (CPU at 64 MHz) booted and ran Sonic N into gameplay, with sound. Since
 then the CPU runs at 80 MHz on a clock of its own, both caches hold
 64 KB, the picture is copied when the firmware updates the display, the
@@ -63,12 +65,12 @@ What is proven, and by what:
 - `sim/run_mem.sh`: every byte the loader sends reads back from SDRAM and
   CRAM, at the loader's fastest rate.
 
-Saves (not yet tried on a Pocket): each game's saves are kept in
+Saves: each game's saves are kept in
 `Saves/ngage/plasticbugs.ngage/<game>.sav` on the card, its phone's C:
 drive, written back a couple of seconds after the game saves and when the
-Pocket's menu opens. Checked in simulation: the whole file read back
+Pocket's menu opens. Checked in simulation (the whole file read back
 through the Pocket's bridge path, and the kernel keeping it on the next
-boot.
+boot), and reported working on a Pocket with v1.2.0's build.
 
 What is not implemented:
 
