@@ -156,6 +156,7 @@ struct chunk {
     u32 reserved;                     /* addresses reserved: max, capped     */
     u32 bottom, top;                  /* committed [bottom, top)             */
     int double_ended;
+    u32 under;                        /* committed below base (FbsLargeChunk) */
 };
 
 struct semaphore { struct kobj o; s32 count; struct thread *waiters; };

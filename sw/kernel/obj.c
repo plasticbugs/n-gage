@@ -193,6 +193,7 @@ static void obj_destroy(struct kobj *o)
         struct chunk *c = (struct chunk *)o;
         extern void vm_release(u32);
         if (c->base) vm_release(c->base);
+        if (c->under) vm_decommit(c->base - c->under, c->under);
     }
     if (o->type == O_TIMER) timer_dequeue((struct ktimer *)o);
     if (o->type == O_CHANNEL) { extern void chan_destroy(struct kobj *); chan_destroy(o); }

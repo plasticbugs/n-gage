@@ -280,6 +280,16 @@ int executor(struct thread *t, u32 attr, u32 a, u32 status)
         if (!k) { r = KErrNoMemory; break; }
         int n = name_arg(a1, name);
         if (n) { obj_set_name(&k->o, name, n); k->o.global = (sub & 1); }
+        /* FbServ's large bitmaps.  Here a game's are the first in it, the
+         * first one's pixels 4 bytes into the chunk.  Rifts reads one row
+         * above a bitmap (6r49.app +0x30050, a scan upward for pixels with
+         * bits 12-15 set) and faulted on the unmapped page below.  On a
+         * phone the idle screen and the menu would have made large bitmaps
+         * before the game, so the row above is someone's pixels (likely;
+         * not seen on a phone).  One zeroed page stands in for them: the
+         * page between reservations, which no reservation takes. */
+        if (n == 13 && u16_eq_fold(name, n, u"FbsLargeChunk", 13) && !vm_commit(k->base - NGVM_PAGE_SIZE, NGVM_PAGE_SIZE))
+            k->under = NGVM_PAGE_SIZE;
         r = put_handle(a, &k->o, towned);
         break;
     }
