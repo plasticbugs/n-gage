@@ -26,7 +26,7 @@ drivers.
 | the kernel | `sw/kernel` | the reference machine, `tools/ngvm/ngvm.py`; six of seven games reach their menus or play |
 | RAM, firmware | Pocket SDRAM (`target/pocket/ngage_mem.sv`) | `sim/run_system.sh`: loaded at the loader's rate, read back byte for byte |
 | memory card | Pocket CRAM (`target/pocket/cram_ctrl.sv`) | the same, with the chip's timing checked cycle by cycle (`sim/cram_model.sv`) |
-| LCD | `rtl/ngvm_lcd.sv`: the framebuffer copied to block RAM when the firmware updates the display | pixel-identical to the reference on the boot screens (`sim/run_system.sh`, 0 of 36,608 differ), and still: three consecutive frames identical |
+| LCD | `rtl/ngvm_lcd.sv`: the framebuffer copied to block RAM when the firmware updates the display; a second raster with the picture turned, for the Analogizer | pixel-identical to the reference on the boot screens (`sim/run_system.sh`, 0 of 36,608 differ), and still: three consecutive frames identical; every dot and sync of both rasters, both ways round (`sim/run_lcd.sh`) |
 | audio | the FIFO in `rtl/ngvm_io.sv`, 1,024 samples (32–64 ms) at the game's rate | sample-for-sample the reference over 9.2 s of Virtua Cop's music, at the FIFO's output (`sim/run_system.sh --wav`) |
 | on-screen keypad | `rtl/ngage_osk.sv`, drawn by `tools/make_osk_panel.py` | every panel pixel matches the generator, each key presses its own bit, and nothing that drives it reaches the game (`sim/run_osk.sh`) |
 
@@ -128,8 +128,18 @@ in the core's own menu (Analogizer, Analogizer Video, SNAC Adapter, SNAC
 Assignment, and H and V Position to centre the picture on the CRT); with
 "Analogizer" off, the default, the core is unchanged.  The Pocket
 powers the cartridge slot for this core: take any game cartridge out first.
-`docs/analogizer.md` has the modes and the controller assignments.  It has
-not yet been tried on an adapter.
+`docs/analogizer.md` has the modes and the controller assignments.
+
+The "Analogizer" list also has **TATE** options, for a CRT stood on its
+side: the CRT gets the picture turned a quarter turn, filling the tube's
+height, while the Pocket keeps it upright (or blank, with "Pocket off").
+Choose "TATE CW" if the tube's top is turned to the right, "TATE CCW" if
+to the left.
+
+It has been tried on one owner's CRT, which lost the picture's bottom
+lines in its overscan. Since then the picture sits 13 lines higher,
+centred as an NES's is, and V Position moves it 16 lines up or 12 down.
+That, and TATE, have been checked in simulation, not yet on a CRT.
 
 ## What goes on the card
 
@@ -189,6 +199,7 @@ sim/run_system.sh --rom SYM.ROM --drive game.img --frames 600 --snap 600
                        # the whole machine on the real memory glue, frames to artifacts/system/
 sim/run_analogizer.sh  # the Analogizer path, read at the cartridge pins
 sim/run_osk.sh         # the on-screen keypad against its generator, pictures to artifacts/osk/
+sim/run_lcd.sh         # the LCD's two rasters, upright and turned, pictures to artifacts/lcd/
 tools/ngvm/ngvm.py --rom SYM.ROM --drive game.img --frames-to DIR
                        # the reference machine, for frames and sound to compare with
 ```

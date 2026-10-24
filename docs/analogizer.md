@@ -24,12 +24,12 @@ core.
 
 | entry | options |
 |---|---|
-| Analogizer | Off (the default), On, On, Pocket off (the picture goes to the CRT only) |
+| Analogizer | Off (the default), On, On, Pocket off (the picture goes to the CRT only), and four TATE options: On, TATE CW; On, TATE CCW; TATE CW, Pocket off; TATE CCW, Pocket off (below) |
 | Analogizer Video | RGBS, RGsB, YPbPr, Y/C NTSC, Y/C PAL, Scandoubler, Scandoubler 25% / 50% / 75%, Scandoubler HQ2x |
 | SNAC Adapter | None, DB15, NES, SNES, PCE 2-button, PCE 6-button, PCE Multitap, DB15 Fast, SNES A,B<->X,Y, PSX Digital, PSX Digital Fast, PSX Analog, PSX Analog Fast |
 | SNAC Assignment | the six below |
 | Analogizer H Position | ±16 dots in the skeleton (**SET** from the core's blanking); + moves the picture right |
-| Analogizer V Position | ±2 lines in the skeleton (**SET**); + moves the picture down |
+| Analogizer V Position | −16 to +12 lines (the skeleton's was ±2); + moves the picture down |
 | Analogizer H Size | optional, for a core with menu room (the skeleton has none): percent, + wider; 15 kHz modes only |
 
 With **Analogizer** off the core behaves exactly as it did without Analogizer
@@ -56,8 +56,9 @@ still the set's to adjust. 0 is the board's own timing.
 
 **Video.** The core sends the board's own signal, at the board's own line
 and frame rate -- the timing a 15 kHz arcade monitor or a PVM expects. (**SET**
-the numbers in the core's copy: the skeleton's is 320 × 224 visible, 452 × 253
-dots at 6.857 MHz, 15.17 kHz, 59.96 Hz.)
+the numbers in the core's copy.) Here it is the N-Gage's 176 × 208 of 452 × 253
+dots at 6.857 MHz, 15.17 kHz, 59.96 Hz: a narrow picture on a CRT, in the
+middle of the scan vertically.
 
 | mode | SOG switch | notes |
 |---|---|---|
@@ -69,6 +70,17 @@ dots at 6.857 MHz, 15.17 kHz, 59.96 Hz.)
 
 "On, Pocket off" turns the Pocket's own picture black while the CRT keeps
 it.
+
+**TATE.** The N-Gage's screen is taller than it is wide, so on a CRT stood
+on its side the picture can fill the tube's height. The TATE options send
+the CRT the picture turned a quarter turn: one CRT line for each column of
+the picture and one dot for each row, 176 lines of 208 dots, in a raster
+of its own (382 × 262 dots at 6 MHz, 15.71 kHz, 59.95 Hz). Choose **TATE
+CW** for a tube turned clockwise (its top to the right) and **TATE CCW**
+for one turned anticlockwise. The Pocket's own screen stays upright, or
+black with "Pocket off". The on-screen keypad is turned with the picture;
+the bring-up panel is not drawn on it. The position sliders work as
+before, along the tube's own lines.
 
 **A board that is not 15 kHz.** Some boards drew a medium-resolution (25 kHz)
 or VGA-rate (31 kHz) picture. Sent as it is, a 15 kHz monitor shows it as two
@@ -137,6 +149,8 @@ own field (or fields), so the four entries share the word:
 | 13:10 | video | 0 RGBS, 1 RGsB, 2 YPbPr, 3 Y/C NTSC, 4 Y/C PAL, 5–9 scandoubler 0/25/50/75%/HQ2x |
 | 14 | blank the Pocket screen | |
 | 15 | OSD on the Analogizer output | not used by the template; no menu entry |
+| 16 | TATE: the turned raster | this core's; the adapter module ignores it, `core_top` decodes it from the bridge write with the enable, as "Sharp" is decoded below |
+| 17 | TATE anticlockwise | with bit 16 |
 
 **Read-back.** The word is written as a number (the adapter module is told
 `bridge_endian_little = 1`, so it does not byte-swap it as it would a file),
@@ -177,7 +191,9 @@ later until the Y/C colour burst, which ends about 3.5 µs after hsync
 does (28 dots at 8 MHz), would reach the picture. Vsync may move either
 way until it reaches a picture line. The skeleton's raster leaves 24 dots
 before hsync and 2 lines before vsync, hence ±16 and ±2; Moo Mesa's gives
-±24 and ±16. `sim/run_analogizer.sh` tries both ends of the range in
+±24 and ±16. This core's leaves 16 lines before vsync and 26 after it,
+and the turned raster 36 and 47: −16 to +12 keeps vsync at least 4
+lines from the picture in both. `sim/run_analogizer.sh` tries both ends of the range in
 `interact.json` and fails if csync is low while a dot is drawn.
 
 **Picture width.** `0xF700000C`, a signed slider in percent, scales the
@@ -425,6 +441,15 @@ place of `cont1..4_key`. **Wherever a core reads `cont*_key` directly**
   source's, and every ring read the right pair; a `DELAY` a line outside
   the measured window on either side fails. Its Quartus 18.1 parse was
   checked inside Atari System 2 (`./build-local.sh map`).
+- This core's `sim/run_analogizer.sh` runs twice, at the upright raster
+  and at the turned one (`+define+TATE`), and both pass. Upright: 36,608
+  dots in 208 lines, 0 differ; csync to the picture 29 lines at 0, 41 at
+  V +12 and 13 at −16. Turned: 36,608 dots in 176 lines, 0 differ; 50
+  lines at 0, 62 and 34. Every one of the menu's 36 options is set by
+  read-merge-write and seen by the adapter. `sim/run_lcd.sh` checks that
+  the turned raster shows each place of the picture where it should, and
+  `sim/run_osk.sh` that the keypad's turned lookup agrees with its upright
+  one at every dot.
 - `sim/lint.sh`: the wrapper lints clean, as built and with `SAME_CLK`,
   `USE_YC = 0` and `USE_SD = 0`; so does `ana_15k`. The vendored files' warnings are
   dropped by path; their errors are not.

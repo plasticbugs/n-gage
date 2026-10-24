@@ -227,7 +227,9 @@ order — each step's reading tells the next where to look
 2. **Menu: Analogizer On, Video RGBS, SNAC Adapter None.**
    The same picture on the Pocket and the CRT, at 15.17 kHz and 59.96 Hz.
    The picture is 176 dots of a 452-dot line, so it is narrow on a CRT.
-   The bring-up panel shows on the CRT too. No picture: say whether the CRT
+   Vertically it should sit in the middle, with all 208 lines in view and
+   nothing lost at the top or the bottom edge. The bring-up panel shows on
+   the CRT too. No picture: say whether the CRT
    reports a signal (sync but no colour points at the DAC clock; nothing at
    all points at sync).
 3. **Each other video mode in turn** (RGsB and YPbPr need the SOG switch on).
@@ -236,7 +238,14 @@ order — each step's reading tells the next where to look
    The setting, and Analogizer On, should still be there.
 6. **Position**: "Analogizer V Position" + should move the picture down
    by that many lines, + on "H Position" to the right, and both should be
-   kept across a reload.
+   kept across a reload. V Position runs from −16 to +12.
+7. **TATE**, with the CRT stood on its side: "On, TATE CW" for a tube
+   turned clockwise, "On, TATE CCW" for anticlockwise. The picture should
+   come up the right way round, filling the tube's height, at 15.71 kHz
+   and 59.95 Hz, with the Pocket's screen still upright. Upside down means
+   the other TATE option; mirrored would be a fault (say which way). The
+   keypad (SELECT + R) should be turned with the picture; the bring-up
+   panel is not on the turned picture.
 
 ## Log
 
@@ -329,3 +338,9 @@ that died belong here as much as the one that lived.
   play. Not reported: how the speed compares on the Pocket, the
   on-screen keypad, Puzzle Bobble's sound, and the games that played on
   the alphas.
+- 2026-10-23, the same build (v1.0.0), through an Analogizer to a CRT:
+  the bottom 4 or 5 lines of the picture are cut off, even with V
+  Position at its end. That raster put vsync 3 lines after the picture,
+  so the picture's bottom sat where an NES's bottom overscan is, and the
+  slider's ±2 could not lift it clear. Not reported: the video mode,
+  the CRT, whether the top or the sides were also lost.

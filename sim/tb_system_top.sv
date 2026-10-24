@@ -140,6 +140,8 @@ module tb_system_top #(
         .keys(keys), .keymap(keymap), .rom_size(rom_size), .drive_size(drive_size),
         .rgb(rgb_c), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank),
         .pix_ce(pix_ce), .de(de),
+        .tate(2'b00), .t_cen(), .t_rgb(), .t_hsync(), .t_vsync(), .t_hblank(), .t_vblank(), .t_de(),
+        .t_gx(), .t_gy(), .t_vis(),
         .snd(snd), .snd_tog(snd_tog),
         .dbg_pc(dbg_pc), .dbg_chars(), .dbg_exited(), .dbg_lcd_on()
     );

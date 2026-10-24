@@ -6,6 +6,21 @@
 // The raster is the template's, 452 x 253 dots at 96 / 14 MHz (59.96 Hz,
 // 15.17 kHz lines, so the Analogizer's 15 kHz path takes it as it is), with
 // the picture in its top-left corner: dots 0-175 of lines VIS_Y0 on.
+// Vsync comes 16 lines after the picture and 29 before it, which puts the
+// picture's middle 53% of the way down a CRT's scan, where an NES's is: with
+// vsync 3 lines after it, as the template had it, a CRT lost the bottom
+// lines to its overscan.
+//
+// A second raster, for the Analogizer only, shows the picture turned a
+// quarter turn, for a CRT standing on its side (TATE): 208 dots a line, one
+// for each of the picture's rows, and 176 lines, one for each column, from
+// the same store.  382 x 262 dots at 96 / 16 MHz (15.71 kHz, 59.95 Hz), the
+// dot near the square one on a 4:3 tube, the picture in the middle of the
+// scan both ways.  `tate` 1 is for a CRT turned clockwise (its top to the
+// right: the first line is the picture's right column, read top to bottom),
+// 2 for one turned anticlockwise (the left column, bottom to top).  The two
+// rasters take turns at the store's read port, a clock each: a dot is 14 or
+// 16 clocks, and either one's pixel is read within 6 of its address.
 //
 // The phone's display keeps its own copy of the picture, which the firmware
 // sends it when the window server updates the screen (sw/kernel/chan.c).
@@ -51,13 +66,27 @@ module ngvm_lcd (
     input  logic        l_done,
 
     output logic [23:0] rgb,
-    output logic        hsync, vsync, hblank, vblank, de
+    output logic        hsync, vsync, hblank, vblank, de,
+
+    // the turned raster (header), for the Analogizer: everything changes on
+    // t_cen, and t_gx, t_gy are the picture's column and row for the dot
+    // that the next t_cen shows, for the on-screen keypad (ngage_osk.sv)
+    input  logic  [1:0] tate,           // 1 clockwise, 2 anticlockwise; static
+    output logic        t_cen,
+    output logic [23:0] t_rgb,
+    output logic        t_hsync, t_vsync, t_hblank, t_vblank, t_de,
+    output logic  [7:0] t_gx, t_gy,
+    output logic        t_vis           // that dot is in the picture
 );
     localparam int HTOTAL = 452, VTOTAL = 253;
     localparam int W = 176, H = 208;
     localparam int VIS_Y0 = 24, VIS_Y1 = VIS_Y0 + H - 1;
     localparam int HS0 = 300, HS1 = 332;            // hsync, dots
-    localparam int VS0 = VIS_Y1 + 4, VS1 = VS0 + 3; // vsync, lines
+    localparam int VS0 = VIS_Y1 + 17, VS1 = VS0 + 3; // vsync, lines (header)
+    // the turned raster: lines and dots from the picture's first
+    localparam int T_DIV = 16, T_HTOTAL = 382, T_VTOTAL = 262;
+    localparam int T_HS0 = 271, T_HS1 = 299;        // 4.7 us
+    localparam int T_VS0 = 212, T_VS1 = 215;
 
     // ------------------------------------------------------------ raster
     logic [8:0] hpos, vpos;
@@ -126,20 +155,63 @@ module ngvm_lcd (
         if (l_wr &&  wa[15]) st_hi[wa[11:0]] <= l_data[11:0];
     end
 
+    // ------------------------------------------------------- the turned raster
+    logic [3:0] t_div;
+    logic [8:0] t_h, t_v;
+    assign t_cen = t_div == 4'(T_DIV - 1);
+    always_ff @(posedge clk) begin
+        if (rst) begin t_div <= '0; t_h <= '0; t_v <= '0; end
+        else begin
+            t_div <= t_div + 4'd1;
+            if (t_cen) begin
+                if (t_h == 9'(T_HTOTAL - 1)) begin
+                    t_h <= '0;
+                    t_v <= (t_v == 9'(T_VTOTAL - 1)) ? 9'd0 : t_v + 9'd1;
+                end else t_h <= t_h + 9'd1;
+            end
+        end
+    end
+    wire t_vis_x = t_h < 9'(H), t_vis_y = t_v < 9'(W);
+    // the dot's place in the picture: a line is a column, a dot a row
+    always_ff @(posedge clk) begin
+        t_gx  <= tate[1] ? 8'(t_v) : 8'(9'(W - 1) - t_v);
+        t_gy  <= tate[1] ? 8'(9'(H - 1) - t_h) : 8'(t_h);
+        t_vis <= t_vis_x && t_vis_y;
+    end
+
     // ------------------------------------------------------------ the picture
-    // y and hpos hold for 14 clocks: the pixel is read long before the
-    // cen_pix that shows it
-    logic [15:0] row, ra;
-    logic [11:0] q_lo, q_hi;
-    logic        q_sel;
+    // y and hpos hold for 14 clocks, t_gx and t_gy for 16: each pixel is read
+    // long before the enable that shows it.  The read port is the upright
+    // raster's on even clocks and the turned one's on odd.
+    logic [15:0] row, ra, ta, rd_a;
+    logic [11:0] q_lo, q_hi, px, t_px;
+    logic        q_sel, ph, rd_t, q_t;
     always_ff @(posedge clk) begin
         row   <= 16'(y) * 16'(W);
         ra    <= row + 16'(hpos);
-        q_lo  <= st_lo[ra[14:0]];
-        q_hi  <= st_hi[ra[11:0]];
-        q_sel <= ra[15];
+        ta    <= 16'(t_gy) * 16'(W) + 16'(t_gx);
+        ph    <= ~ph;
+        rd_a  <= ph ? ta : ra;
+        rd_t  <= ph;
+        q_lo  <= st_lo[rd_a[14:0]];
+        q_hi  <= st_hi[rd_a[11:0]];
+        q_sel <= rd_a[15];
+        q_t   <= rd_t;
+        if (q_t) t_px <= q_sel ? q_hi : q_lo;
+        else     px   <= q_sel ? q_hi : q_lo;
     end
-    wire [11:0] px = q_sel ? q_hi : q_lo;
+
+    always_ff @(posedge clk) begin
+        if (t_cen) begin
+            t_rgb    <= (t_vis && on && shown) ? {t_px[11:8], t_px[11:8], t_px[7:4], t_px[7:4], t_px[3:0], t_px[3:0]}
+                                               : 24'h000000;
+            t_de     <= t_vis;
+            t_hblank <= !t_vis_x;
+            t_hsync  <= t_h >= 9'(T_HS0) && t_h < 9'(T_HS1);
+            t_vblank <= !t_vis_y;
+            t_vsync  <= t_v >= 9'(T_VS0) && t_v < 9'(T_VS1);
+        end
+    end
 
     always_ff @(posedge clk) begin
         if (cen_pix) begin
@@ -153,7 +225,7 @@ module ngvm_lcd (
         end
     end
 
-    wire _unused = &{1'b0, base_s1[31:25], base_s1[0], l_data[15:12], 1'b0};
+    wire _unused = &{1'b0, base_s1[31:25], base_s1[0], l_data[15:12], tate[0], 1'b0};
 endmodule
 
 `default_nettype wire

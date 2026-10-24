@@ -124,11 +124,15 @@
         "persist": true,
         "address": "0xF7000000",
         "defaultval": 0,
-        "mask": "0xFFFFBFDF",
+        "mask": "0xFFFCBFDF",
         "options": [
           {"name": "Off", "value": "0x0000"},
           {"name": "On", "value": "0x0020"},
-          {"name": "On, Pocket off", "value": "0x4020"}
+          {"name": "On, Pocket off", "value": "0x4020"},
+          {"name": "On, TATE CW", "value": "0x10020"},
+          {"name": "On, TATE CCW", "value": "0x30020"},
+          {"name": "TATE CW, Pocket off", "value": "0x14020"},
+          {"name": "TATE CCW, Pocket off", "value": "0x34020"}
         ]
       },
       {
@@ -214,7 +218,7 @@
         "persist": true,
         "address": "0xF7000008",
         "defaultval": 0,
-        "graphical": {"signed": true, "min": -2, "max": 2, "adjust_small": 1, "adjust_large": 4}
+        "graphical": {"signed": true, "min": -16, "max": 12, "adjust_small": 1, "adjust_large": 4}
       }
     ]
   }

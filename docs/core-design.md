@@ -60,9 +60,39 @@ bench need no converter:
 
 - 452 × 253 dots at 6.857 MHz: 59.96 Hz, with lines at 15.17 kHz.
 - Visible: 176 × 208, in dots 0–175 of lines 24–231.
-- Hsync is on dots 300–331. Vsync is on lines 235–237.
+- Hsync is on dots 300–331. Vsync is on lines 248–250.
+  - That leaves 16 lines after the picture and 29 before it, so the
+    picture's middle is 53% of the way down a CRT's scan, where an NES's
+    is.
+  - The template's vsync came 3 lines after the picture (lines 235–237).
+    On a CRT over the Analogizer that put the bottom lines in the
+    overscan, out of reach of the V Position slider's ±2.
 - The LCD's frame pulse (NGVM's vblank) comes at line 232. It sets
   `IRQ_VBLANK`.
+
+**The turned raster (TATE)**, for the Analogizer only, shows the picture
+a quarter turn round for a CRT stood on its side. `ngvm_lcd` scans it
+from the same frame store:
+
+- 382 × 262 dots at 6 MHz (96 / 16): 15.71 kHz, 59.95 Hz.
+- One line per picture column (176) and one dot per row (208), so the
+  dot is near square on a 4:3 tube.
+- Picture at dots 0–207 of lines 0–175. Hsync is on dots 271–298 and
+  vsync on lines 212–214, which puts the picture in the middle of the
+  scan both ways.
+- Clockwise (`tate` 1, the tube's top turned to the right): line v is
+  column 175 − v, read from row 0 down. Anticlockwise (2): line v is
+  column v, read from row 207 up.
+- The store's one read port takes the two rasters in turn, a clock each.
+  A dot is 14 or 16 clocks, and each raster's pixel is read within six
+  of its address.
+- The keypad looks up the turned picture's dots by their place in the
+  picture (`t_gx`, `t_gy`), with the second port of its bitmap's RAM.
+  The bring-up panel is not drawn on it.
+- `core_top` gives the Analogizer the turned raster when the menu's
+  "Analogizer" list has bit 16 of the settings word set (bit 17:
+  anticlockwise; docs/analogizer.md). The Pocket's own screen keeps the
+  upright picture.
 
 **After the LCD**, in `core_top`, all in `clk_sys` and each registered
 on the dot enable:

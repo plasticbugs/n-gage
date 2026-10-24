@@ -982,6 +982,21 @@ module core_top
 
     wire        g_pix_ce, g_hs, g_vs, g_de, g_vb, g_hb;
     wire [23:0] g_rgb;
+    wire        t_cen, t_hs, t_vs, t_vb, t_hb, t_vis;
+    wire [23:0] t_rgb;
+    wire  [7:0] t_gx, t_gy;
+
+    //! TATE: the "Analogizer" list's "On, TATE ..." options set bit 16 of
+    //! the settings word, and bit 17 for a CRT turned anticlockwise.  The
+    //! adapter module ignores both (docs/analogizer.md, the settings word);
+    //! they are taken here from the bridge write, with the enable, and the
+    //! LCD makes the turned raster the Analogizer then shows (ngvm_lcd.sv).
+    reg  [1:0] tate_74 = 2'd0;
+    always @(posedge clk_74a)
+        if (bridge_wr && bridge_addr == 32'hF7000000)
+            tate_74 <= !(bridge_wr_data[5] && bridge_wr_data[16]) ? 2'd0 : bridge_wr_data[17] ? 2'd2 : 2'd1;
+    reg  [1:0] tate_m = 2'd0, tate_s = 2'd0;
+    always @(posedge clk_sys) begin tate_m <= tate_74; tate_s <= tate_m; end
     wire [31:0] g_snd;
     wire        g_snd_tog;
     wire [31:0] g_dbg_pc, g_dbg_chars;
@@ -1010,6 +1025,9 @@ module core_top
         .keys(g_keys), .keymap(g_keymap), .rom_size(rom_size), .drive_size(drive_size),
         .rgb(g_rgb), .hsync(g_hs), .vsync(g_vs),
         .hblank(g_hb), .vblank(g_vb), .pix_ce(g_pix_ce), .de(g_de),
+        .tate(tate_s), .t_cen(t_cen), .t_rgb(t_rgb),
+        .t_hsync(t_hs), .t_vsync(t_vs), .t_hblank(t_hb), .t_vblank(t_vb), .t_de(),
+        .t_gx(t_gx), .t_gy(t_gy), .t_vis(t_vis),
         .snd(g_snd), .snd_tog(g_snd_tog),
         .dbg_pc(g_dbg_pc), .dbg_chars(g_dbg_chars), .dbg_exited(g_exited), .dbg_lcd_on(g_lcd_on)
     );
@@ -1036,14 +1054,20 @@ module core_top
     //! LCD's, so the mux below sees the two together.
     //! ------------------------------------------------------------------
     wire osk_visible, osk_active, osk_pix, osk_held;
+    wire osk_t_active, osk_t_pix, osk_t_held;
     ngage_osk u_osk (
         .clk(clk_sys), .rst(g_reset), .cen_pix(g_pix_ce), .de(g_de), .vsync(g_vs),
         .pad(g_pad), .keys(g_keys),
-        .visible(osk_visible), .active(osk_active), .pix(osk_pix), .held(osk_held)
+        .visible(osk_visible), .active(osk_active), .pix(osk_pix), .held(osk_held),
+        .t_cen(t_cen), .t_vis(t_vis), .t_gx(t_gx), .t_gy(t_gy),
+        .t_active(osk_t_active), .t_pix(osk_t_pix), .t_held(osk_t_held)
     );
     //! white keys on black, the key being pressed amber
     wire [23:0] osk_rgb = !osk_pix ? 24'h000000 : osk_held ? 24'hFFC000 : 24'hFFFFFF;
     wire [23:0] pic_rgb = osk_active ? osk_rgb : g_rgb;
+    //! and on the turned picture, which has no bring-up panel
+    wire [23:0] osk_t_rgb = !osk_t_pix ? 24'h000000 : osk_t_held ? 24'hFFC000 : 24'hFFFFFF;
+    wire [23:0] t_pic_rgb = osk_t_active ? osk_t_rgb : t_rgb;
 
     //! ------------------------------------------------------------------
     //! The bring-up panel (rtl/dbg_overlay.sv, METHODOLOGY section 5.21), on
@@ -1123,14 +1147,24 @@ module core_top
     //! scandoubler's line buffer: too short and the right of every doubled
     //! line is lost), and CLK_HZ to clk_ana's frequency.  sim/tb_analogizer.sv
     //! carries the same raster at its top: change the two together.
+    //! With TATE on, the source is the LCD's turned raster instead (382 dots
+    //! a line, inside LINE_LEN), registered on its own enable as the upright
+    //! one is on g_pix_ce; the switch is a frame's glitch on the CRT.
     //! ------------------------------------------------------------------
+    wire        a_tate = tate_s != 2'd0;
+    wire        a_ce   = a_tate ? t_cen : g_pix_ce;
+    wire [23:0] a_rgb  = a_tate ? t_pic_rgb : {ovl_r, ovl_g, ovl_b};
+    wire        a_hs   = a_tate ? t_hs : g_hs;
+    wire        a_vs   = a_tate ? t_vs : g_vs;
+    wire        a_hb   = a_tate ? t_hb : g_hb;
+    wire        a_vb   = a_tate ? t_vb : g_vb;
     generate
         if(USE_ANALOGIZER == 1) begin : analogizer
             pocket_analogizer #(.CLK_HZ(48_000_000), .LINE_LEN(452)) u_analogizer (
                 .clk_74a(clk_74a), .clk(clk_ana), .rst(g_reset),
-                .clk_src(clk_sys), .src_pix_ce(g_pix_ce),
-                .src_rgb({ovl_r, ovl_g, ovl_b}),
-                .src_hs(g_hs), .src_vs(g_vs), .src_hb(g_hb), .src_vb(g_vb),
+                .clk_src(clk_sys), .src_pix_ce(a_ce),
+                .src_rgb(a_rgb),
+                .src_hs(a_hs), .src_vs(a_vs), .src_hb(a_hb), .src_vb(a_vb),
                 .bridge_addr(bridge_addr),
                 .bridge_rd(bridge_rd), .bridge_rd_data(ana_bridge_rd_data),
                 .bridge_wr(bridge_wr), .bridge_wr_data(bridge_wr_data),

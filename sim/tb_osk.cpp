@@ -7,10 +7,16 @@
 //
 // The bench is the LCD's raster (rtl/ngvm_lcd.sv, docs/core-design.md 2):
 // 452 x 253 dots, one every 14 clocks, 176 x 208 visible from line 24,
-// vsync on lines 235-237, and de and vsync changing at the cen_pix edge that
+// vsync on lines 248-250, and de and vsync changing at the cen_pix edge that
 // starts each dot, as the LCD registers them.  The keypad's outputs for a dot
 // are read just after that edge, which is when core_top's mux sees them
 // beside the LCD's colour for the same dot.
+//
+// The turned picture's lookup (TATE, for the Analogizer) is asked about the
+// same dot by its place, t_gx and t_gy, with t_cen a clock before the next
+// cen_pix, and must answer as the upright one did, at every dot of every
+// frame the bench runs.  Where the turned raster puts each place is the
+// LCD's bench's business (sim/tb_lcd.cpp).
 //
 // IO_KEYS is read where the kernel reads it, once a frame at line 232 (the
 // LCD's frame pulse, NGVM's vblank), and also watched at every clock, so a
@@ -29,7 +35,7 @@
 #include <vector>
 
 static const int W = 176, H = 208, HTOTAL = 452, VTOTAL = 253, VIS_Y0 = 24;
-static const int VS0 = 235, VS1 = 238, POLL_LINE = 232, DOT = 14;
+static const int VS0 = 248, VS1 = 251, POLL_LINE = 232, DOT = 14;
 static const int X0 = 52, Y_LOW = 124, Y_HIGH = 4, PW = 72, PH = 80, CW = 24, CH = 16;
 static const int MAP_BASE = 0x2D0;
 enum { K_UP, K_DOWN, K_LEFT, K_RIGHT, K_A, K_B, K_X, K_Y, K_L, K_R, K_SELECT, K_START };
@@ -42,6 +48,7 @@ static unsigned pad = 0;                    // the buttons held
 static uint32_t keys_or = 0;                // every IO_KEYS bit seen at any clock since cleared
 static std::vector<uint32_t> polls;         // IO_KEYS where the kernel reads it, a frame each
 static int bad = 0;
+static long t_dots = 0, t_wrong = 0;        // the turned lookup: dots asked, answers unlike the upright one's
 
 static void tick() {
     dut->pad = pad;
@@ -56,7 +63,7 @@ struct Pic {
 };
 
 // n lines of raster from where the last call left it; the keypad acts on the
-// pad once a frame, at line 235
+// pad once a frame, at vsync (line 248)
 static int at_line = 0;
 static void lines(int n, Pic *p = nullptr) {
     for (; n > 0; n--, at_line = (at_line + 1) % VTOTAL)
@@ -67,13 +74,22 @@ static void lines(int n, Pic *p = nullptr) {
             dut->de = (h < W && line >= VIS_Y0 && line < VIS_Y0 + H);
             dut->vsync = (line >= VS0 && line < VS1);
             dut->cen_pix = 0;
+            bool vis = dut->de;
+            dut->t_vis = vis; dut->t_gx = vis ? h : 0; dut->t_gy = vis ? line - VIS_Y0 : 0;
             dut->eval();
-            if (p && dut->de) {
+            int act = dut->active, pix = dut->pix, held = dut->held;
+            if (p && vis) {
                 int i = (line - VIS_Y0) * W + h;
-                p->act[i] = dut->active; p->pix[i] = dut->pix; p->held[i] = dut->held;
+                p->act[i] = act; p->pix[i] = pix; p->held[i] = held;
             }
             if (h == 0 && line == POLL_LINE) polls.push_back(dut->keys);
-            for (int c = 1; c < DOT; c++) tick();
+            for (int c = 1; c < DOT; c++) { dut->t_cen = c == DOT - 1; tick(); }
+            dut->t_cen = 0;
+            t_dots += vis;
+            if (dut->t_active != act || (act && (dut->t_pix != pix || dut->t_held != held))) {
+                if (t_wrong++ < 6) printf("  turned lookup at (%d, line %d): %d%d%d, upright %d%d%d\n", h, line,
+                                          dut->t_active, dut->t_pix, dut->t_held, act, pix, held);
+            }
         }
 }
 // one frame, from line 0
@@ -348,7 +364,7 @@ int main(int argc, char **argv) {
     const unsigned SR = (1u << K_SELECT) | (1u << K_R);
     pad = SR; frame(); pad = 0; frames(2);             // put it away
     keys_or = 0;
-    lines(234);
+    lines(VS0 - 1);
     pad = 1u << K_SELECT; lines(3 * VTOTAL - 2);
     pad |= 1u << K_R;     frames(2);
     pad = 0;              frames(2);
@@ -356,12 +372,16 @@ int main(int argc, char **argv) {
           "R 3 frames less 2 lines after SELECT: the chord, and neither sent");
     pad = SR; frame(); pad = 0; frames(2);
     keys_or = 0;
-    lines(234);
+    lines(VS0 - 1);
     pad = 1u << K_SELECT; lines(3 * VTOTAL + 2);
     pad |= 1u << K_R;     frames(2);
     pad = 0;              frames(2);
     check(dut->visible && (keys_or & SR) == (1u << K_SELECT),
           "3 frames and 2 lines: SELECT was sent as #, as a press of its own");
+
+    char twhat[120];
+    snprintf(twhat, sizeof twhat, "the turned lookup: %ld picture dots, %ld unlike the upright", t_dots, t_wrong);
+    check(t_dots > 0 && t_wrong == 0, twhat);
 
     delete dut;
     printf(bad ? "FAIL (%d)\n" : "PASS\n", bad);

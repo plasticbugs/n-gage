@@ -71,6 +71,14 @@ module ngage_core #(
     output logic         hsync, vsync, hblank, vblank,
     output logic         pix_ce, de,
 
+    // ---------------- the picture turned, for the Analogizer (ngvm_lcd.sv)
+    input  logic   [1:0] tate,          // 0 off, 1 clockwise, 2 anticlockwise
+    output logic         t_cen,
+    output logic  [23:0] t_rgb,
+    output logic         t_hsync, t_vsync, t_hblank, t_vblank, t_de,
+    output logic   [7:0] t_gx, t_gy,
+    output logic         t_vis,
+
     // ---------------- sound, in clk_cpu's domain: L 15:0, R 31:16, signed
     output logic  [31:0] snd,
     output logic         snd_tog,
@@ -152,7 +160,10 @@ module ngage_core #(
         .lcd_base(lcd_base), .lcd_on(lcd_on), .show(show), .frame(frame),
         .l_req(l_req), .l_addr(l_addr), .l_len(l_len),
         .l_wr(l_wr), .l_idx(l_idx), .l_data(l_data), .l_done(l_done),
-        .rgb(rgb), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank), .de(de)
+        .rgb(rgb), .hsync(hsync), .vsync(vsync), .hblank(hblank), .vblank(vblank), .de(de),
+        .tate(tate), .t_cen(t_cen), .t_rgb(t_rgb),
+        .t_hsync(t_hsync), .t_vsync(t_vsync), .t_hblank(t_hblank), .t_vblank(t_vblank), .t_de(t_de),
+        .t_gx(t_gx), .t_gy(t_gy), .t_vis(t_vis)
     );
     always_ff @(posedge clk) if (frame) frame_t <= !frame_t;
 

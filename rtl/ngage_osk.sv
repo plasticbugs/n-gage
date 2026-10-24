@@ -58,7 +58,15 @@ module ngage_osk #(
     output logic        visible,        // the keypad is up and has the pad
     output logic        active,         // this dot is the panel's,
     output logic        pix,            // it is lit,
-    output logic        held            // and its key is down
+    output logic        held,           // and its key is down
+
+    // the same three for the turned raster (ngvm_lcd.sv, the Analogizer's
+    // TATE picture), looked up by place: t_gx, t_gy are the picture's column
+    // and row of the dot the next t_cen shows, and the outputs are
+    // registered on that t_cen, as the turned raster's colour is
+    input  logic        t_cen, t_vis,
+    input  logic  [7:0] t_gx, t_gy,
+    output logic        t_active, t_pix, t_held
 );
     localparam int CW = 24, CH = 16;            // a cell
     localparam int PW = 3 * CW, PH = 5 * CH;    // the panel, 72 x 80
@@ -246,6 +254,37 @@ module ngage_osk #(
             active <= visible && de && in_x && in_y;
             pix    <= bit_ ^ (inner && on_cursor);
             held   <= on_down;
+        end
+    end
+
+    // ------------------------------------------------ the turned picture's
+    // The same lookup at the turned raster's place (its own read of the
+    // bitmap), for the dot this one's own column and row name
+    wire  [8:0] t_xn   = {1'b0, t_gx};
+    wire        t_in_x = (t_xn >= 9'(X0)) && (t_xn < 9'(X0 + PW));
+    wire        t_in_y = ({1'b0, t_gy} >= yt) && ({1'b0, t_gy} < yt + 9'(PH));
+    wire  [6:0] t_px   = 7'(t_xn - 9'(X0));
+    wire  [6:0] t_py   = 7'({1'b0, t_gy} - yt);
+    logic [9:0] t_rom_a;
+    logic [7:0] t_rom_q;
+    always_ff @(posedge clk) begin
+        t_rom_a <= {t_py, 3'b000} + {3'b000, t_py} + {6'd0, t_px[6:3]};
+        t_rom_q <= rom[t_rom_a];
+    end
+    wire [1:0] t_col   = (t_px < 7'(CW)) ? 2'd0 : (t_px < 7'(2 * CW)) ? 2'd1 : 2'd2;
+    wire [6:0] t_lx    = t_px - ({2'b00, t_col, 3'b000} + {1'b0, t_col, 4'b0000});
+    wire [2:0] t_row   = t_py[6:4];
+    wire [3:0] t_ly    = t_py[3:0];
+    wire       t_inner = (t_lx >= 7'd2) && (t_lx <= 7'd21) && (t_ly >= 4'd2) && (t_ly <= 4'd13);
+    wire       t_on_cursor = (t_row == cy) && (t_col == cx);
+    wire       t_on_down   = down && (t_row == krow) && (t_col == kcol);
+    wire       t_bit       = t_rom_q[3'd7 - t_px[2:0]];
+
+    always_ff @(posedge clk) begin
+        if (t_cen) begin
+            t_active <= visible && t_vis && t_in_x && t_in_y;
+            t_pix    <= t_bit ^ (t_inner && t_on_cursor);
+            t_held   <= t_on_down;
         end
     end
 endmodule

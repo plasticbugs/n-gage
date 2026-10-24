@@ -33,13 +33,25 @@
 module tb_analogizer;
     // ------------------------------------------- the core's raster: SET THESE
     // to the core's (its video module, and core_top's pocket_analogizer
-    // parameters).  NGVM's LCD: rtl/ngvm_lcd.sv, 6.857 MHz dots from 96 MHz.
+    // parameters).  NGVM's LCD: rtl/ngvm_lcd.sv, 6.857 MHz dots from 96 MHz;
+    // with +define+TATE its turned raster, which core_top gives the
+    // Analogizer for the "TATE" options, 6 MHz dots (sim/run_analogizer.sh
+    // runs both).
+`ifndef TATE
     localparam int DIV    = 14;           // system clocks a dot
     localparam int HTOTAL = 452, VTOTAL = 253;
     localparam int X0 = 0,   X1 = 175;    // visible dots, inclusive
     localparam int Y0 = 24,  Y1 = 231;    // visible lines, inclusive
     localparam int HS0 = 300, HS1 = 332;  // hsync [HS0, HS1)
-    localparam int VS0 = 235, VS1 = 238;  // vsync [VS0, VS1)
+    localparam int VS0 = 248, VS1 = 251;  // vsync [VS0, VS1)
+`else
+    localparam int DIV    = 16;
+    localparam int HTOTAL = 382, VTOTAL = 262;
+    localparam int X0 = 0,   X1 = 207;
+    localparam int Y0 = 0,   Y1 = 175;
+    localparam int HS0 = 271, HS1 = 299;
+    localparam int VS0 = 212, VS1 = 215;
+`endif
     localparam int CLK_HZ = 48_000_000;   // the Analogizer's clock: clk_sys / 2
     localparam int W = X1 - X0 + 1, H = Y1 - Y0 + 1;
     localparam int APD = DIV / 2;         // Analogizer clocks a dot
@@ -198,6 +210,12 @@ module tb_analogizer;
     task automatic frame_start();
         @(posedge clk_src iff (pix_ce && hpos == 10'(HTOTAL - 1) && vpos == 10'(VTOTAL - 1)));
     endtask
+    // the end of the line four before the picture's first: a raster whose
+    // picture starts on line 0 (the turned one) has it straight after
+    // frame_start, inside the pipeline's latency
+    task automatic picture_start();
+        @(posedge clk_src iff (pix_ce && hpos == 10'(HTOTAL - 1) && vpos == 10'((Y0 + VTOTAL - 5) % VTOTAL)));
+    endtask
 
     // ------------------------------------------------------------- checks
     // RGBS: collect the visible pixels as the DAC samples them (on clk) and
@@ -214,7 +232,7 @@ module tb_analogizer;
                 logic [23:0] c = colour(10'(x), 10'(y));
                 exp_q.push_back({c[23:18], c[15:10], c[7:2]});
             end
-        frame_start();
+        picture_start();
         repeat (2000) @(posedge clk);       // the pipeline's own latency, well inside vblank
         n = 0; bad = 0; run = 0; prev = 18'h3ffff; line_px = 0; lines = 0;
         was_blank = 1'b1; cs_prev = 1'b1; cs_lo = 0; cs_runs = 0; cs_bad = 0;
