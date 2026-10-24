@@ -15,9 +15,9 @@ A small C kernel (`sw/kernel`) stands in for the phone's EKA1 kernel and
 drivers.
 
 > **No firmware or games are included, and none ever will be.** You supply
-> the phone's firmware (`sym.rom`) and the games' memory cards, built with
-> `mkdrive.py`: "What goes on the card", below, says where to get the
-> firmware and where each file goes.
+> the phone's firmware (`sym.rom`) and the games' memory cards, built by the
+> page that comes with the core or by `mkdrive.py`: "What goes on the card",
+> below, says where to get the firmware and where each file goes.
 
 | part | implementation | verified by |
 |---|---|---|
@@ -177,18 +177,37 @@ file is byte-for-byte the firmware this core was built and tested on:
 Rename it to `sym.rom`, in lower case, and put it in
 `Assets/ngage/common/`. Other firmware versions have not been tried.
 
-**The games.** One `.img` per game, built from the game's files:
+**The games.** One `.img` per game, built from the game's files. The easy
+way is the page that comes with the core,
+`Assets/ngage/common/Add N-Gage games.html`. Open it from the SD card in
+Microsoft Edge or Google Chrome, on Windows or a Mac, choose the card's
+`Assets` folder, and drop the games' `.zip` files or folders on it, as many
+at once as you like:
+
+- it builds each game's `.img` and saves it to the card, with an entry in
+  the Pocket's game list named after the game;
+- it checks a dropped `SYM.ROM` and saves it as `sym.rom`;
+- it never overwrites a file already on the card;
+- it works offline, and nothing leaves the computer.
+
+Other browsers download the files instead, for you to copy across. A short
+narrated film on the page shows every step.
+
+Or, with Python 3:
 
 ```sh
 python3 mkdrive.py --from vcop.zip --out vcop.img
 ```
 
-`mkdrive.py` needs only Python 3. A game's files must come to 32 MB at
-most, the size of the core's drive: of the retail games, only Glimmerati
-and Pathway to Glory are larger. The game list
-(`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`; to add a game,
-copy one of its files, name the copy after the game, and change its
-`filename` to the game's `.img`.
+The page and `mkdrive.py` make the same bytes from the same game:
+`tools/check_mkdrive.py` builds every case with both and fails on any
+difference.
+
+A game's files must come to 32 MB at most, the size of the core's drive: of
+the retail games, only Glimmerati and Pathway to Glory are larger. The game
+list (`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`. The page
+writes these entries for you. By hand, copy one of the files, name the copy
+after the game, and change its `filename` to the game's `.img`.
 
 ## Building the core
 
@@ -211,6 +230,10 @@ sim/run_osk.sh         # the on-screen keypad against its generator, pictures to
 sim/run_lcd.sh         # the LCD's two rasters, upright and turned, pictures to artifacts/lcd/
 tools/ngvm/ngvm.py --rom SYM.ROM --drive game.img --frames-to DIR
                        # the reference machine, for frames and sound to compare with
+tools/check_mkdrive.py --games DIR --rom SYM.ROM
+                       # the card page's builder against mkdrive.py, byte for byte
+node tools/check_mkdrive_page.mjs --games DIR --rom SYM.ROM
+                       # the card page in headless Chrome: a batch onto a stand-in SD card
 ```
 
 ## Credits

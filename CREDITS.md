@@ -79,6 +79,13 @@ the core's README when it ships with the adapter enabled.
   every pixel and every press against them. Its L + R + Select chord, and
   the MSX2 core's (`rtl/osk_overlay.v`), are where SELECT + R came from.
   The RTL and the glyphs are this core's own.
+- **The card page** (`pkg/pocket/Assets/ngage/common/Add N-Gage games.html`)
+  sets its type in **Barlow** and **Barlow Condensed** by Jeremy Tribby
+  ([github.com/jpt/barlow](https://github.com/jpt/barlow)), embedded under
+  the SIL Open Font License 1.1. The narration of its film was generated
+  with Google's Gemini 3.8 Flash TTS and its music with Google's Lyria 3,
+  both through OpenRouter. The page's script, its film and its game builder
+  (a JavaScript port of `tools/mkdrive.py`) are this core's own.
 - **The platform image** (`pkg/pocket/Platforms/_images/ngage.bin`, the
   banner in the Pocket's list of systems) was made by plasticbugs. The
   Nokia and N-Gage names on it are Nokia's.

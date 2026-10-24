@@ -64,6 +64,14 @@ if ! grep -q 'github.com/Abdess/retrobios' docs/release-notes.md || ! grep -q "$
     exit 1
 fi
 
+# The page that builds the games ships in the package, and the notes send
+# people to it.
+PAGE="Add N-Gage games.html"
+if [ ! -f "pkg/pocket/Assets/ngage/common/$PAGE" ] || ! grep -qF "$PAGE" docs/release-notes.md; then
+    echo "docs/release-notes.md must point to Assets/ngage/common/$PAGE, and pkg/pocket must ship it"
+    exit 1
+fi
+
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 
