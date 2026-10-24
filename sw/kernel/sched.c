@@ -114,7 +114,7 @@ static void program_timer(void)
 
 void sched_init(void)
 {
-    IO(IO_IRQ_ENABLE) = IRQ_TIMER | IRQ_VBLANK;
+    IO(IO_IRQ_ENABLE) = IRQ_TIMER | IRQ_VBLANK | IRQ_FETCH;
     slice_end = now_us() + SLICE_US;
     program_timer();
 }
@@ -432,6 +432,7 @@ void timer_tick(void)
     }
     if (now >= slice_end) slice_expired = 1;
     launch_poll();
+    drive_poll();
     program_timer();
 }
 

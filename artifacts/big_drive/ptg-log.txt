@@ -1,0 +1,40 @@
+[  0.004 s] NGVM kernel
+[  0.045 s] [launch] will run E:\system\apps\6R72\6R72.app
+[  0.045 s] EFile: entry 503cdbc5 data 80100000+c2c bss 8
+[  1.230 s] [rdebug] auxstart 105
+[  4.831 s] [kern] process EStart exits: type 0 reason 0
+[  4.872 s] [lcd] control 8193 (406cfce0 406cfcdc) from EwSrv
+[  4.872 s] [lcd] control 4109 (406cfcd4 0) from EwSrv
+[  4.947 s] [kern] process SelfTestServer exits: type 0 reason -37
+[  5.458 s] [kern] process DBRECOVERY exits: type 0 reason 0
+[  5.503 s] [LesterDrv] control 1 (0 0)
+[  5.534 s] [NOSDRIVER] request, pending: 2 (4558dca4 0)
+[  5.656 s] [chan] Comm unit 0: not present
+[  5.772 s] [rdebug] CSysApAppUi::ConstructL: Start listening
+[  5.817 s] [helper] control 7 (0 0): not modelled, accepted
+[  5.821 s] [lcd] control 4099 (405e7d70 0) from EikSrvs
+[  5.821 s] [lcd] control 4100 (0 0) from EikSrvs
+[  6.591 s] [rdebug] RAdspServerSession::Construct
+[  6.592 s] [kern] PANIC thread Main in AudioServer: SS Audio Server 4
+[  6.592 s]   pc 503b3670 lr 503b3670 sp 45e3bf44: 80000001 45e3bf70 503b3690 503b8034 ffff8001 4 45e3bf70 45e44104 503b4704 ffff8001 510f2a2b 1000000f 510fa42c 45e44080 0 510f0e55 45e44080 0 510f0685 100000 503b6810 503b2884 503acd70 0
+[  6.592 s] [kern] process AudioServer exits: type 2 reason 4
+[  6.976 s] [kern] process AppRun exits: type 0 reason 0
+[  6.991 s] [kern] process AppRun exits: type 0 reason 0
+[  7.312 s] [kern] process SplashScreen exits: type 0 reason 0
+[  7.351 s] [kern] process Loadersrv exits: type 0 reason -37
+[  7.556 s] [launch] starting AppRun
+[  7.965 s] [kern] process MailInit exits: type 0 reason 0
+[  8.066 s] [launch] CommDb modem: 0
+[  8.587 s] [lcd] control 8193 (45eabc4c 45eabc48) from 6R72
+[  8.587 s] [lcd] control 4109 (45eabc40 0) from 6R72
+[  9.282 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[  9.282 s] [Audioldd] control 1 (0 0)
+[  9.283 s] [Audioldd] control 1 (0 0)
+[  9.284 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[  9.396 s] [kern] process RfsServer exits: type 0 reason 0
+[ 12.795 s] [kern] process FLogSvr exits: type 0 reason 0
+[ 15.452 s] [kern] process EDbsrv exits: type 0 reason 0
+load: busy MIPS per second: 31 0 0 27 84 57 100 100 55 31 31 32 75 78 34 28 70 58 30 47 83 96 77 60 87 97 83 88 97 89 97 97 74 97 97 87 97 86 97 24 2 2 2 2 18 2 2 2 2 16 6 6 3 2 73 6 6 5 2 46 69 64 63 66 80 77 77 76 77 28 24 25 24 25
+load: mean 49.4, max 100.0 MIPS of 100; RAM peak 726 pages (11.3 MB)
+lcd: 1416 updates; the framebuffer differed from the picture shown for over 0.1 s 0 times
+ran 75.000 virtual s (7500010300 insns) in 71.9 host s; 4500 frames; exit None

@@ -1,0 +1,2807 @@
+[  0.005 s] NGVM kernel
+[  0.045 s] [drive] C: at 21f00000 (erased), D: at 40004000, E: 3c00000 bytes, larger than its window
+[  0.045 s] [launch] will run E:\system\apps\6R82\6R82.app
+[  0.045 s] EFile: entry 503cdbc5 data 80100000+c2c bss 8
+[  1.230 s] [rdebug] auxstart 105
+[  4.745 s] [drive] E: read 0+3e
+[  4.745 s] [drive] E: done -> 0
+[  4.746 s] [drive] E: read 200+20000
+[  4.747 s] [drive] E: done -> 0
+[  4.834 s] [kern] process EStart exits: type 0 reason 0
+[  4.837 s] [drive] E: read 3c600+200
+[  4.837 s] [drive] E: done -> 0
+[  4.837 s] [drive] E: read 41200+200
+[  4.837 s] [drive] E: done -> 0
+[  4.840 s] [drive] E: read 41e00+200
+[  4.840 s] [drive] E: done -> 0
+[  4.840 s] [drive] E: read 42000+200
+[  4.840 s] [drive] E: done -> 0
+[  4.841 s] [drive] E: read 42200+200
+[  4.841 s] [drive] E: done -> 0
+[  4.841 s] [drive] E: read 42400+200
+[  4.841 s] [drive] E: done -> 0
+[  4.841 s] [drive] E: read 42600+200
+[  4.841 s] [drive] E: done -> 0
+[  4.841 s] [drive] E: read 42800+200
+[  4.841 s] [drive] E: done -> 0
+[  4.875 s] [lcd] control 8193 (406cfce0 406cfcdc) from EwSrv
+[  4.875 s] [lcd] control 4109 (406cfcd4 0) from EwSrv
+[  4.950 s] [kern] process SelfTestServer exits: type 0 reason -37
+[  5.285 s] [drive] E: read 41a00+200
+[  5.285 s] [drive] E: done -> 0
+[  5.286 s] [drive] E: read 42e00+200
+[  5.286 s] [drive] E: done -> 0
+[  5.286 s] [drive] E: read 44600+200
+[  5.286 s] [drive] E: done -> 0
+[  5.286 s] [drive] E: read 43000+200
+[  5.286 s] [drive] E: done -> 0
+[  5.286 s] [drive] E: read 200200+200
+[  5.286 s] [drive] E: done -> 0
+[  5.287 s] [drive] E: read 200200+4
+[  5.287 s] [drive] E: done -> 0
+[  5.287 s] [drive] E: read 20023c+4
+[  5.287 s] [drive] E: done -> 0
+[  5.287 s] [drive] E: read 200204+38
+[  5.287 s] [drive] E: done -> 0
+[  5.288 s] [drive] E: read 43200+200
+[  5.288 s] [drive] E: done -> 0
+[  5.288 s] [drive] E: read 43400+200
+[  5.288 s] [drive] E: done -> 0
+[  5.288 s] [drive] E: read 43600+200
+[  5.288 s] [drive] E: done -> 0
+[  5.288 s] [drive] E: read 43e00+200
+[  5.288 s] [drive] E: done -> 0
+[  5.290 s] [drive] E: read 43e00+210
+[  5.290 s] [drive] E: done -> 0
+[  5.290 s] [drive] E: read 445bd+30
+[  5.290 s] [drive] E: done -> 0
+[  5.290 s] [drive] E: read 43e14+204
+[  5.290 s] [drive] E: done -> 0
+[  5.290 s] [drive] E: read 44018+21b
+[  5.290 s] [drive] E: done -> 0
+[  5.291 s] [drive] E: read 44233+3ba
+[  5.291 s] [drive] E: done -> 0
+[  5.335 s] [drive] E: read 43a00+200
+[  5.335 s] [drive] E: done -> 0
+[  5.462 s] [kern] process DBRECOVERY exits: type 0 reason 0
+[  5.506 s] [LesterDrv] control 1 (0 0)
+[  5.524 s] [ipc] thread 52 waits for server EtelServer, which thread 60 is starting
+[  5.528 s] [ipc] thread 52: server EtelServer started
+[  5.538 s] [NOSDRIVER] request, pending: 2 (455a1ca4 0)
+[  5.652 s] [chan] Comm unit 0: not present
+[  5.768 s] [rdebug] CSysApAppUi::ConstructL: Start listening
+[  5.822 s] [helper] control 7 (0 0): not modelled, accepted
+[  5.826 s] [lcd] control 4099 (405e7d70 0) from EikSrvs
+[  5.826 s] [lcd] control 4100 (0 0) from EikSrvs
+[  6.601 s] [rdebug] RAdspServerSession::Construct
+[  6.602 s] [kern] PANIC thread Main in AudioServer: SS Audio Server 4
+[  6.602 s]   pc 503b3670 lr 503b3670 sp 45e3bf44: 80000001 45e3bf70 503b3690 503b8034 ffff8001 4 45e3bf70 45e44104 503b4704 ffff8001 510f2a2b 1000000f 510fa42c 45e44080 0 510f0e55 45e44080 0 510f0685 100000 503b6810 503b2884 503acd70 0
+[  6.603 s] [kern] process AudioServer exits: type 2 reason 4
+[  6.981 s] [kern] process AppRun exits: type 0 reason 0
+[  6.995 s] [kern] process AppRun exits: type 0 reason 0
+[  7.241 s] [drive] E: read 35d6a00+200
+[  7.241 s] [drive] E: fetch 1: block 35d into slot 1ff (block 1ff was there)
+[  7.245 s] [kern] process SplashScreen exits: type 0 reason 0
+[  7.258 s] [drive] E: fetched block 35d in 17384 us
+[  7.258 s] [drive] E: done -> 0
+[  7.258 s] [drive] E: read 35d6e00+200
+[  7.258 s] [drive] E: done -> 0
+[  7.258 s] [drive] E: read 35d7e00+200
+[  7.258 s] [drive] E: done -> 0
+[  7.258 s] [drive] E: read 35e5e00+200
+[  7.258 s] [drive] E: fetch 2: block 35e into slot 1fe (block 1fe was there)
+[  7.275 s] [drive] E: fetched block 35e in 17384 us
+[  7.275 s] [drive] E: done -> 0
+[  7.275 s] [drive] E: read 3607200+200
+[  7.275 s] [drive] E: fetch 3: block 360 into slot 1fd (block 1fd was there)
+[  7.293 s] [drive] E: fetched block 360 in 17384 us
+[  7.293 s] [drive] E: done -> 0
+[  7.293 s] [drive] E: read 3608e00+200
+[  7.293 s] [drive] E: done -> 0
+[  7.293 s] [drive] E: read 3611a00+200
+[  7.293 s] [drive] E: fetch 4: block 361 into slot 1fc (block 1fc was there)
+[  7.310 s] [drive] E: fetched block 361 in 17384 us
+[  7.310 s] [drive] E: done -> 0
+[  7.310 s] [drive] E: read 361a200+200
+[  7.310 s] [drive] E: done -> 0
+[  7.310 s] [drive] E: read 361ba00+200
+[  7.310 s] [drive] E: done -> 0
+[  7.310 s] [drive] E: read 3624200+200
+[  7.310 s] [drive] E: fetch 5: block 362 into slot 1fb (block 1fb was there)
+[  7.328 s] [drive] E: fetched block 362 in 17384 us
+[  7.328 s] [drive] E: done -> 0
+[  7.328 s] [drive] E: read 3625a00+200
+[  7.328 s] [drive] E: done -> 0
+[  7.328 s] [drive] E: read 3626e00+200
+[  7.328 s] [drive] E: done -> 0
+[  7.328 s] [drive] E: read 362a200+200
+[  7.328 s] [drive] E: done -> 0
+[  7.328 s] [drive] E: read 3634e00+200
+[  7.328 s] [drive] E: fetch 6: block 363 into slot 1fa (block 1fa was there)
+[  7.345 s] [drive] E: fetched block 363 in 17384 us
+[  7.345 s] [drive] E: done -> 0
+[  7.345 s] [drive] E: read 3635a00+200
+[  7.345 s] [drive] E: done -> 0
+[  7.345 s] [drive] E: read 363a200+200
+[  7.345 s] [drive] E: done -> 0
+[  7.346 s] [drive] E: read 3640200+200
+[  7.346 s] [drive] E: fetch 7: block 364 into slot 1f9 (block 1f9 was there)
+[  7.363 s] [drive] E: fetched block 364 in 17384 us
+[  7.363 s] [drive] E: done -> 0
+[  7.363 s] [drive] E: read 3642200+200
+[  7.363 s] [drive] E: done -> 0
+[  7.363 s] [drive] E: read 3644200+200
+[  7.363 s] [drive] E: done -> 0
+[  7.363 s] [drive] E: read 3657a00+200
+[  7.363 s] [drive] E: fetch 8: block 365 into slot 1f8 (block 1f8 was there)
+[  7.381 s] [drive] E: fetched block 365 in 17384 us
+[  7.381 s] [drive] E: done -> 0
+[  7.381 s] [drive] E: read 3658200+200
+[  7.381 s] [drive] E: done -> 0
+[  7.381 s] [drive] E: read 36e5e00+200
+[  7.381 s] [drive] E: fetch 9: block 36e into slot 1f7 (block 1f7 was there)
+[  7.398 s] [drive] E: fetched block 36e in 17384 us
+[  7.398 s] [drive] E: done -> 0
+[  7.398 s] [drive] E: read 36ee200+200
+[  7.398 s] [drive] E: done -> 0
+[  7.398 s] [drive] E: read 36eea00+200
+[  7.398 s] [drive] E: done -> 0
+[  7.398 s] [drive] E: read 36efa00+200
+[  7.398 s] [drive] E: done -> 0
+[  7.398 s] [drive] E: read 36fd200+200
+[  7.398 s] [drive] E: fetch 10: block 36f into slot 1f6 (block 1f6 was there)
+[  7.416 s] [drive] E: fetched block 36f in 17384 us
+[  7.416 s] [drive] E: done -> 0
+[  7.416 s] [drive] E: read 370de00+200
+[  7.416 s] [drive] E: fetch 11: block 370 into slot 1f5 (block 1f5 was there)
+[  7.433 s] [drive] E: fetched block 370 in 17384 us
+[  7.433 s] [drive] E: done -> 0
+[  7.433 s] [drive] E: read 3710200+200
+[  7.433 s] [drive] E: fetch 12: block 371 into slot 1f4 (block 1f4 was there)
+[  7.451 s] [drive] E: fetched block 371 in 17384 us
+[  7.451 s] [drive] E: done -> 0
+[  7.451 s] [drive] E: read 3711a00+200
+[  7.451 s] [drive] E: done -> 0
+[  7.558 s] [launch] starting AppRun
+[  7.583 s] [kern] process Loadersrv exits: type 0 reason -37
+[  8.175 s] [kern] process MailInit exits: type 0 reason 0
+[  8.277 s] [launch] CommDb modem: 0
+[  8.545 s] [drive] E: read 44600+7c
+[  8.545 s] [drive] E: done -> 0
+[  8.548 s] [drive] E: read 1f879c+4
+[  8.548 s] [drive] E: done -> 0
+[  8.548 s] [drive] E: read 1f9018+8
+[  8.548 s] [drive] E: done -> 0
+[  8.565 s] [drive] E: read 4467c+1b4120
+[  8.583 s] [drive] E: done -> 0
+[  8.584 s] [drive] E: read 1f9020+564c
+[  8.584 s] [drive] E: done -> 0
+[  8.587 s] [drive] E: read 1f879c+87c
+[  8.587 s] [drive] E: done -> 0
+[  8.596 s] [drive] E: read 35e5e00+7c
+[  8.596 s] [drive] E: done -> 0
+[  8.597 s] [drive] E: read 360502c+4
+[  8.597 s] [drive] E: done -> 0
+[  8.597 s] [drive] E: read 36055c4+8
+[  8.597 s] [drive] E: done -> 0
+[  8.598 s] [drive] E: read 35e5e7c+1f1b0
+[  8.599 s] [drive] E: fetch 13: block 35f into slot 1f3 (block 1f3 was there)
+[  8.616 s] [drive] E: fetched block 35f in 17384 us
+[  8.617 s] [drive] E: done -> 0
+[  8.617 s] [drive] E: read 36055cc+1a78
+[  8.617 s] [drive] E: done -> 0
+[  8.618 s] [drive] E: read 360502c+598
+[  8.618 s] [drive] E: done -> 0
+[  8.620 s] [drive] E: read 35d6e00+7c
+[  8.620 s] [drive] E: done -> 0
+[  8.620 s] [drive] E: read 35d7b70+4
+[  8.620 s] [drive] E: done -> 0
+[  8.620 s] [drive] E: read 35d7c44+8
+[  8.620 s] [drive] E: done -> 0
+[  8.621 s] [drive] E: read 35d6e7c+cf4
+[  8.621 s] [drive] E: done -> 0
+[  8.621 s] [drive] E: read 35d7c4c+b4
+[  8.621 s] [drive] E: done -> 0
+[  8.621 s] [drive] E: read 35d7b70+d4
+[  8.621 s] [drive] E: done -> 0
+[  8.631 s] [drive] E: read 35d7e00+7c
+[  8.631 s] [drive] E: done -> 0
+[  8.631 s] [drive] E: read 35e4e1c+4
+[  8.631 s] [drive] E: done -> 0
+[  8.631 s] [drive] E: read 35e524c+8
+[  8.631 s] [drive] E: done -> 0
+[  8.632 s] [drive] E: read 35d7e7c+cfa0
+[  8.632 s] [drive] E: done -> 0
+[  8.632 s] [drive] E: read 35e5254+aec
+[  8.632 s] [drive] E: done -> 0
+[  8.633 s] [drive] E: read 35e4e1c+430
+[  8.633 s] [drive] E: done -> 0
+[  8.652 s] [drive] E: read 3625a00+7c
+[  8.652 s] [drive] E: done -> 0
+[  8.652 s] [drive] E: read 3626a68+4
+[  8.652 s] [drive] E: done -> 0
+[  8.652 s] [drive] E: read 3626b50+8
+[  8.652 s] [drive] E: done -> 0
+[  8.652 s] [drive] E: read 3625a7c+fec
+[  8.652 s] [drive] E: done -> 0
+[  8.652 s] [drive] E: read 3626b58+184
+[  8.652 s] [drive] E: done -> 0
+[  8.653 s] [drive] E: read 3626a68+e8
+[  8.653 s] [drive] E: done -> 0
+[  8.683 s] [drive] E: read 36e5e00+7c
+[  8.683 s] [drive] E: done -> 0
+[  8.683 s] [drive] E: read 36ed574+4
+[  8.683 s] [drive] E: done -> 0
+[  8.684 s] [drive] E: read 36ed730+8
+[  8.684 s] [drive] E: done -> 0
+[  8.684 s] [drive] E: read 36e5e7c+76f8
+[  8.684 s] [drive] E: done -> 0
+[  8.684 s] [drive] E: read 36ed738+738
+[  8.684 s] [drive] E: done -> 0
+[  8.685 s] [drive] E: read 36ed574+1bc
+[  8.685 s] [drive] E: done -> 0
+[  8.688 s] [drive] E: read 36ee200+7c
+[  8.688 s] [drive] E: done -> 0
+[  8.688 s] [drive] E: read 36ee848+4
+[  8.688 s] [drive] E: done -> 0
+[  8.688 s] [drive] E: read 36ee888+8
+[  8.688 s] [drive] E: done -> 0
+[  8.688 s] [drive] E: read 36ee27c+5cc
+[  8.688 s] [drive] E: done -> 0
+[  8.688 s] [drive] E: read 36ee890+40
+[  8.688 s] [drive] E: done -> 0
+[  8.688 s] [drive] E: read 36ee848+40
+[  8.688 s] [drive] E: done -> 0
+[  8.691 s] [drive] E: read 3711a00+7c
+[  8.691 s] [drive] E: done -> 0
+[  8.691 s] [drive] E: read 3711f7c+4
+[  8.691 s] [drive] E: done -> 0
+[  8.691 s] [drive] E: read 3711fec+8
+[  8.691 s] [drive] E: done -> 0
+[  8.691 s] [drive] E: read 3711a7c+500
+[  8.691 s] [drive] E: done -> 0
+[  8.691 s] [drive] E: read 3711ff4+30
+[  8.691 s] [drive] E: done -> 0
+[  8.692 s] [drive] E: read 3711f7c+70
+[  8.692 s] [drive] E: done -> 0
+[  8.711 s] [drive] E: read 3611a00+7c
+[  8.711 s] [drive] E: done -> 0
+[  8.711 s] [drive] E: read 3619694+4
+[  8.711 s] [drive] E: done -> 0
+[  8.711 s] [drive] E: read 3619b2c+8
+[  8.711 s] [drive] E: done -> 0
+[  8.712 s] [drive] E: read 3611a7c+7c18
+[  8.712 s] [drive] E: done -> 0
+[  8.712 s] [drive] E: read 3619b34+410
+[  8.712 s] [drive] E: done -> 0
+[  8.712 s] [drive] E: read 3619694+498
+[  8.712 s] [drive] E: done -> 0
+[  8.730 s] [drive] E: read 361a200+7c
+[  8.730 s] [drive] E: done -> 0
+[  8.730 s] [drive] E: read 361b66c+4
+[  8.730 s] [drive] E: done -> 0
+[  8.730 s] [drive] E: read 361b798+8
+[  8.730 s] [drive] E: done -> 0
+[  8.730 s] [drive] E: read 361a27c+13f0
+[  8.730 s] [drive] E: done -> 0
+[  8.730 s] [drive] E: read 361b7a0+104
+[  8.730 s] [drive] E: done -> 0
+[  8.730 s] [drive] E: read 361b66c+12c
+[  8.730 s] [drive] E: done -> 0
+[  8.746 s] [drive] E: read 35c4200+7c
+[  8.746 s] [drive] E: fetch 14: block 35c into slot 1f2 (block 1f2 was there)
+[  8.763 s] [drive] E: fetched block 35c in 17384 us
+[  8.763 s] [drive] E: done -> 0
+[  8.763 s] [drive] E: read 35cfc90+4
+[  8.763 s] [drive] E: done -> 0
+[  8.763 s] [drive] E: read 35cfd2c+8
+[  8.763 s] [drive] E: done -> 0
+[  8.764 s] [drive] E: read 35c427c+ba14
+[  8.764 s] [drive] E: done -> 0
+[  8.764 s] [drive] E: read 35cfd34+1b8
+[  8.764 s] [drive] E: done -> 0
+[  8.765 s] [drive] E: read 35cfc90+9c
+[  8.765 s] [drive] E: done -> 0
+[  8.784 s] [drive] E: read 1fea00+200
+[  8.784 s] [drive] E: done -> 0
+[  8.784 s] [drive] E: read 1fea00+4
+[  8.784 s] [drive] E: done -> 0
+[  8.784 s] [drive] E: read 1fea2a+4
+[  8.784 s] [drive] E: done -> 0
+[  8.784 s] [drive] E: read 1fea04+8
+[  8.784 s] [drive] E: done -> 0
+[  8.786 s] [drive] E: read 43e00+210
+[  8.786 s] [drive] E: done -> 0
+[  8.786 s] [drive] E: read 445bd+30
+[  8.786 s] [drive] E: done -> 0
+[  8.786 s] [drive] E: read 445b8+35
+[  8.786 s] [drive] E: done -> 0
+[  8.788 s] [drive] E: read 43e00+210
+[  8.788 s] [drive] E: done -> 0
+[  8.788 s] [drive] E: read 445bd+30
+[  8.788 s] [drive] E: done -> 0
+[  8.794 s] [drive] E: read 1fea2e+4
+[  8.794 s] [drive] E: done -> 0
+[  8.794 s] [drive] E: read 1fea0c+18
+[  8.794 s] [drive] E: done -> 0
+[  8.795 s] [drive] E: read 1fea30+4
+[  8.795 s] [drive] E: done -> 0
+[  8.795 s] [drive] E: read 1fea24+6
+[  8.795 s] [drive] E: done -> 0
+[  8.809 s] [drive] E: read 40e00+200
+[  8.809 s] [drive] E: done -> 0
+[  8.810 s] [drive] E: read 40600+200
+[  8.810 s] [drive] E: done -> 0
+[  8.810 s] [drive] E: read 40600+25
+[  8.810 s] [drive] E: done -> 0
+[  8.818 s] [lcd] control 8193 (45eabc54 45eabc50) from 6R82
+[  8.818 s] [lcd] control 4109 (45eabc48 0) from 6R82
+[  8.821 s] [drive] E: read 1fea2c+4
+[  8.821 s] [drive] E: done -> 0
+[  8.939 s] [drive] E: read 201a00+4
+[  8.939 s] [drive] E: done -> 0
+[  8.940 s] [drive] E: read 201a04+1d586
+[  8.943 s] [drive] E: done -> 0
+[  8.998 s] [drive] E: read 1097555+400
+[  8.998 s] [drive] E: done -> 0
+[  9.001 s] [drive] E: read 1097955+400
+[  9.001 s] [drive] E: done -> 0
+[  9.002 s] [drive] E: read 1097d55+400
+[  9.002 s] [drive] E: done -> 0
+[  9.003 s] [drive] E: read 1098155+325
+[  9.003 s] [drive] E: done -> 0
+[  9.049 s] [drive] E: read 10a3da1+400
+[  9.049 s] [drive] E: done -> 0
+[  9.050 s] [drive] E: read 10a41a1+400
+[  9.050 s] [drive] E: done -> 0
+[  9.050 s] [drive] E: read 10a45a1+400
+[  9.050 s] [drive] E: done -> 0
+[  9.051 s] [drive] E: read 10a49a1+400
+[  9.051 s] [drive] E: done -> 0
+[  9.052 s] [drive] E: read 10a4da1+400
+[  9.052 s] [drive] E: done -> 0
+[  9.052 s] [drive] E: read 10a51a1+400
+[  9.052 s] [drive] E: done -> 0
+[  9.053 s] [drive] E: read 10a55a1+400
+[  9.053 s] [drive] E: done -> 0
+[  9.054 s] [drive] E: read 10a59a1+400
+[  9.054 s] [drive] E: done -> 0
+[  9.054 s] [drive] E: read 10a5da1+400
+[  9.054 s] [drive] E: done -> 0
+[  9.055 s] [drive] E: read 10a61a1+400
+[  9.055 s] [drive] E: done -> 0
+[  9.055 s] [drive] E: read 10a65a1+400
+[  9.056 s] [drive] E: done -> 0
+[  9.056 s] [drive] E: read 10a69a1+400
+[  9.056 s] [drive] E: done -> 0
+[  9.057 s] [drive] E: read 10a6da1+400
+[  9.057 s] [drive] E: done -> 0
+[  9.057 s] [drive] E: read 10a71a1+400
+[  9.058 s] [drive] E: done -> 0
+[  9.058 s] [drive] E: read 10a75a1+400
+[  9.058 s] [drive] E: done -> 0
+[  9.059 s] [drive] E: read 10a79a1+400
+[  9.059 s] [drive] E: done -> 0
+[  9.060 s] [drive] E: read 10a7da1+400
+[  9.060 s] [drive] E: done -> 0
+[  9.060 s] [drive] E: read 10a81a1+400
+[  9.060 s] [drive] E: done -> 0
+[  9.061 s] [drive] E: read 10a85a1+400
+[  9.061 s] [drive] E: done -> 0
+[  9.062 s] [drive] E: read 10a89a1+400
+[  9.062 s] [drive] E: done -> 0
+[  9.062 s] [drive] E: read 10a8da1+400
+[  9.062 s] [drive] E: done -> 0
+[  9.063 s] [drive] E: read 10a91a1+400
+[  9.063 s] [drive] E: done -> 0
+[  9.064 s] [drive] E: read 10a95a1+400
+[  9.064 s] [drive] E: done -> 0
+[  9.064 s] [drive] E: read 10a99a1+400
+[  9.064 s] [drive] E: done -> 0
+[  9.065 s] [drive] E: read 10a9da1+400
+[  9.065 s] [drive] E: done -> 0
+[  9.066 s] [drive] E: read 10aa1a1+400
+[  9.066 s] [drive] E: done -> 0
+[  9.066 s] [drive] E: read 10aa5a1+400
+[  9.067 s] [drive] E: done -> 0
+[  9.067 s] [drive] E: read 10aa9a1+400
+[  9.067 s] [drive] E: done -> 0
+[  9.068 s] [drive] E: read 10aada1+400
+[  9.068 s] [drive] E: done -> 0
+[  9.069 s] [drive] E: read 10ab1a1+400
+[  9.069 s] [drive] E: done -> 0
+[  9.070 s] [drive] E: read 10ab5a1+400
+[  9.070 s] [drive] E: done -> 0
+[  9.071 s] [drive] E: read 10ab9a1+400
+[  9.071 s] [drive] E: done -> 0
+[  9.071 s] [drive] E: read 10abda1+400
+[  9.071 s] [drive] E: done -> 0
+[  9.072 s] [drive] E: read 10ac1a1+400
+[  9.072 s] [drive] E: done -> 0
+[  9.073 s] [drive] E: read 10ac5a1+1ef
+[  9.073 s] [drive] E: done -> 0
+[  9.378 s] [drive] E: read 35c3e00+200
+[  9.378 s] [drive] E: done -> 0
+[  9.378 s] [drive] E: read 35d1200+200
+[  9.378 s] [drive] E: done -> 0
+[  9.379 s] [drive] E: read 35c4000+200
+[  9.379 s] [drive] E: done -> 0
+[  9.385 s] [drive] E: read 35d1200+abe
+[  9.385 s] [drive] E: done -> 0
+[  9.389 s] [drive] E: read 35d0200+200
+[  9.389 s] [drive] E: done -> 0
+[  9.395 s] [drive] E: read 35d0200+1e0
+[  9.395 s] [drive] E: done -> 0
+[  9.398 s] [kern] process RfsServer exits: type 0 reason 0
+[  9.437 s] [drive] E: read 133c49e+400
+[  9.437 s] [drive] E: done -> 0
+[  9.438 s] [drive] E: read 133c89e+400
+[  9.438 s] [drive] E: done -> 0
+[  9.439 s] [drive] E: read 133cc9e+400
+[  9.439 s] [drive] E: done -> 0
+[  9.440 s] [drive] E: read 133d09e+400
+[  9.440 s] [drive] E: done -> 0
+[  9.440 s] [drive] E: read 133d49e+400
+[  9.440 s] [drive] E: done -> 0
+[  9.441 s] [drive] E: read 133d89e+400
+[  9.441 s] [drive] E: done -> 0
+[  9.441 s] [drive] E: read 133dc9e+400
+[  9.441 s] [drive] E: done -> 0
+[  9.442 s] [drive] E: read 133e09e+400
+[  9.442 s] [drive] E: done -> 0
+[  9.442 s] [drive] E: read 133e49e+400
+[  9.442 s] [drive] E: done -> 0
+[  9.443 s] [drive] E: read 133e89e+400
+[  9.443 s] [drive] E: done -> 0
+[  9.443 s] [drive] E: read 133ec9e+400
+[  9.443 s] [drive] E: done -> 0
+[  9.444 s] [drive] E: read 133f09e+400
+[  9.444 s] [drive] E: done -> 0
+[  9.444 s] [drive] E: read 133f49e+400
+[  9.444 s] [drive] E: done -> 0
+[  9.445 s] [drive] E: read 133f89e+400
+[  9.445 s] [drive] E: done -> 0
+[  9.445 s] [drive] E: read 133fc9e+400
+[  9.446 s] [drive] E: done -> 0
+[  9.446 s] [drive] E: read 134009e+400
+[  9.446 s] [drive] E: done -> 0
+[  9.447 s] [drive] E: read 134049e+400
+[  9.447 s] [drive] E: done -> 0
+[  9.447 s] [drive] E: read 134089e+400
+[  9.447 s] [drive] E: done -> 0
+[  9.448 s] [drive] E: read 1340c9e+103
+[  9.448 s] [drive] E: done -> 0
+[  9.449 s] [drive] E: read 10d3529+400
+[  9.449 s] [drive] E: done -> 0
+[  9.451 s] [drive] E: read 10d3929+400
+[  9.451 s] [drive] E: done -> 0
+[  9.452 s] [drive] E: read 10d3d29+400
+[  9.452 s] [drive] E: done -> 0
+[  9.453 s] [drive] E: read 10d4129+400
+[  9.453 s] [drive] E: done -> 0
+[  9.454 s] [drive] E: read 10d4529+400
+[  9.454 s] [drive] E: done -> 0
+[  9.455 s] [drive] E: read 10d4929+400
+[  9.455 s] [drive] E: done -> 0
+[  9.456 s] [drive] E: read 10d4d29+400
+[  9.456 s] [drive] E: done -> 0
+[  9.457 s] [drive] E: read 10d5129+400
+[  9.457 s] [drive] E: done -> 0
+[  9.460 s] [drive] E: read 10d5529+400
+[  9.460 s] [drive] E: done -> 0
+[  9.461 s] [drive] E: read 10d5929+400
+[  9.461 s] [drive] E: done -> 0
+[  9.463 s] [drive] E: read 10d5d29+400
+[  9.463 s] [drive] E: done -> 0
+[  9.464 s] [drive] E: read 10d6129+400
+[  9.464 s] [drive] E: done -> 0
+[  9.465 s] [drive] E: read 10d6529+400
+[  9.465 s] [drive] E: done -> 0
+[  9.466 s] [drive] E: read 10d6929+400
+[  9.466 s] [drive] E: done -> 0
+[  9.467 s] [drive] E: read 10d6d29+400
+[  9.467 s] [drive] E: done -> 0
+[  9.468 s] [drive] E: read 10d7129+400
+[  9.468 s] [drive] E: done -> 0
+[  9.470 s] [drive] E: read 10d7529+1b6
+[  9.470 s] [drive] E: done -> 0
+[  9.470 s] [drive] E: read 10d76df+1f5
+[  9.470 s] [drive] E: done -> 0
+[  9.473 s] [drive] E: read 1391fb9+400
+[  9.473 s] [drive] E: done -> 0
+[  9.474 s] [drive] E: read 13923b9+400
+[  9.474 s] [drive] E: done -> 0
+[  9.475 s] [drive] E: read 13927b9+400
+[  9.475 s] [drive] E: done -> 0
+[  9.476 s] [drive] E: read 1392bb9+400
+[  9.476 s] [drive] E: done -> 0
+[  9.476 s] [drive] E: read 1392fb9+400
+[  9.476 s] [drive] E: done -> 0
+[  9.477 s] [drive] E: read 13933b9+3f0
+[  9.477 s] [drive] E: done -> 0
+[  9.482 s] [drive] E: read 1098d57+400
+[  9.482 s] [drive] E: done -> 0
+[  9.484 s] [drive] E: read 1099157+400
+[  9.484 s] [drive] E: done -> 0
+[  9.485 s] [drive] E: read 1099557+400
+[  9.485 s] [drive] E: done -> 0
+[  9.486 s] [drive] E: read 1099957+400
+[  9.486 s] [drive] E: done -> 0
+[  9.487 s] [drive] E: read 1099d57+400
+[  9.487 s] [drive] E: done -> 0
+[  9.488 s] [drive] E: read 109a157+24e
+[  9.488 s] [drive] E: done -> 0
+[  9.500 s] [drive] E: read ace886+400
+[  9.500 s] [drive] E: done -> 0
+[  9.502 s] [drive] E: read 2bd30b+400
+[  9.502 s] [drive] E: done -> 0
+[  9.506 s] [drive] E: read 6473dd+400
+[  9.506 s] [drive] E: done -> 0
+[  9.513 s] [drive] E: read 65a422+400
+[  9.513 s] [drive] E: done -> 0
+[  9.515 s] [drive] E: read 2b00e1+400
+[  9.515 s] [drive] E: done -> 0
+[  9.518 s] [drive] E: read 2c5bf4+400
+[  9.518 s] [drive] E: done -> 0
+[  9.519 s] [drive] E: read 31b98c+400
+[  9.519 s] [drive] E: done -> 0
+[  9.521 s] [drive] E: read 34ef09+400
+[  9.521 s] [drive] E: done -> 0
+[  9.523 s] [drive] E: read 38182f+400
+[  9.523 s] [drive] E: done -> 0
+[  9.525 s] [drive] E: read 2d916e+400
+[  9.525 s] [drive] E: done -> 0
+[  9.527 s] [drive] E: read 2ebe8d+400
+[  9.527 s] [drive] E: done -> 0
+[  9.528 s] [drive] E: read 38e71b+400
+[  9.528 s] [drive] E: done -> 0
+[  9.530 s] [drive] E: read 21f224+13b
+[  9.530 s] [drive] E: done -> 0
+[  9.536 s] [drive] E: read 39df7b+400
+[  9.536 s] [drive] E: done -> 0
+[  9.538 s] [drive] E: read 36a4da+400
+[  9.538 s] [drive] E: done -> 0
+[  9.540 s] [drive] E: read 3df3ac+400
+[  9.540 s] [drive] E: done -> 0
+[  9.541 s] [drive] E: read 3be16f+400
+[  9.541 s] [drive] E: done -> 0
+[  9.543 s] [drive] E: read 649842+400
+[  9.543 s] [drive] E: done -> 0
+[  9.546 s] [drive] E: read 23b054+400
+[  9.546 s] [drive] E: done -> 0
+[  9.549 s] [drive] E: read acec86+11
+[  9.549 s] [drive] E: done -> 0
+[  9.549 s] [drive] E: read b3423a+5f
+[  9.549 s] [drive] E: done -> 0
+[  9.552 s] [drive] E: read b3423a+5f
+[  9.552 s] [drive] E: done -> 0
+[  9.552 s] [drive] E: read b3423a+5f
+[  9.552 s] [drive] E: done -> 0
+[  9.552 s] [drive] E: read b34240+59
+[  9.552 s] [drive] E: done -> 0
+[  9.552 s] [drive] E: read b34241+58
+[  9.552 s] [drive] E: done -> 0
+[  9.552 s] [drive] E: read b34244+55
+[  9.552 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b34245+54
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b3424d+4c
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b3424e+4b
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b3426f+2a
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b34270+29
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b34275+24
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b34276+23
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b34279+20
+[  9.553 s] [drive] E: done -> 0
+[  9.553 s] [drive] E: read b3427a+1f
+[  9.553 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b3427e+1b
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b3427f+1a
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b34282+17
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b34283+16
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b34288+11
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b34289+10
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b3428c+d
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b3428d+c
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b34294+5
+[  9.554 s] [drive] E: done -> 0
+[  9.554 s] [drive] E: read b34295+4
+[  9.554 s] [drive] E: done -> 0
+[  9.555 s] [drive] E: read b34298+1
+[  9.555 s] [drive] E: done -> 0
+[  9.555 s] [drive] E: read b34298+1
+[  9.555 s] [drive] E: done -> 0
+[  9.555 s] [drive] E: read b34299+3c
+[  9.555 s] [drive] E: done -> 0
+[  9.555 s] [drive] E: read b34299+3c
+[  9.555 s] [drive] E: done -> 0
+[  9.555 s] [drive] E: read b34299+3c
+[  9.555 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b3429f+36
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342a0+35
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342a2+33
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342a3+32
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342a7+2e
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342a8+2d
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342aa+2b
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342ab+2a
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342b2+23
+[  9.556 s] [drive] E: done -> 0
+[  9.556 s] [drive] E: read b342b3+22
+[  9.556 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342b5+20
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342b6+1f
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342ba+1b
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342bb+1a
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342bd+18
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342be+17
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342c4+11
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342c5+10
+[  9.557 s] [drive] E: done -> 0
+[  9.557 s] [drive] E: read b342c7+e
+[  9.557 s] [drive] E: done -> 0
+[  9.558 s] [drive] E: read b342c8+d
+[  9.558 s] [drive] E: done -> 0
+[  9.558 s] [drive] E: read b342ce+7
+[  9.558 s] [drive] E: done -> 0
+[  9.558 s] [drive] E: read b342cf+6
+[  9.558 s] [drive] E: done -> 0
+[  9.558 s] [drive] E: read b342d3+2
+[  9.558 s] [drive] E: done -> 0
+[  9.558 s] [drive] E: read b342d3+2
+[  9.558 s] [drive] E: done -> 0
+[  9.558 s] [drive] E: read b342d4+1
+[  9.558 s] [drive] E: done -> 0
+[  9.563 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[  9.563 s] [Audioldd] control 1 (0 0)
+[  9.564 s] [Audioldd] control 1 (0 0)
+[  9.761 s] [drive] E: read 21ef86+5
+[  9.761 s] [drive] E: done -> 0
+[  9.763 s] [drive] E: read 2bd30b+400
+[  9.763 s] [drive] E: done -> 0
+[  9.767 s] [drive] E: read 23b054+400
+[  9.767 s] [drive] E: done -> 0
+[  9.768 s] [drive] E: read 23b454+400
+[  9.768 s] [drive] E: done -> 0
+[  9.770 s] [drive] E: read 2bd70b+400
+[  9.770 s] [drive] E: done -> 0
+[  9.772 s] [drive] E: read 2bdb0b+400
+[  9.772 s] [drive] E: done -> 0
+[  9.773 s] [drive] E: read 2bdf0b+400
+[  9.773 s] [drive] E: done -> 0
+[  9.774 s] [drive] E: read 2be30b+400
+[  9.774 s] [drive] E: done -> 0
+[  9.775 s] [drive] E: read 2be70b+29f
+[  9.775 s] [drive] E: done -> 0
+[  9.824 s] [drive] E: read b34677+1000
+[  9.825 s] [drive] E: done -> 0
+[  9.834 s] [drive] E: read 23b854+400
+[  9.834 s] [drive] E: done -> 0
+[  9.835 s] [drive] E: read 23bc54+400
+[  9.835 s] [drive] E: done -> 0
+[  9.865 s] [drive] E: read 23c054+400
+[  9.865 s] [drive] E: done -> 0
+[  9.894 s] [drive] E: read 23c454+400
+[  9.894 s] [drive] E: done -> 0
+[  9.924 s] [drive] E: read 23c854+400
+[  9.924 s] [drive] E: done -> 0
+[  9.925 s] [drive] E: read 23cc54+400
+[  9.925 s] [drive] E: done -> 0
+[  9.955 s] [drive] E: read 23d054+400
+[  9.955 s] [drive] E: done -> 0
+[  9.985 s] [drive] E: read 23d454+400
+[  9.985 s] [drive] E: done -> 0
+[ 10.015 s] [drive] E: read 23d854+400
+[ 10.015 s] [drive] E: done -> 0
+[ 10.045 s] [drive] E: read 23dc54+400
+[ 10.045 s] [drive] E: done -> 0
+[ 10.075 s] [drive] E: read 23e054+400
+[ 10.075 s] [drive] E: done -> 0
+[ 10.076 s] [drive] E: read 23e454+400
+[ 10.076 s] [drive] E: done -> 0
+[ 10.105 s] [drive] E: read 23e854+400
+[ 10.105 s] [drive] E: done -> 0
+[ 10.106 s] [drive] E: read 23ec54+400
+[ 10.106 s] [drive] E: done -> 0
+[ 10.136 s] [drive] E: read 23f054+400
+[ 10.136 s] [drive] E: done -> 0
+[ 10.167 s] [drive] E: read 23f454+400
+[ 10.167 s] [drive] E: done -> 0
+[ 10.168 s] [drive] E: read 23f854+400
+[ 10.168 s] [drive] E: done -> 0
+[ 10.196 s] [drive] E: read 23fc54+400
+[ 10.196 s] [drive] E: done -> 0
+[ 10.197 s] [drive] E: read 240054+400
+[ 10.197 s] [drive] E: done -> 0
+[ 10.228 s] [drive] E: read 240454+400
+[ 10.228 s] [drive] E: done -> 0
+[ 10.229 s] [drive] E: read 240854+400
+[ 10.229 s] [drive] E: done -> 0
+[ 10.257 s] [drive] E: read 240c54+400
+[ 10.257 s] [drive] E: done -> 0
+[ 10.258 s] [drive] E: read 241054+400
+[ 10.258 s] [drive] E: done -> 0
+[ 10.284 s] [drive] E: read 241454+400
+[ 10.284 s] [drive] E: done -> 0
+[ 10.361 s] [drive] E: read 241854+7d
+[ 10.361 s] [drive] E: done -> 0
+[ 10.531 s] [drive] E: read b35677+1000
+[ 10.532 s] [drive] E: done -> 0
+[ 11.564 s] [drive] E: read b36677+1000
+[ 11.564 s] [drive] E: done -> 0
+[ 12.041 s] [drive] E: read 6473dd+400
+[ 12.041 s] [drive] E: done -> 0
+[ 12.371 s] [drive] E: read 6477dd+22b
+[ 12.371 s] [drive] E: done -> 0
+[ 12.595 s] [drive] E: read b37677+1000
+[ 12.595 s] [drive] E: done -> 0
+[ 13.007 s] [kern] process FLogSvr exits: type 0 reason 0
+[ 13.624 s] [drive] E: read b38677+1000
+[ 13.625 s] [drive] E: done -> 0
+[ 14.522 s] [drive] E: read 65a422+400
+[ 14.522 s] [drive] E: done -> 0
+[ 14.524 s] [drive] E: read 65a822+400
+[ 14.524 s] [drive] E: done -> 0
+[ 14.547 s] [drive] E: read 65ac22+400
+[ 14.547 s] [drive] E: done -> 0
+[ 14.584 s] [drive] E: read 65b022+400
+[ 14.584 s] [drive] E: done -> 0
+[ 14.585 s] [drive] E: read 65b422+400
+[ 14.585 s] [drive] E: done -> 0
+[ 14.610 s] [drive] E: read 65b822+400
+[ 14.610 s] [drive] E: done -> 0
+[ 14.619 s] [kern] process EDbsrv exits: type 0 reason 0
+[ 14.626 s] [drive] E: read b39677+1000
+[ 14.626 s] [drive] E: done -> 0
+[ 14.648 s] [drive] E: read 65bc22+400
+[ 14.648 s] [drive] E: done -> 0
+[ 14.649 s] [drive] E: read 65c022+400
+[ 14.649 s] [drive] E: done -> 0
+[ 14.674 s] [drive] E: read 65c422+400
+[ 14.674 s] [drive] E: done -> 0
+[ 14.709 s] [drive] E: read 65c822+400
+[ 14.709 s] [drive] E: done -> 0
+[ 14.742 s] [drive] E: read 65cc22+400
+[ 14.742 s] [drive] E: done -> 0
+[ 14.743 s] [drive] E: read 65d022+400
+[ 14.743 s] [drive] E: done -> 0
+[ 14.790 s] [drive] E: read 65d422+400
+[ 14.790 s] [drive] E: done -> 0
+[ 14.815 s] [drive] E: read 65d822+400
+[ 14.815 s] [drive] E: done -> 0
+[ 14.884 s] [drive] E: read 65dc22+400
+[ 14.884 s] [drive] E: done -> 0
+[ 14.885 s] [drive] E: read 65e022+400
+[ 14.885 s] [drive] E: done -> 0
+[ 14.910 s] [drive] E: read 65e422+400
+[ 14.910 s] [drive] E: done -> 0
+[ 14.976 s] [drive] E: read 65e822+400
+[ 14.976 s] [drive] E: done -> 0
+[ 15.009 s] [drive] E: read 65ec22+400
+[ 15.009 s] [drive] E: done -> 0
+[ 15.010 s] [drive] E: read 65f022+400
+[ 15.010 s] [drive] E: done -> 0
+[ 15.034 s] [drive] E: read 65f422+400
+[ 15.034 s] [drive] E: done -> 0
+[ 15.112 s] [drive] E: read 65f822+400
+[ 15.112 s] [drive] E: done -> 0
+[ 15.145 s] [drive] E: read 65fc22+400
+[ 15.145 s] [drive] E: done -> 0
+[ 15.146 s] [drive] E: read 660022+400
+[ 15.146 s] [drive] E: done -> 0
+[ 15.182 s] [drive] E: read 660422+400
+[ 15.182 s] [drive] E: done -> 0
+[ 15.209 s] [drive] E: read 660822+400
+[ 15.209 s] [drive] E: done -> 0
+[ 15.209 s] [drive] E: read 660c22+400
+[ 15.209 s] [drive] E: done -> 0
+[ 15.243 s] [drive] E: read 661022+400
+[ 15.243 s] [drive] E: done -> 0
+[ 15.266 s] [drive] E: read 661422+400
+[ 15.266 s] [drive] E: done -> 0
+[ 15.267 s] [drive] E: read 661822+400
+[ 15.267 s] [drive] E: done -> 0
+[ 15.301 s] [drive] E: read 661c22+400
+[ 15.301 s] [drive] E: done -> 0
+[ 15.302 s] [drive] E: read 662022+400
+[ 15.302 s] [drive] E: done -> 0
+[ 15.335 s] [drive] E: read 662422+400
+[ 15.335 s] [drive] E: done -> 0
+[ 15.379 s] [drive] E: read 662822+400
+[ 15.379 s] [drive] E: done -> 0
+[ 15.380 s] [drive] E: read 662c22+400
+[ 15.380 s] [drive] E: done -> 0
+[ 15.414 s] [drive] E: read 663022+400
+[ 15.414 s] [drive] E: done -> 0
+[ 15.447 s] [drive] E: read 663422+a8
+[ 15.447 s] [drive] E: done -> 0
+[ 15.656 s] [drive] E: read b3a677+1000
+[ 15.656 s] [drive] E: done -> 0
+[ 16.687 s] [drive] E: read b3b677+1000
+[ 16.687 s] [drive] E: done -> 0
+[ 17.017 s] [drive] E: read 649842+400
+[ 17.017 s] [drive] E: done -> 0
+[ 17.194 s] [drive] E: read 649c42+400
+[ 17.194 s] [drive] E: done -> 0
+[ 17.284 s] [drive] E: read 64a042+400
+[ 17.284 s] [drive] E: done -> 0
+[ 17.408 s] [drive] E: read 64a442+21d
+[ 17.408 s] [drive] E: done -> 0
+[ 17.460 s] [drive] E: read b3c677+1000
+[ 17.460 s] [drive] E: done -> 0
+[ 18.490 s] [drive] E: read b3d677+1000
+[ 18.491 s] [drive] E: done -> 0
+[ 19.488 s] [drive] E: read b3e677+1000
+[ 19.489 s] [drive] E: done -> 0
+[ 20.519 s] [drive] E: read b3f677+1000
+[ 20.519 s] [drive] E: done -> 0
+[ 20.520 s] [drive] E: read 2b00e1+400
+[ 20.520 s] [drive] E: done -> 0
+[ 20.521 s] [drive] E: read 2b04e1+400
+[ 20.521 s] [drive] E: done -> 0
+[ 20.522 s] [drive] E: read 2b08e1+400
+[ 20.522 s] [drive] E: done -> 0
+[ 20.523 s] [drive] E: read 2b0ce1+400
+[ 20.523 s] [drive] E: done -> 0
+[ 20.556 s] [drive] E: read 2b10e1+400
+[ 20.556 s] [drive] E: done -> 0
+[ 20.557 s] [drive] E: read 2b14e1+400
+[ 20.557 s] [drive] E: done -> 0
+[ 20.580 s] [drive] E: read 2b18e1+400
+[ 20.580 s] [drive] E: done -> 0
+[ 20.581 s] [drive] E: read 2b1ce1+400
+[ 20.581 s] [drive] E: done -> 0
+[ 20.582 s] [drive] E: read 2b20e1+400
+[ 20.582 s] [drive] E: done -> 0
+[ 20.584 s] [drive] E: read 2b24e1+400
+[ 20.584 s] [drive] E: done -> 0
+[ 20.617 s] [drive] E: read 2b28e1+400
+[ 20.617 s] [drive] E: done -> 0
+[ 20.617 s] [drive] E: read 2b2ce1+400
+[ 20.617 s] [drive] E: done -> 0
+[ 20.618 s] [drive] E: read 2b30e1+400
+[ 20.618 s] [drive] E: done -> 0
+[ 20.641 s] [drive] E: read 2b34e1+400
+[ 20.641 s] [drive] E: done -> 0
+[ 20.642 s] [drive] E: read 2b38e1+400
+[ 20.642 s] [drive] E: done -> 0
+[ 20.643 s] [drive] E: read 2b3ce1+400
+[ 20.643 s] [drive] E: done -> 0
+[ 20.643 s] [drive] E: read 2b40e1+400
+[ 20.643 s] [drive] E: done -> 0
+[ 20.644 s] [drive] E: read 2b44e1+400
+[ 20.644 s] [drive] E: done -> 0
+[ 20.688 s] [drive] E: read 2b48e1+400
+[ 20.688 s] [drive] E: done -> 0
+[ 20.689 s] [drive] E: read 2b4ce1+400
+[ 20.689 s] [drive] E: done -> 0
+[ 20.690 s] [drive] E: read 2b50e1+400
+[ 20.690 s] [drive] E: done -> 0
+[ 20.690 s] [drive] E: read 2b54e1+400
+[ 20.690 s] [drive] E: done -> 0
+[ 20.725 s] [drive] E: read 2b58e1+400
+[ 20.725 s] [drive] E: done -> 0
+[ 20.725 s] [drive] E: read 2b5ce1+400
+[ 20.725 s] [drive] E: done -> 0
+[ 20.726 s] [drive] E: read 2b60e1+400
+[ 20.726 s] [drive] E: done -> 0
+[ 20.727 s] [drive] E: read 2b64e1+400
+[ 20.727 s] [drive] E: done -> 0
+[ 20.728 s] [drive] E: read 2b68e1+400
+[ 20.728 s] [drive] E: done -> 0
+[ 20.771 s] [drive] E: read 2b6ce1+400
+[ 20.771 s] [drive] E: done -> 0
+[ 20.772 s] [drive] E: read 2b70e1+400
+[ 20.772 s] [drive] E: done -> 0
+[ 20.772 s] [drive] E: read 2b74e1+400
+[ 20.772 s] [drive] E: done -> 0
+[ 20.773 s] [drive] E: read 2b78e1+400
+[ 20.773 s] [drive] E: done -> 0
+[ 20.820 s] [drive] E: read 2b7ce1+400
+[ 20.820 s] [drive] E: done -> 0
+[ 20.821 s] [drive] E: read 2b80e1+400
+[ 20.821 s] [drive] E: done -> 0
+[ 20.821 s] [drive] E: read 2b84e1+400
+[ 20.821 s] [drive] E: done -> 0
+[ 20.822 s] [drive] E: read 2b88e1+400
+[ 20.822 s] [drive] E: done -> 0
+[ 20.846 s] [drive] E: read 2b8ce1+400
+[ 20.846 s] [drive] E: done -> 0
+[ 20.847 s] [drive] E: read 2b90e1+400
+[ 20.847 s] [drive] E: done -> 0
+[ 20.848 s] [drive] E: read 2b94e1+400
+[ 20.848 s] [drive] E: done -> 0
+[ 20.881 s] [drive] E: read 2b98e1+400
+[ 20.881 s] [drive] E: done -> 0
+[ 20.882 s] [drive] E: read 2b9ce1+400
+[ 20.882 s] [drive] E: done -> 0
+[ 20.883 s] [drive] E: read 2ba0e1+400
+[ 20.883 s] [drive] E: done -> 0
+[ 20.907 s] [drive] E: read 2ba4e1+400
+[ 20.907 s] [drive] E: done -> 0
+[ 20.908 s] [drive] E: read 2ba8e1+400
+[ 20.908 s] [drive] E: done -> 0
+[ 20.908 s] [drive] E: read 2bace1+400
+[ 20.908 s] [drive] E: done -> 0
+[ 20.909 s] [drive] E: read 2bb0e1+400
+[ 20.909 s] [drive] E: done -> 0
+[ 20.942 s] [drive] E: read 2bb4e1+3be
+[ 20.942 s] [drive] E: done -> 0
+[ 21.550 s] [drive] E: read b40677+1000
+[ 21.550 s] [drive] E: done -> 0
+[ 22.580 s] [drive] E: read b41677+1000
+[ 22.580 s] [drive] E: done -> 0
+[ 23.610 s] [drive] E: read b42677+1000
+[ 23.611 s] [drive] E: done -> 0
+[ 24.492 s] [drive] E: read 2c5bf4+400
+[ 24.492 s] [drive] E: done -> 0
+[ 24.495 s] [drive] E: read 2c5ff4+400
+[ 24.495 s] [drive] E: done -> 0
+[ 24.496 s] [drive] E: read 2c63f4+400
+[ 24.496 s] [drive] E: done -> 0
+[ 24.525 s] [drive] E: read 2c67f4+400
+[ 24.525 s] [drive] E: done -> 0
+[ 24.526 s] [drive] E: read 2c6bf4+400
+[ 24.526 s] [drive] E: done -> 0
+[ 24.527 s] [drive] E: read 2c6ff4+400
+[ 24.527 s] [drive] E: done -> 0
+[ 24.557 s] [drive] E: read 2c73f4+400
+[ 24.557 s] [drive] E: done -> 0
+[ 24.558 s] [drive] E: read 2c77f4+400
+[ 24.558 s] [drive] E: done -> 0
+[ 24.559 s] [drive] E: read 2c7bf4+400
+[ 24.559 s] [drive] E: done -> 0
+[ 24.588 s] [drive] E: read 2c7ff4+400
+[ 24.588 s] [drive] E: done -> 0
+[ 24.589 s] [drive] E: read 2c83f4+400
+[ 24.589 s] [drive] E: done -> 0
+[ 24.608 s] [drive] E: read b43677+1000
+[ 24.609 s] [drive] E: done -> 0
+[ 24.621 s] [drive] E: read 2c87f4+400
+[ 24.621 s] [drive] E: done -> 0
+[ 24.622 s] [drive] E: read 2c8bf4+400
+[ 24.622 s] [drive] E: done -> 0
+[ 24.652 s] [drive] E: read 2c8ff4+400
+[ 24.652 s] [drive] E: done -> 0
+[ 24.652 s] [drive] E: read 2c93f4+400
+[ 24.652 s] [drive] E: done -> 0
+[ 24.653 s] [drive] E: read 2c97f4+400
+[ 24.653 s] [drive] E: done -> 0
+[ 24.684 s] [drive] E: read 2c9bf4+400
+[ 24.684 s] [drive] E: done -> 0
+[ 24.685 s] [drive] E: read 2c9ff4+400
+[ 24.685 s] [drive] E: done -> 0
+[ 24.708 s] [drive] E: read 2ca3f4+400
+[ 24.708 s] [drive] E: done -> 0
+[ 24.709 s] [drive] E: read 2ca7f4+400
+[ 24.709 s] [drive] E: done -> 0
+[ 24.774 s] [drive] E: read 2cabf4+400
+[ 24.774 s] [drive] E: done -> 0
+[ 24.775 s] [drive] E: read 2caff4+400
+[ 24.775 s] [drive] E: done -> 0
+[ 24.776 s] [drive] E: read 2cb3f4+400
+[ 24.776 s] [drive] E: done -> 0
+[ 24.819 s] [drive] E: read 2cb7f4+400
+[ 24.819 s] [drive] E: done -> 0
+[ 24.820 s] [drive] E: read 2cbbf4+400
+[ 24.820 s] [drive] E: done -> 0
+[ 24.853 s] [drive] E: read 2cbff4+400
+[ 24.854 s] [drive] E: done -> 0
+[ 24.854 s] [drive] E: read 2cc3f4+400
+[ 24.854 s] [drive] E: done -> 0
+[ 24.879 s] [drive] E: read 2cc7f4+400
+[ 24.879 s] [drive] E: done -> 0
+[ 24.880 s] [drive] E: read 2ccbf4+400
+[ 24.880 s] [drive] E: done -> 0
+[ 24.914 s] [drive] E: read 2ccff4+400
+[ 24.914 s] [drive] E: done -> 0
+[ 24.914 s] [drive] E: read 2cd3f4+400
+[ 24.914 s] [drive] E: done -> 0
+[ 24.939 s] [drive] E: read 2cd7f4+400
+[ 24.939 s] [drive] E: done -> 0
+[ 24.940 s] [drive] E: read 2cdbf4+400
+[ 24.940 s] [drive] E: done -> 0
+[ 24.973 s] [drive] E: read 2cdff4+400
+[ 24.973 s] [drive] E: done -> 0
+[ 24.974 s] [drive] E: read 2ce3f4+400
+[ 24.974 s] [drive] E: done -> 0
+[ 25.009 s] [drive] E: read 2ce7f4+400
+[ 25.009 s] [drive] E: done -> 0
+[ 25.010 s] [drive] E: read 2cebf4+400
+[ 25.010 s] [drive] E: done -> 0
+[ 25.010 s] [drive] E: read 2ceff4+400
+[ 25.010 s] [drive] E: done -> 0
+[ 25.034 s] [drive] E: read 2cf3f4+400
+[ 25.034 s] [drive] E: done -> 0
+[ 25.035 s] [drive] E: read 2cf7f4+400
+[ 25.035 s] [drive] E: done -> 0
+[ 25.069 s] [drive] E: read 2cfbf4+400
+[ 25.069 s] [drive] E: done -> 0
+[ 25.070 s] [drive] E: read 2cfff4+400
+[ 25.070 s] [drive] E: done -> 0
+[ 25.071 s] [drive] E: read 2d03f4+400
+[ 25.071 s] [drive] E: done -> 0
+[ 25.114 s] [drive] E: read 2d07f4+400
+[ 25.114 s] [drive] E: done -> 0
+[ 25.115 s] [drive] E: read 2d0bf4+400
+[ 25.115 s] [drive] E: done -> 0
+[ 25.150 s] [drive] E: read 2d0ff4+400
+[ 25.150 s] [drive] E: done -> 0
+[ 25.150 s] [drive] E: read 2d13f4+400
+[ 25.150 s] [drive] E: done -> 0
+[ 25.151 s] [drive] E: read 2d17f4+400
+[ 25.151 s] [drive] E: done -> 0
+[ 25.174 s] [drive] E: read 2d1bf4+400
+[ 25.174 s] [drive] E: done -> 0
+[ 25.175 s] [drive] E: read 2d1ff4+400
+[ 25.175 s] [drive] E: done -> 0
+[ 25.242 s] [drive] E: read 2d23f4+400
+[ 25.242 s] [drive] E: done -> 0
+[ 25.243 s] [drive] E: read 2d27f4+400
+[ 25.243 s] [drive] E: done -> 0
+[ 25.244 s] [drive] E: read 2d2bf4+400
+[ 25.244 s] [drive] E: done -> 0
+[ 25.268 s] [drive] E: read 2d2ff4+400
+[ 25.268 s] [drive] E: done -> 0
+[ 25.269 s] [drive] E: read 2d33f4+400
+[ 25.269 s] [drive] E: done -> 0
+[ 25.270 s] [drive] E: read 2d37f4+400
+[ 25.270 s] [drive] E: done -> 0
+[ 25.336 s] [drive] E: read 2d3bf4+400
+[ 25.336 s] [drive] E: done -> 0
+[ 25.337 s] [drive] E: read 2d3ff4+400
+[ 25.337 s] [drive] E: done -> 0
+[ 25.338 s] [drive] E: read 2d43f4+400
+[ 25.338 s] [drive] E: done -> 0
+[ 25.361 s] [drive] E: read 2d47f4+400
+[ 25.361 s] [drive] E: done -> 0
+[ 25.362 s] [drive] E: read 2d4bf4+400
+[ 25.362 s] [drive] E: done -> 0
+[ 25.362 s] [drive] E: read 2d4ff4+400
+[ 25.362 s] [drive] E: done -> 0
+[ 25.381 s] [drive] E: read b44677+1000
+[ 25.381 s] [drive] E: done -> 0
+[ 25.408 s] [drive] E: read 2d53f4+400
+[ 25.408 s] [drive] E: done -> 0
+[ 25.409 s] [drive] E: read 2d57f4+400
+[ 25.409 s] [drive] E: done -> 0
+[ 25.410 s] [drive] E: read 2d5bf4+400
+[ 25.410 s] [drive] E: done -> 0
+[ 25.411 s] [drive] E: read 2d5ff4+400
+[ 25.411 s] [drive] E: done -> 0
+[ 25.444 s] [drive] E: read 2d63f4+400
+[ 25.444 s] [drive] E: done -> 0
+[ 25.446 s] [drive] E: read 2d67f4+400
+[ 25.446 s] [drive] E: done -> 0
+[ 25.446 s] [drive] E: read 2d6bf4+400
+[ 25.446 s] [drive] E: done -> 0
+[ 25.470 s] [drive] E: read 2d6ff4+400
+[ 25.470 s] [drive] E: done -> 0
+[ 25.471 s] [drive] E: read 2d73f4+400
+[ 25.471 s] [drive] E: done -> 0
+[ 25.471 s] [drive] E: read 2d77f4+400
+[ 25.471 s] [drive] E: done -> 0
+[ 25.505 s] [drive] E: read 2d7bf4+400
+[ 25.505 s] [drive] E: done -> 0
+[ 25.505 s] [drive] E: read 2d7ff4+400
+[ 25.505 s] [drive] E: done -> 0
+[ 25.506 s] [drive] E: read 2d83f4+400
+[ 25.506 s] [drive] E: done -> 0
+[ 25.540 s] [drive] E: read 2d87f4+400
+[ 25.541 s] [drive] E: done -> 0
+[ 25.541 s] [drive] E: read 2d8bf4+400
+[ 25.541 s] [drive] E: done -> 0
+[ 25.542 s] [drive] E: read 2d8ff4+17a
+[ 25.542 s] [drive] E: done -> 0
+[ 26.412 s] [drive] E: read b45677+1000
+[ 26.412 s] [drive] E: done -> 0
+[ 27.442 s] [drive] E: read b46677+1000
+[ 27.442 s] [drive] E: done -> 0
+[ 28.471 s] [drive] E: read b47677+1000
+[ 28.471 s] [drive] E: done -> 0
+[ 29.502 s] [drive] E: read b48677+1000
+[ 29.502 s] [drive] E: done -> 0
+[ 30.432 s] [drive] E: read 2d916e+400
+[ 30.432 s] [drive] E: done -> 0
+[ 30.433 s] [drive] E: read 2d956e+400
+[ 30.433 s] [drive] E: done -> 0
+[ 30.434 s] [drive] E: read 2d996e+400
+[ 30.434 s] [drive] E: done -> 0
+[ 30.458 s] [drive] E: read 2d9d6e+400
+[ 30.458 s] [drive] E: done -> 0
+[ 30.459 s] [drive] E: read 2da16e+400
+[ 30.459 s] [drive] E: done -> 0
+[ 30.493 s] [drive] E: read 2da56e+400
+[ 30.493 s] [drive] E: done -> 0
+[ 30.493 s] [drive] E: read 2da96e+400
+[ 30.494 s] [drive] E: done -> 0
+[ 30.500 s] [drive] E: read b49677+1000
+[ 30.500 s] [drive] E: done -> 0
+[ 30.519 s] [drive] E: read 2dad6e+400
+[ 30.519 s] [drive] E: done -> 0
+[ 30.520 s] [drive] E: read 2db16e+400
+[ 30.520 s] [drive] E: done -> 0
+[ 30.521 s] [drive] E: read 2db56e+400
+[ 30.521 s] [drive] E: done -> 0
+[ 30.554 s] [drive] E: read 2db96e+400
+[ 30.554 s] [drive] E: done -> 0
+[ 30.555 s] [drive] E: read 2dbd6e+400
+[ 30.555 s] [drive] E: done -> 0
+[ 30.556 s] [drive] E: read 2dc16e+400
+[ 30.556 s] [drive] E: done -> 0
+[ 30.580 s] [drive] E: read 2dc56e+400
+[ 30.580 s] [drive] E: done -> 0
+[ 30.581 s] [drive] E: read 2dc96e+400
+[ 30.581 s] [drive] E: done -> 0
+[ 30.582 s] [drive] E: read 2dcd6e+400
+[ 30.582 s] [drive] E: done -> 0
+[ 30.583 s] [drive] E: read 2dd16e+400
+[ 30.583 s] [drive] E: done -> 0
+[ 30.616 s] [drive] E: read 2dd56e+400
+[ 30.616 s] [drive] E: done -> 0
+[ 30.617 s] [drive] E: read 2dd96e+400
+[ 30.617 s] [drive] E: done -> 0
+[ 30.617 s] [drive] E: read 2ddd6e+400
+[ 30.618 s] [drive] E: done -> 0
+[ 30.642 s] [drive] E: read 2de16e+400
+[ 30.642 s] [drive] E: done -> 0
+[ 30.642 s] [drive] E: read 2de56e+400
+[ 30.642 s] [drive] E: done -> 0
+[ 30.643 s] [drive] E: read 2de96e+400
+[ 30.643 s] [drive] E: done -> 0
+[ 30.644 s] [drive] E: read 2ded6e+400
+[ 30.644 s] [drive] E: done -> 0
+[ 30.697 s] [drive] E: read 2df16e+400
+[ 30.697 s] [drive] E: done -> 0
+[ 30.698 s] [drive] E: read 2df56e+400
+[ 30.698 s] [drive] E: done -> 0
+[ 30.699 s] [drive] E: read 2df96e+400
+[ 30.699 s] [drive] E: done -> 0
+[ 30.699 s] [drive] E: read 2dfd6e+400
+[ 30.699 s] [drive] E: done -> 0
+[ 30.723 s] [drive] E: read 2e016e+400
+[ 30.723 s] [drive] E: done -> 0
+[ 30.724 s] [drive] E: read 2e056e+400
+[ 30.724 s] [drive] E: done -> 0
+[ 30.724 s] [drive] E: read 2e096e+400
+[ 30.724 s] [drive] E: done -> 0
+[ 30.725 s] [drive] E: read 2e0d6e+400
+[ 30.725 s] [drive] E: done -> 0
+[ 30.790 s] [drive] E: read 2e116e+400
+[ 30.790 s] [drive] E: done -> 0
+[ 30.791 s] [drive] E: read 2e156e+400
+[ 30.791 s] [drive] E: done -> 0
+[ 30.792 s] [drive] E: read 2e196e+400
+[ 30.792 s] [drive] E: done -> 0
+[ 30.792 s] [drive] E: read 2e1d6e+400
+[ 30.793 s] [drive] E: done -> 0
+[ 30.816 s] [drive] E: read 2e216e+400
+[ 30.816 s] [drive] E: done -> 0
+[ 30.816 s] [drive] E: read 2e256e+400
+[ 30.816 s] [drive] E: done -> 0
+[ 30.817 s] [drive] E: read 2e296e+400
+[ 30.817 s] [drive] E: done -> 0
+[ 30.884 s] [drive] E: read 2e2d6e+400
+[ 30.884 s] [drive] E: done -> 0
+[ 30.885 s] [drive] E: read 2e316e+400
+[ 30.885 s] [drive] E: done -> 0
+[ 30.885 s] [drive] E: read 2e356e+400
+[ 30.885 s] [drive] E: done -> 0
+[ 30.887 s] [drive] E: read 2e396e+400
+[ 30.887 s] [drive] E: done -> 0
+[ 30.910 s] [drive] E: read 2e3d6e+400
+[ 30.910 s] [drive] E: done -> 0
+[ 30.911 s] [drive] E: read 2e416e+400
+[ 30.911 s] [drive] E: done -> 0
+[ 30.912 s] [drive] E: read 2e456e+400
+[ 30.912 s] [drive] E: done -> 0
+[ 30.912 s] [drive] E: read 2e496e+400
+[ 30.913 s] [drive] E: done -> 0
+[ 30.988 s] [drive] E: read 2e4d6e+400
+[ 30.988 s] [drive] E: done -> 0
+[ 30.989 s] [drive] E: read 2e516e+400
+[ 30.989 s] [drive] E: done -> 0
+[ 30.990 s] [drive] E: read 2e556e+400
+[ 30.990 s] [drive] E: done -> 0
+[ 30.990 s] [drive] E: read 2e596e+400
+[ 30.990 s] [drive] E: done -> 0
+[ 31.023 s] [drive] E: read 2e5d6e+400
+[ 31.023 s] [drive] E: done -> 0
+[ 31.024 s] [drive] E: read 2e616e+400
+[ 31.024 s] [drive] E: done -> 0
+[ 31.025 s] [drive] E: read 2e656e+400
+[ 31.025 s] [drive] E: done -> 0
+[ 31.025 s] [drive] E: read 2e696e+400
+[ 31.025 s] [drive] E: done -> 0
+[ 31.026 s] [drive] E: read 2e6d6e+400
+[ 31.027 s] [drive] E: done -> 0
+[ 31.050 s] [drive] E: read 2e716e+400
+[ 31.050 s] [drive] E: done -> 0
+[ 31.050 s] [drive] E: read 2e756e+400
+[ 31.050 s] [drive] E: done -> 0
+[ 31.051 s] [drive] E: read 2e796e+400
+[ 31.051 s] [drive] E: done -> 0
+[ 31.052 s] [drive] E: read 2e7d6e+400
+[ 31.052 s] [drive] E: done -> 0
+[ 31.085 s] [drive] E: read 2e816e+400
+[ 31.085 s] [drive] E: done -> 0
+[ 31.086 s] [drive] E: read 2e856e+400
+[ 31.086 s] [drive] E: done -> 0
+[ 31.086 s] [drive] E: read 2e896e+400
+[ 31.086 s] [drive] E: done -> 0
+[ 31.087 s] [drive] E: read 2e8d6e+400
+[ 31.087 s] [drive] E: done -> 0
+[ 31.110 s] [drive] E: read 2e916e+400
+[ 31.110 s] [drive] E: done -> 0
+[ 31.111 s] [drive] E: read 2e956e+400
+[ 31.111 s] [drive] E: done -> 0
+[ 31.112 s] [drive] E: read 2e996e+400
+[ 31.112 s] [drive] E: done -> 0
+[ 31.112 s] [drive] E: read 2e9d6e+400
+[ 31.112 s] [drive] E: done -> 0
+[ 31.145 s] [drive] E: read 2ea16e+400
+[ 31.145 s] [drive] E: done -> 0
+[ 31.146 s] [drive] E: read 2ea56e+400
+[ 31.146 s] [drive] E: done -> 0
+[ 31.147 s] [drive] E: read 2ea96e+400
+[ 31.147 s] [drive] E: done -> 0
+[ 31.147 s] [drive] E: read 2ead6e+400
+[ 31.148 s] [drive] E: done -> 0
+[ 31.181 s] [drive] E: read 2eb16e+400
+[ 31.181 s] [drive] E: done -> 0
+[ 31.181 s] [drive] E: read 2eb56e+400
+[ 31.181 s] [drive] E: done -> 0
+[ 31.182 s] [drive] E: read 2eb96e+400
+[ 31.182 s] [drive] E: done -> 0
+[ 31.183 s] [drive] E: read 2ebd6e+11f
+[ 31.183 s] [drive] E: done -> 0
+[ 31.532 s] [drive] E: read b4a677+1000
+[ 31.532 s] [drive] E: done -> 0
+[ 32.562 s] [drive] E: read b4b677+1000
+[ 32.562 s] [drive] E: done -> 0
+[ 33.335 s] [drive] E: read b4c677+1000
+[ 33.335 s] [drive] E: done -> 0
+[ 34.365 s] [drive] E: read b4d677+1000
+[ 34.365 s] [drive] E: done -> 0
+[ 35.363 s] [drive] E: read b4e677+1000
+[ 35.363 s] [drive] E: done -> 0
+[ 36.369 s] [drive] E: read 2ebe8d+400
+[ 36.369 s] [drive] E: done -> 0
+[ 36.370 s] [drive] E: read 2ec28d+400
+[ 36.370 s] [drive] E: done -> 0
+[ 36.394 s] [drive] E: read b4f677+1000
+[ 36.394 s] [drive] E: done -> 0
+[ 36.397 s] [drive] E: read 2ec68d+400
+[ 36.397 s] [drive] E: done -> 0
+[ 36.398 s] [drive] E: read 2eca8d+400
+[ 36.398 s] [drive] E: done -> 0
+[ 36.453 s] [drive] E: read 2ece8d+400
+[ 36.453 s] [drive] E: done -> 0
+[ 36.454 s] [drive] E: read 2ed28d+400
+[ 36.454 s] [drive] E: done -> 0
+[ 36.489 s] [drive] E: read 2ed68d+400
+[ 36.489 s] [drive] E: done -> 0
+[ 36.490 s] [drive] E: read 2eda8d+400
+[ 36.490 s] [drive] E: done -> 0
+[ 36.523 s] [drive] E: read 2ede8d+400
+[ 36.523 s] [drive] E: done -> 0
+[ 36.524 s] [drive] E: read 2ee28d+400
+[ 36.524 s] [drive] E: done -> 0
+[ 36.548 s] [drive] E: read 2ee68d+400
+[ 36.548 s] [drive] E: done -> 0
+[ 36.548 s] [drive] E: read 2eea8d+400
+[ 36.549 s] [drive] E: done -> 0
+[ 36.602 s] [drive] E: read 2eee8d+400
+[ 36.602 s] [drive] E: done -> 0
+[ 36.603 s] [drive] E: read 2ef28d+400
+[ 36.603 s] [drive] E: done -> 0
+[ 36.604 s] [drive] E: read 2ef68d+400
+[ 36.604 s] [drive] E: done -> 0
+[ 36.627 s] [drive] E: read 2efa8d+400
+[ 36.627 s] [drive] E: done -> 0
+[ 36.628 s] [drive] E: read 2efe8d+400
+[ 36.628 s] [drive] E: done -> 0
+[ 36.663 s] [drive] E: read 2f028d+400
+[ 36.663 s] [drive] E: done -> 0
+[ 36.664 s] [drive] E: read 2f068d+400
+[ 36.664 s] [drive] E: done -> 0
+[ 36.664 s] [drive] E: read 2f0a8d+400
+[ 36.664 s] [drive] E: done -> 0
+[ 36.688 s] [drive] E: read 2f0e8d+400
+[ 36.688 s] [drive] E: done -> 0
+[ 36.688 s] [drive] E: read 2f128d+400
+[ 36.689 s] [drive] E: done -> 0
+[ 36.689 s] [drive] E: read 2f168d+400
+[ 36.689 s] [drive] E: done -> 0
+[ 36.722 s] [drive] E: read 2f1a8d+400
+[ 36.722 s] [drive] E: done -> 0
+[ 36.723 s] [drive] E: read 2f1e8d+400
+[ 36.723 s] [drive] E: done -> 0
+[ 36.724 s] [drive] E: read 2f228d+400
+[ 36.724 s] [drive] E: done -> 0
+[ 36.725 s] [drive] E: read 2f268d+400
+[ 36.725 s] [drive] E: done -> 0
+[ 36.758 s] [drive] E: read 2f2a8d+400
+[ 36.758 s] [drive] E: done -> 0
+[ 36.759 s] [drive] E: read 2f2e8d+400
+[ 36.759 s] [drive] E: done -> 0
+[ 36.759 s] [drive] E: read 2f328d+400
+[ 36.759 s] [drive] E: done -> 0
+[ 36.760 s] [drive] E: read 2f368d+400
+[ 36.760 s] [drive] E: done -> 0
+[ 36.785 s] [drive] E: read 2f3a8d+400
+[ 36.785 s] [drive] E: done -> 0
+[ 36.785 s] [drive] E: read 2f3e8d+400
+[ 36.785 s] [drive] E: done -> 0
+[ 36.786 s] [drive] E: read 2f428d+400
+[ 36.786 s] [drive] E: done -> 0
+[ 36.787 s] [drive] E: read 2f468d+400
+[ 36.787 s] [drive] E: done -> 0
+[ 36.820 s] [drive] E: read 2f4a8d+400
+[ 36.820 s] [drive] E: done -> 0
+[ 36.821 s] [drive] E: read 2f4e8d+400
+[ 36.821 s] [drive] E: done -> 0
+[ 36.821 s] [drive] E: read 2f528d+400
+[ 36.821 s] [drive] E: done -> 0
+[ 36.822 s] [drive] E: read 2f568d+400
+[ 36.822 s] [drive] E: done -> 0
+[ 36.846 s] [drive] E: read 2f5a8d+400
+[ 36.846 s] [drive] E: done -> 0
+[ 36.847 s] [drive] E: read 2f5e8d+400
+[ 36.847 s] [drive] E: done -> 0
+[ 36.847 s] [drive] E: read 2f628d+400
+[ 36.848 s] [drive] E: done -> 0
+[ 36.848 s] [drive] E: read 2f668d+400
+[ 36.848 s] [drive] E: done -> 0
+[ 36.891 s] [drive] E: read 2f6a8d+400
+[ 36.891 s] [drive] E: done -> 0
+[ 36.892 s] [drive] E: read 2f6e8d+400
+[ 36.892 s] [drive] E: done -> 0
+[ 36.893 s] [drive] E: read 2f728d+400
+[ 36.893 s] [drive] E: done -> 0
+[ 36.893 s] [drive] E: read 2f768d+400
+[ 36.893 s] [drive] E: done -> 0
+[ 36.894 s] [drive] E: read 2f7a8d+400
+[ 36.894 s] [drive] E: done -> 0
+[ 36.928 s] [drive] E: read 2f7e8d+400
+[ 36.928 s] [drive] E: done -> 0
+[ 36.929 s] [drive] E: read 2f828d+400
+[ 36.929 s] [drive] E: done -> 0
+[ 36.930 s] [drive] E: read 2f868d+400
+[ 36.930 s] [drive] E: done -> 0
+[ 36.930 s] [drive] E: read 2f8a8d+400
+[ 36.930 s] [drive] E: done -> 0
+[ 36.954 s] [drive] E: read 2f8e8d+400
+[ 36.954 s] [drive] E: done -> 0
+[ 36.955 s] [drive] E: read 2f928d+400
+[ 36.955 s] [drive] E: done -> 0
+[ 36.955 s] [drive] E: read 2f968d+400
+[ 36.955 s] [drive] E: done -> 0
+[ 36.956 s] [drive] E: read 2f9a8d+400
+[ 36.956 s] [drive] E: done -> 0
+[ 36.990 s] [drive] E: read 2f9e8d+400
+[ 36.991 s] [drive] E: done -> 0
+[ 36.991 s] [drive] E: read 2fa28d+400
+[ 36.991 s] [drive] E: done -> 0
+[ 36.992 s] [drive] E: read 2fa68d+400
+[ 36.992 s] [drive] E: done -> 0
+[ 36.993 s] [drive] E: read 2faa8d+400
+[ 36.993 s] [drive] E: done -> 0
+[ 36.993 s] [drive] E: read 2fae8d+400
+[ 36.993 s] [drive] E: done -> 0
+[ 37.017 s] [drive] E: read 2fb28d+400
+[ 37.017 s] [drive] E: done -> 0
+[ 37.017 s] [drive] E: read 2fb68d+400
+[ 37.017 s] [drive] E: done -> 0
+[ 37.018 s] [drive] E: read 2fba8d+400
+[ 37.018 s] [drive] E: done -> 0
+[ 37.019 s] [drive] E: read 2fbe8d+400
+[ 37.019 s] [drive] E: done -> 0
+[ 37.053 s] [drive] E: read 2fc28d+400
+[ 37.053 s] [drive] E: done -> 0
+[ 37.054 s] [drive] E: read 2fc68d+400
+[ 37.054 s] [drive] E: done -> 0
+[ 37.054 s] [drive] E: read 2fca8d+400
+[ 37.054 s] [drive] E: done -> 0
+[ 37.055 s] [drive] E: read 2fce8d+400
+[ 37.055 s] [drive] E: done -> 0
+[ 37.088 s] [drive] E: read 2fd28d+400
+[ 37.088 s] [drive] E: done -> 0
+[ 37.089 s] [drive] E: read 2fd68d+400
+[ 37.089 s] [drive] E: done -> 0
+[ 37.090 s] [drive] E: read 2fda8d+400
+[ 37.090 s] [drive] E: done -> 0
+[ 37.090 s] [drive] E: read 2fde8d+400
+[ 37.090 s] [drive] E: done -> 0
+[ 37.115 s] [drive] E: read 2fe28d+400
+[ 37.115 s] [drive] E: done -> 0
+[ 37.115 s] [drive] E: read 2fe68d+400
+[ 37.115 s] [drive] E: done -> 0
+[ 37.116 s] [drive] E: read 2fea8d+400
+[ 37.116 s] [drive] E: done -> 0
+[ 37.117 s] [drive] E: read 2fee8d+400
+[ 37.117 s] [drive] E: done -> 0
+[ 37.117 s] [drive] E: read 2ff28d+400
+[ 37.117 s] [drive] E: done -> 0
+[ 37.151 s] [drive] E: read 2ff68d+400
+[ 37.151 s] [drive] E: done -> 0
+[ 37.151 s] [drive] E: read 2ffa8d+400
+[ 37.151 s] [drive] E: done -> 0
+[ 37.152 s] [drive] E: read 2ffe8d+400
+[ 37.152 s] [drive] E: done -> 0
+[ 37.153 s] [drive] E: read 30028d+400
+[ 37.153 s] [drive] E: done -> 0
+[ 37.197 s] [drive] E: read 30068d+400
+[ 37.197 s] [drive] E: done -> 0
+[ 37.198 s] [drive] E: read 300a8d+400
+[ 37.198 s] [drive] E: done -> 0
+[ 37.199 s] [drive] E: read 300e8d+400
+[ 37.199 s] [drive] E: done -> 0
+[ 37.199 s] [drive] E: read 30128d+400
+[ 37.199 s] [drive] E: done -> 0
+[ 37.222 s] [drive] E: read 30168d+400
+[ 37.222 s] [drive] E: done -> 0
+[ 37.223 s] [drive] E: read 301a8d+400
+[ 37.223 s] [drive] E: done -> 0
+[ 37.224 s] [drive] E: read 301e8d+400
+[ 37.224 s] [drive] E: done -> 0
+[ 37.224 s] [drive] E: read 30228d+400
+[ 37.224 s] [drive] E: done -> 0
+[ 37.291 s] [drive] E: read 30268d+400
+[ 37.291 s] [drive] E: done -> 0
+[ 37.292 s] [drive] E: read 302a8d+400
+[ 37.292 s] [drive] E: done -> 0
+[ 37.292 s] [drive] E: read 302e8d+400
+[ 37.292 s] [drive] E: done -> 0
+[ 37.293 s] [drive] E: read 30328d+400
+[ 37.293 s] [drive] E: done -> 0
+[ 37.294 s] [drive] E: read 30368d+400
+[ 37.294 s] [drive] E: done -> 0
+[ 37.318 s] [drive] E: read 303a8d+400
+[ 37.318 s] [drive] E: done -> 0
+[ 37.319 s] [drive] E: read 303e8d+400
+[ 37.319 s] [drive] E: done -> 0
+[ 37.319 s] [drive] E: read 30428d+2de
+[ 37.319 s] [drive] E: done -> 0
+[ 37.425 s] [drive] E: read b50677+1000
+[ 37.425 s] [drive] E: done -> 0
+[ 38.455 s] [drive] E: read b51677+1000
+[ 38.455 s] [drive] E: done -> 0
+[ 39.486 s] [drive] E: read b52677+1000
+[ 39.486 s] [drive] E: done -> 0
+[ 40.068 s] [drive] E: read 201e12a+400
+[ 40.068 s] [drive] E: fetch 15: block 201 into slot 1f1 (block 1f1 was there)
+[ 40.085 s] [drive] E: fetched block 201 in 17384 us
+[ 40.085 s] [drive] E: done -> 0
+[ 40.086 s] [drive] E: read 201e52a+400
+[ 40.087 s] [drive] E: done -> 0
+[ 40.088 s] [drive] E: read 201e92a+2aa
+[ 40.088 s] [drive] E: done -> 0
+[ 40.227 s] [drive] E: read b53677+1000
+[ 40.227 s] [drive] E: done -> 0
+[ 40.362 s] [drive] E: read 1cd5eeb+127
+[ 40.362 s] [drive] E: done -> 0
+[ 40.363 s] [drive] E: read 18de699+400
+[ 40.363 s] [drive] E: done -> 0
+[ 40.364 s] [drive] E: read 18dea99+400
+[ 40.364 s] [drive] E: done -> 0
+[ 40.365 s] [drive] E: read 18dee99+86
+[ 40.365 s] [drive] E: done -> 0
+[ 40.368 s] [drive] E: read 18def1f+162
+[ 40.368 s] [drive] E: done -> 0
+[ 40.370 s] [drive] E: read 18de528+171
+[ 40.370 s] [drive] E: done -> 0
+[ 40.373 s] [drive] E: read 13b009b+400
+[ 40.373 s] [drive] E: done -> 0
+[ 40.374 s] [drive] E: read 13b049b+400
+[ 40.374 s] [drive] E: done -> 0
+[ 40.375 s] [drive] E: read 13b089b+400
+[ 40.375 s] [drive] E: done -> 0
+[ 40.376 s] [drive] E: read 13b0c9b+400
+[ 40.376 s] [drive] E: done -> 0
+[ 40.376 s] [drive] E: read 13b109b+400
+[ 40.376 s] [drive] E: done -> 0
+[ 40.377 s] [drive] E: read 13b149b+400
+[ 40.377 s] [drive] E: done -> 0
+[ 40.377 s] [drive] E: read 13b189b+400
+[ 40.377 s] [drive] E: done -> 0
+[ 40.378 s] [drive] E: read 13b1c9b+400
+[ 40.378 s] [drive] E: done -> 0
+[ 40.379 s] [drive] E: read 13b209b+284
+[ 40.379 s] [drive] E: done -> 0
+[ 40.380 s] [drive] E: read 12e8834+400
+[ 40.380 s] [drive] E: done -> 0
+[ 40.381 s] [drive] E: read 12e8c34+400
+[ 40.381 s] [drive] E: done -> 0
+[ 40.382 s] [drive] E: read 12e9034+2e9
+[ 40.382 s] [drive] E: done -> 0
+[ 40.384 s] [drive] E: read 12e8834+400
+[ 40.384 s] [drive] E: done -> 0
+[ 40.385 s] [drive] E: read 12e8c34+400
+[ 40.385 s] [drive] E: done -> 0
+[ 40.385 s] [drive] E: read 12e9034+2e9
+[ 40.385 s] [drive] E: done -> 0
+[ 40.398 s] [drive] E: read 13ae727+400
+[ 40.398 s] [drive] E: done -> 0
+[ 40.399 s] [drive] E: read 13aeb27+400
+[ 40.399 s] [drive] E: done -> 0
+[ 40.399 s] [drive] E: read 13aef27+400
+[ 40.399 s] [drive] E: done -> 0
+[ 40.400 s] [drive] E: read 13af327+253
+[ 40.400 s] [drive] E: done -> 0
+[ 40.408 s] [drive] E: read 18dd15d+400
+[ 40.408 s] [drive] E: done -> 0
+[ 40.409 s] [drive] E: read 18dd55d+400
+[ 40.409 s] [drive] E: done -> 0
+[ 40.410 s] [drive] E: read 18dd95d+400
+[ 40.410 s] [drive] E: done -> 0
+[ 40.410 s] [drive] E: read 18ddd5d+2fc
+[ 40.410 s] [drive] E: done -> 0
+[ 40.420 s] [drive] E: read 1f415be+1000
+[ 40.420 s] [drive] E: fetch 16: block 1f4 into slot 1f0 (block 1f0 was there)
+[ 40.438 s] [drive] E: fetched block 1f4 in 17384 us
+[ 40.438 s] [drive] E: done -> 0
+[ 41.129 s] [drive] E: read 1f425be+1000
+[ 41.129 s] [drive] E: done -> 0
+[ 42.160 s] [drive] E: read 1f435be+1000
+[ 42.160 s] [drive] E: done -> 0
+[ 43.191 s] [drive] E: read 1f445be+1000
+[ 43.191 s] [drive] E: done -> 0
+[ 44.190 s] [drive] E: read 1f455be+1000
+[ 44.190 s] [drive] E: done -> 0
+[ 45.092 s] [drive] E: read 1d1e266+c86
+[ 45.093 s] [drive] E: done -> 0
+[ 45.214 s] [drive] E: read 1cd7f41+152
+[ 45.214 s] [drive] E: done -> 0
+[ 45.216 s] [drive] E: read 131924f+400
+[ 45.216 s] [drive] E: done -> 0
+[ 45.217 s] [drive] E: read 131964f+400
+[ 45.217 s] [drive] E: done -> 0
+[ 45.218 s] [drive] E: read 1319a4f+400
+[ 45.218 s] [drive] E: done -> 0
+[ 45.219 s] [drive] E: read 1319e4f+400
+[ 45.219 s] [drive] E: done -> 0
+[ 45.219 s] [drive] E: read 131a24f+400
+[ 45.219 s] [drive] E: done -> 0
+[ 45.220 s] [drive] E: read 131a64f+400
+[ 45.220 s] [drive] E: done -> 0
+[ 45.220 s] [drive] E: read 131aa4f+400
+[ 45.220 s] [drive] E: done -> 0
+[ 45.223 s] [drive] E: read 1f465be+1000
+[ 45.223 s] [drive] E: done -> 0
+[ 45.223 s] [drive] E: read 131ae4f+400
+[ 45.223 s] [drive] E: done -> 0
+[ 45.224 s] [drive] E: read 131b24f+400
+[ 45.224 s] [drive] E: done -> 0
+[ 45.224 s] [drive] E: read 131b64f+400
+[ 45.224 s] [drive] E: done -> 0
+[ 45.225 s] [drive] E: read 131ba4f+400
+[ 45.225 s] [drive] E: done -> 0
+[ 45.225 s] [drive] E: read 131be4f+400
+[ 45.225 s] [drive] E: done -> 0
+[ 45.226 s] [drive] E: read 131c24f+400
+[ 45.226 s] [drive] E: done -> 0
+[ 45.227 s] [drive] E: read 131c64f+400
+[ 45.227 s] [drive] E: done -> 0
+[ 45.227 s] [drive] E: read 131ca4f+400
+[ 45.227 s] [drive] E: done -> 0
+[ 45.228 s] [drive] E: read 131ce4f+400
+[ 45.228 s] [drive] E: done -> 0
+[ 45.228 s] [drive] E: read 131d24f+400
+[ 45.228 s] [drive] E: done -> 0
+[ 45.229 s] [drive] E: read 131d64f+400
+[ 45.229 s] [drive] E: done -> 0
+[ 45.229 s] [drive] E: read 131da4f+d5
+[ 45.229 s] [drive] E: done -> 0
+[ 46.254 s] [drive] E: read 1f475be+1000
+[ 46.254 s] [drive] E: done -> 0
+[ 47.284 s] [drive] E: read 1f485be+1000
+[ 47.284 s] [drive] E: done -> 0
+[ 48.057 s] [drive] E: read 1f495be+1000
+[ 48.057 s] [drive] E: done -> 0
+[ 49.056 s] [drive] E: read 1f4a5be+1000
+[ 49.056 s] [drive] E: done -> 0
+[ 50.036 s] [drive] E: read 1cd8538+10d
+[ 50.036 s] [drive] E: done -> 0
+[ 50.038 s] [drive] E: read 131db24+400
+[ 50.038 s] [drive] E: done -> 0
+[ 50.039 s] [drive] E: read 131df24+400
+[ 50.039 s] [drive] E: done -> 0
+[ 50.040 s] [drive] E: read 131e324+400
+[ 50.040 s] [drive] E: done -> 0
+[ 50.040 s] [drive] E: read 131e724+400
+[ 50.040 s] [drive] E: done -> 0
+[ 50.041 s] [drive] E: read 131eb24+400
+[ 50.041 s] [drive] E: done -> 0
+[ 50.041 s] [drive] E: read 131ef24+400
+[ 50.041 s] [drive] E: done -> 0
+[ 50.042 s] [drive] E: read 131f324+400
+[ 50.042 s] [drive] E: done -> 0
+[ 50.042 s] [drive] E: read 131f724+400
+[ 50.042 s] [drive] E: done -> 0
+[ 50.043 s] [drive] E: read 131fb24+400
+[ 50.043 s] [drive] E: done -> 0
+[ 50.044 s] [drive] E: read 131ff24+400
+[ 50.044 s] [drive] E: done -> 0
+[ 50.044 s] [drive] E: read 1320324+400
+[ 50.044 s] [drive] E: done -> 0
+[ 50.045 s] [drive] E: read 1320724+400
+[ 50.045 s] [drive] E: done -> 0
+[ 50.045 s] [drive] E: read 1320b24+400
+[ 50.045 s] [drive] E: done -> 0
+[ 50.046 s] [drive] E: read 1320f24+400
+[ 50.046 s] [drive] E: done -> 0
+[ 50.046 s] [drive] E: read 1321324+400
+[ 50.046 s] [drive] E: done -> 0
+[ 50.047 s] [drive] E: read 1321724+400
+[ 50.047 s] [drive] E: done -> 0
+[ 50.047 s] [drive] E: read 1321b24+400
+[ 50.047 s] [drive] E: done -> 0
+[ 50.048 s] [drive] E: read 1321f24+400
+[ 50.048 s] [drive] E: done -> 0
+[ 50.048 s] [drive] E: read 1322324+400
+[ 50.048 s] [drive] E: done -> 0
+[ 50.049 s] [drive] E: read 1322724+98
+[ 50.049 s] [drive] E: done -> 0
+[ 50.088 s] [drive] E: read 1f4b5be+1000
+[ 50.088 s] [drive] E: done -> 0
+[ 51.122 s] [drive] E: read 1f4c5be+1000
+[ 51.122 s] [drive] E: done -> 0
+[ 52.155 s] [drive] E: read 1f4d5be+1000
+[ 52.155 s] [drive] E: done -> 0
+[ 53.159 s] [drive] E: read 1f4e5be+1000
+[ 53.159 s] [drive] E: done -> 0
+[ 54.191 s] [drive] E: read 1f4f5be+1000
+[ 54.191 s] [drive] E: fetch 17: block 1f5 into slot 1ef (block 1ef was there)
+[ 54.208 s] [drive] E: fetched block 1f5 in 17384 us
+[ 54.208 s] [drive] E: done -> 0
+[ 55.025 s] [drive] E: read 10a3964+179
+[ 55.025 s] [drive] E: done -> 0
+[ 55.026 s] [drive] E: read 10a30f6+400
+[ 55.026 s] [drive] E: done -> 0
+[ 55.027 s] [drive] E: read 10a34f6+37
+[ 55.027 s] [drive] E: done -> 0
+[ 55.043 s] [drive] E: read 10a30f6+400
+[ 55.043 s] [drive] E: done -> 0
+[ 55.044 s] [drive] E: read 10a34f6+37
+[ 55.044 s] [drive] E: done -> 0
+[ 55.059 s] [drive] E: read 10a30f6+400
+[ 55.059 s] [drive] E: done -> 0
+[ 55.060 s] [drive] E: read 10a34f6+37
+[ 55.060 s] [drive] E: done -> 0
+[ 55.075 s] [drive] E: read 10a30f6+400
+[ 55.075 s] [drive] E: done -> 0
+[ 55.076 s] [drive] E: read 10a34f6+37
+[ 55.076 s] [drive] E: done -> 0
+[ 55.090 s] [drive] E: read 10a30f6+400
+[ 55.090 s] [drive] E: done -> 0
+[ 55.091 s] [drive] E: read 10a34f6+37
+[ 55.091 s] [drive] E: done -> 0
+[ 55.107 s] [drive] E: read 10a30f6+400
+[ 55.107 s] [drive] E: done -> 0
+[ 55.108 s] [drive] E: read 10a34f6+37
+[ 55.108 s] [drive] E: done -> 0
+[ 55.122 s] [drive] E: read 10a30f6+400
+[ 55.122 s] [drive] E: done -> 0
+[ 55.123 s] [drive] E: read 10a34f6+37
+[ 55.123 s] [drive] E: done -> 0
+[ 55.137 s] [drive] E: read 10a30f6+400
+[ 55.138 s] [drive] E: done -> 0
+[ 55.138 s] [drive] E: read 10a34f6+37
+[ 55.138 s] [drive] E: done -> 0
+[ 55.152 s] [drive] E: read 10a30f6+400
+[ 55.153 s] [drive] E: done -> 0
+[ 55.153 s] [drive] E: read 10a34f6+37
+[ 55.153 s] [drive] E: done -> 0
+[ 55.169 s] [drive] E: read 10a30f6+400
+[ 55.169 s] [drive] E: done -> 0
+[ 55.170 s] [drive] E: read 10a34f6+37
+[ 55.170 s] [drive] E: done -> 0
+[ 55.183 s] [drive] E: read 10a30f6+400
+[ 55.183 s] [drive] E: done -> 0
+[ 55.184 s] [drive] E: read 10a34f6+37
+[ 55.184 s] [drive] E: done -> 0
+[ 55.198 s] [drive] E: read 109a45d+d4
+[ 55.198 s] [drive] E: done -> 0
+[ 55.201 s] [drive] E: read 10a3add+188
+[ 55.201 s] [drive] E: done -> 0
+[ 55.202 s] [drive] E: read 10a352d+400
+[ 55.202 s] [drive] E: done -> 0
+[ 55.203 s] [drive] E: read 10a392d+37
+[ 55.203 s] [drive] E: done -> 0
+[ 55.218 s] [drive] E: read 10a352d+400
+[ 55.218 s] [drive] E: done -> 0
+[ 55.219 s] [drive] E: read 10a392d+37
+[ 55.219 s] [drive] E: done -> 0
+[ 55.224 s] [drive] E: read 1f505be+1000
+[ 55.224 s] [drive] E: done -> 0
+[ 55.236 s] [drive] E: read 10a352d+400
+[ 55.236 s] [drive] E: done -> 0
+[ 55.237 s] [drive] E: read 10a392d+37
+[ 55.237 s] [drive] E: done -> 0
+[ 55.252 s] [drive] E: read 10a352d+400
+[ 55.252 s] [drive] E: done -> 0
+[ 55.253 s] [drive] E: read 10a392d+37
+[ 55.253 s] [drive] E: done -> 0
+[ 55.267 s] [drive] E: read 10a352d+400
+[ 55.267 s] [drive] E: done -> 0
+[ 55.268 s] [drive] E: read 10a392d+37
+[ 55.268 s] [drive] E: done -> 0
+[ 55.282 s] [drive] E: read 10a352d+400
+[ 55.283 s] [drive] E: done -> 0
+[ 55.283 s] [drive] E: read 10a392d+37
+[ 55.283 s] [drive] E: done -> 0
+[ 55.299 s] [drive] E: read 10a352d+400
+[ 55.299 s] [drive] E: done -> 0
+[ 55.300 s] [drive] E: read 10a392d+37
+[ 55.300 s] [drive] E: done -> 0
+[ 55.314 s] [drive] E: read 10a352d+400
+[ 55.314 s] [drive] E: done -> 0
+[ 55.315 s] [drive] E: read 10a392d+37
+[ 55.315 s] [drive] E: done -> 0
+[ 55.329 s] [drive] E: read 10a352d+400
+[ 55.329 s] [drive] E: done -> 0
+[ 55.330 s] [drive] E: read 10a392d+37
+[ 55.330 s] [drive] E: done -> 0
+[ 55.343 s] [drive] E: read 10a352d+400
+[ 55.343 s] [drive] E: done -> 0
+[ 55.344 s] [drive] E: read 10a392d+37
+[ 55.344 s] [drive] E: done -> 0
+[ 55.359 s] [drive] E: read 10a352d+400
+[ 55.359 s] [drive] E: done -> 0
+[ 55.360 s] [drive] E: read 10a392d+37
+[ 55.360 s] [drive] E: done -> 0
+[ 55.373 s] [drive] E: read 109a531+d7
+[ 55.373 s] [drive] E: done -> 0
+[ 55.376 s] [drive] E: read 10a2eb1+12c
+[ 55.376 s] [drive] E: done -> 0
+[ 55.391 s] [drive] E: read 109a937+209
+[ 55.391 s] [drive] E: done -> 0
+[ 55.406 s] [drive] E: read 109bca3+22
+[ 55.406 s] [drive] E: done -> 0
+[ 55.406 s] [drive] E: read 109be21+60
+[ 55.406 s] [drive] E: done -> 0
+[ 55.412 s] [drive] E: read 1cd3e3b+10a
+[ 55.412 s] [drive] E: done -> 0
+[ 55.413 s] [drive] E: read 18de699+400
+[ 55.413 s] [drive] E: done -> 0
+[ 55.416 s] [drive] E: read 18dea99+400
+[ 55.416 s] [drive] E: done -> 0
+[ 55.416 s] [drive] E: read 18dee99+86
+[ 55.416 s] [drive] E: done -> 0
+[ 55.420 s] [drive] E: read 18def1f+162
+[ 55.420 s] [drive] E: done -> 0
+[ 55.421 s] [drive] E: read 18de528+171
+[ 55.421 s] [drive] E: done -> 0
+[ 55.425 s] [drive] E: read 12e8834+400
+[ 55.425 s] [drive] E: done -> 0
+[ 55.426 s] [drive] E: read 12e8c34+400
+[ 55.426 s] [drive] E: done -> 0
+[ 55.426 s] [drive] E: read 12e9034+2e9
+[ 55.426 s] [drive] E: done -> 0
+[ 55.428 s] [drive] E: read 12e8834+400
+[ 55.428 s] [drive] E: done -> 0
+[ 55.429 s] [drive] E: read 12e8c34+400
+[ 55.429 s] [drive] E: done -> 0
+[ 55.430 s] [drive] E: read 12e9034+2e9
+[ 55.430 s] [drive] E: done -> 0
+[ 55.439 s] [drive] E: read 13ae727+400
+[ 55.439 s] [drive] E: done -> 0
+[ 55.440 s] [drive] E: read 13aeb27+400
+[ 55.440 s] [drive] E: done -> 0
+[ 55.440 s] [drive] E: read 13aef27+400
+[ 55.440 s] [drive] E: done -> 0
+[ 55.441 s] [drive] E: read 13af327+253
+[ 55.441 s] [drive] E: done -> 0
+[ 55.449 s] [drive] E: read 18dd15d+400
+[ 55.449 s] [drive] E: done -> 0
+[ 55.450 s] [drive] E: read 18dd55d+400
+[ 55.450 s] [drive] E: done -> 0
+[ 55.451 s] [drive] E: read 18dd95d+400
+[ 55.451 s] [drive] E: done -> 0
+[ 55.452 s] [drive] E: read 18ddd5d+2fc
+[ 55.452 s] [drive] E: done -> 0
+[ 55.460 s] [drive] E: read 18dbc95+400
+[ 55.460 s] [drive] E: done -> 0
+[ 55.461 s] [drive] E: read 18dc095+1a0
+[ 55.461 s] [drive] E: done -> 0
+[ 55.462 s] [drive] E: read 18dbc95+400
+[ 55.462 s] [drive] E: done -> 0
+[ 55.463 s] [drive] E: read 18dc095+1a0
+[ 55.463 s] [drive] E: done -> 0
+[ 55.467 s] [drive] E: read 18e5df2+400
+[ 55.467 s] [drive] E: done -> 0
+[ 55.468 s] [drive] E: read 18e61f2+400
+[ 55.468 s] [drive] E: done -> 0
+[ 55.469 s] [drive] E: read 18e65f2+8d
+[ 55.469 s] [drive] E: done -> 0
+[ 55.473 s] [drive] E: read 18e5df2+400
+[ 55.473 s] [drive] E: done -> 0
+[ 55.474 s] [drive] E: read 18e61f2+400
+[ 55.474 s] [drive] E: done -> 0
+[ 55.475 s] [drive] E: read 18e65f2+8d
+[ 55.475 s] [drive] E: done -> 0
+[ 55.477 s] [drive] E: read 1781998+400
+[ 55.477 s] [drive] E: done -> 0
+[ 55.478 s] [drive] E: read 1781d98+400
+[ 55.478 s] [drive] E: done -> 0
+[ 55.478 s] [drive] E: read 1782198+400
+[ 55.478 s] [drive] E: done -> 0
+[ 55.480 s] [drive] E: read 1782598+400
+[ 55.480 s] [drive] E: done -> 0
+[ 55.480 s] [drive] E: read 1782998+400
+[ 55.481 s] [drive] E: done -> 0
+[ 55.481 s] [drive] E: read 1782d98+400
+[ 55.481 s] [drive] E: done -> 0
+[ 55.482 s] [drive] E: read 1783198+400
+[ 55.482 s] [drive] E: done -> 0
+[ 55.482 s] [drive] E: read 1783598+400
+[ 55.482 s] [drive] E: done -> 0
+[ 55.483 s] [drive] E: read 1783998+400
+[ 55.483 s] [drive] E: done -> 0
+[ 55.483 s] [drive] E: read 1783d98+400
+[ 55.483 s] [drive] E: done -> 0
+[ 55.484 s] [drive] E: read 1784198+400
+[ 55.484 s] [drive] E: done -> 0
+[ 55.484 s] [drive] E: read 1784598+400
+[ 55.484 s] [drive] E: done -> 0
+[ 55.485 s] [drive] E: read 1784998+400
+[ 55.485 s] [drive] E: done -> 0
+[ 55.485 s] [drive] E: read 1784d98+400
+[ 55.485 s] [drive] E: done -> 0
+[ 55.486 s] [drive] E: read 1785198+400
+[ 55.486 s] [drive] E: done -> 0
+[ 55.487 s] [drive] E: read 1785598+400
+[ 55.487 s] [drive] E: done -> 0
+[ 55.487 s] [drive] E: read 1785998+400
+[ 55.487 s] [drive] E: done -> 0
+[ 55.488 s] [drive] E: read 1785d98+400
+[ 55.488 s] [drive] E: done -> 0
+[ 55.488 s] [drive] E: read 1786198+1f8
+[ 55.488 s] [drive] E: done -> 0
+[ 55.489 s] [drive] E: read 17b721b+400
+[ 55.489 s] [drive] E: done -> 0
+[ 55.490 s] [drive] E: read 17b761b+3df
+[ 55.490 s] [drive] E: done -> 0
+[ 55.492 s] [drive] E: read 17c09d4+400
+[ 55.492 s] [drive] E: done -> 0
+[ 55.493 s] [drive] E: read 17c0dd4+400
+[ 55.493 s] [drive] E: done -> 0
+[ 55.494 s] [drive] E: read 17c11d4+33b
+[ 55.494 s] [drive] E: done -> 0
+[ 55.498 s] [drive] E: read 17c09d4+400
+[ 55.498 s] [drive] E: done -> 0
+[ 55.499 s] [drive] E: read 17c0dd4+400
+[ 55.499 s] [drive] E: done -> 0
+[ 55.500 s] [drive] E: read 17c11d4+33b
+[ 55.500 s] [drive] E: done -> 0
+[ 55.511 s] [drive] E: read 18dc8d1+400
+[ 55.511 s] [drive] E: done -> 0
+[ 55.512 s] [drive] E: read 18dccd1+400
+[ 55.512 s] [drive] E: done -> 0
+[ 55.512 s] [drive] E: read 18dd0d1+8c
+[ 55.512 s] [drive] E: done -> 0
+[ 55.513 s] [drive] E: read 18dc8d1+400
+[ 55.513 s] [drive] E: done -> 0
+[ 55.514 s] [drive] E: read 18dccd1+400
+[ 55.514 s] [drive] E: done -> 0
+[ 55.515 s] [drive] E: read 18dd0d1+8c
+[ 55.515 s] [drive] E: done -> 0
+[ 55.520 s] [drive] E: read 18df1d6+14a
+[ 55.520 s] [drive] E: done -> 0
+[ 55.521 s] [drive] E: read 18df320+150
+[ 55.521 s] [drive] E: done -> 0
+[ 55.995 s] [drive] E: read 1f515be+1000
+[ 55.996 s] [drive] E: done -> 0
+[ 56.997 s] [drive] E: read 1f525be+1000
+[ 56.997 s] [drive] E: done -> 0
+[ 58.029 s] [drive] E: read 1f535be+1000
+[ 58.029 s] [drive] E: done -> 0
+[ 59.062 s] [drive] E: read 1f545be+1000
+[ 59.062 s] [drive] E: done -> 0
+[ 60.065 s] [drive] E: read 18e2ccc+400
+[ 60.065 s] [drive] E: done -> 0
+[ 60.066 s] [drive] E: read 18e30cc+346
+[ 60.066 s] [drive] E: done -> 0
+[ 60.070 s] [drive] E: read 18e3412+400
+[ 60.070 s] [drive] E: done -> 0
+[ 60.071 s] [drive] E: read 18e3812+337
+[ 60.071 s] [drive] E: done -> 0
+[ 60.075 s] [drive] E: read 18e2a6f+12e
+[ 60.075 s] [drive] E: done -> 0
+[ 60.075 s] [drive] E: read 18e2b9d+12f
+[ 60.075 s] [drive] E: done -> 0
+[ 60.076 s] [drive] E: read 10a183d+ac
+[ 60.076 s] [drive] E: done -> 0
+[ 60.094 s] [drive] E: read 1f555be+1000
+[ 60.094 s] [drive] E: done -> 0
+[ 61.092 s] [drive] E: read 1f565be+1000
+[ 61.093 s] [drive] E: done -> 0
+[ 62.127 s] [drive] E: read 1f575be+1000
+[ 62.127 s] [drive] E: done -> 0
+[ 63.160 s] [drive] E: read 1f585be+1000
+[ 63.160 s] [drive] E: done -> 0
+[ 63.902 s] [drive] E: read 1f595be+1000
+[ 63.902 s] [drive] E: done -> 0
+[ 64.932 s] [drive] E: read 1f5a5be+1000
+[ 64.932 s] [drive] E: done -> 0
+[ 65.081 s] [drive] E: read 1ce2f5d+b3
+[ 65.081 s] [drive] E: done -> 0
+[ 65.086 s] [drive] E: read 1ce4312+392
+[ 65.086 s] [drive] E: done -> 0
+[ 65.088 s] [drive] E: read 1ce3d9f+400
+[ 65.088 s] [drive] E: done -> 0
+[ 65.089 s] [drive] E: read 1ce419f+173
+[ 65.089 s] [drive] E: done -> 0
+[ 65.090 s] [drive] E: read 1ce37f1+400
+[ 65.090 s] [drive] E: done -> 0
+[ 65.091 s] [drive] E: read 1ce3bf1+1ae
+[ 65.091 s] [drive] E: done -> 0
+[ 65.092 s] [drive] E: read 1ce3676+42
+[ 65.092 s] [drive] E: done -> 0
+[ 65.094 s] [drive] E: read 1ce4312+392
+[ 65.094 s] [drive] E: done -> 0
+[ 65.096 s] [drive] E: read 1ce3d9f+400
+[ 65.096 s] [drive] E: done -> 0
+[ 65.097 s] [drive] E: read 1ce419f+173
+[ 65.097 s] [drive] E: done -> 0
+[ 65.098 s] [drive] E: read 1ce37f1+400
+[ 65.098 s] [drive] E: done -> 0
+[ 65.099 s] [drive] E: read 1ce3bf1+1ae
+[ 65.099 s] [drive] E: done -> 0
+[ 65.100 s] [drive] E: read 1ce3676+42
+[ 65.100 s] [drive] E: done -> 0
+[ 65.102 s] [drive] E: read 1ce4312+392
+[ 65.102 s] [drive] E: done -> 0
+[ 65.104 s] [drive] E: read 1ce3d9f+400
+[ 65.104 s] [drive] E: done -> 0
+[ 65.105 s] [drive] E: read 1ce419f+173
+[ 65.105 s] [drive] E: done -> 0
+[ 65.106 s] [drive] E: read 1ce37f1+400
+[ 65.106 s] [drive] E: done -> 0
+[ 65.107 s] [drive] E: read 1ce3bf1+1ae
+[ 65.107 s] [drive] E: done -> 0
+[ 65.108 s] [drive] E: read 1ce37a2+4f
+[ 65.108 s] [drive] E: done -> 0
+[ 65.110 s] [drive] E: read 1ce4312+392
+[ 65.110 s] [drive] E: done -> 0
+[ 65.112 s] [drive] E: read 1ce3d9f+400
+[ 65.112 s] [drive] E: done -> 0
+[ 65.113 s] [drive] E: read 1ce419f+173
+[ 65.113 s] [drive] E: done -> 0
+[ 65.113 s] [drive] E: read 1ce4312+392
+[ 65.113 s] [drive] E: done -> 0
+[ 65.115 s] [drive] E: read 1ce3d9f+400
+[ 65.115 s] [drive] E: done -> 0
+[ 65.116 s] [drive] E: read 1ce419f+173
+[ 65.116 s] [drive] E: done -> 0
+[ 65.118 s] [drive] E: read 1ce37f1+400
+[ 65.118 s] [drive] E: done -> 0
+[ 65.119 s] [drive] E: read 1ce3bf1+1ae
+[ 65.119 s] [drive] E: done -> 0
+[ 65.120 s] [drive] E: read 1ce37a2+4f
+[ 65.120 s] [drive] E: done -> 0
+[ 65.121 s] [drive] E: read 1ce4312+392
+[ 65.121 s] [drive] E: done -> 0
+[ 65.123 s] [drive] E: read 1ce3d9f+400
+[ 65.124 s] [drive] E: done -> 0
+[ 65.126 s] [drive] E: read 1ce419f+173
+[ 65.126 s] [drive] E: done -> 0
+[ 65.127 s] [drive] E: read 1ce37f1+400
+[ 65.127 s] [drive] E: done -> 0
+[ 65.128 s] [drive] E: read 1ce3bf1+1ae
+[ 65.128 s] [drive] E: done -> 0
+[ 65.129 s] [drive] E: read 1ce37a2+4f
+[ 65.129 s] [drive] E: done -> 0
+[ 65.131 s] [drive] E: read 1ce4312+392
+[ 65.131 s] [drive] E: done -> 0
+[ 65.133 s] [drive] E: read 1ce3d9f+400
+[ 65.133 s] [drive] E: done -> 0
+[ 65.134 s] [drive] E: read 1ce419f+173
+[ 65.134 s] [drive] E: done -> 0
+[ 65.135 s] [drive] E: read 1ce37f1+400
+[ 65.135 s] [drive] E: done -> 0
+[ 65.136 s] [drive] E: read 1ce3bf1+1ae
+[ 65.136 s] [drive] E: done -> 0
+[ 65.137 s] [drive] E: read 1ce37a2+4f
+[ 65.137 s] [drive] E: done -> 0
+[ 65.139 s] [drive] E: read 1ce4312+392
+[ 65.139 s] [drive] E: done -> 0
+[ 65.141 s] [drive] E: read 1ce3d9f+400
+[ 65.141 s] [drive] E: done -> 0
+[ 65.142 s] [drive] E: read 1ce419f+173
+[ 65.142 s] [drive] E: done -> 0
+[ 65.143 s] [drive] E: read 1ce37f1+400
+[ 65.143 s] [drive] E: done -> 0
+[ 65.144 s] [drive] E: read 1ce3bf1+1ae
+[ 65.144 s] [drive] E: done -> 0
+[ 65.145 s] [drive] E: read 1ce36b8+47
+[ 65.145 s] [drive] E: done -> 0
+[ 65.147 s] [drive] E: read 1ce4312+392
+[ 65.147 s] [drive] E: done -> 0
+[ 65.149 s] [drive] E: read 1ce3d9f+400
+[ 65.149 s] [drive] E: done -> 0
+[ 65.150 s] [drive] E: read 1ce419f+173
+[ 65.150 s] [drive] E: done -> 0
+[ 65.151 s] [drive] E: read 1ce37f1+400
+[ 65.151 s] [drive] E: done -> 0
+[ 65.152 s] [drive] E: read 1ce3bf1+1ae
+[ 65.152 s] [drive] E: done -> 0
+[ 65.153 s] [drive] E: read 1ce36b8+47
+[ 65.153 s] [drive] E: done -> 0
+[ 65.155 s] [drive] E: read 1ce4312+392
+[ 65.155 s] [drive] E: done -> 0
+[ 65.157 s] [drive] E: read 1ce3d9f+400
+[ 65.157 s] [drive] E: done -> 0
+[ 65.158 s] [drive] E: read 1ce419f+173
+[ 65.158 s] [drive] E: done -> 0
+[ 65.159 s] [drive] E: read 1ce37f1+400
+[ 65.159 s] [drive] E: done -> 0
+[ 65.160 s] [drive] E: read 1ce3bf1+1ae
+[ 65.160 s] [drive] E: done -> 0
+[ 65.161 s] [drive] E: read 1ce36ff+43
+[ 65.161 s] [drive] E: done -> 0
+[ 65.163 s] [drive] E: read 1ce4312+392
+[ 65.163 s] [drive] E: done -> 0
+[ 65.165 s] [drive] E: read 1ce3d9f+400
+[ 65.165 s] [drive] E: done -> 0
+[ 65.166 s] [drive] E: read 1ce419f+173
+[ 65.166 s] [drive] E: done -> 0
+[ 65.167 s] [drive] E: read 1ce4312+392
+[ 65.167 s] [drive] E: done -> 0
+[ 65.169 s] [drive] E: read 1ce3d9f+400
+[ 65.169 s] [drive] E: done -> 0
+[ 65.170 s] [drive] E: read 1ce419f+173
+[ 65.170 s] [drive] E: done -> 0
+[ 65.171 s] [drive] E: read 1ce37f1+400
+[ 65.171 s] [drive] E: done -> 0
+[ 65.172 s] [drive] E: read 1ce3bf1+1ae
+[ 65.172 s] [drive] E: done -> 0
+[ 65.173 s] [drive] E: read 1ce36ff+43
+[ 65.173 s] [drive] E: done -> 0
+[ 65.175 s] [drive] E: read 1ce4312+392
+[ 65.175 s] [drive] E: done -> 0
+[ 65.177 s] [drive] E: read 1ce3d9f+400
+[ 65.177 s] [drive] E: done -> 0
+[ 65.178 s] [drive] E: read 1ce419f+173
+[ 65.178 s] [drive] E: done -> 0
+[ 65.179 s] [drive] E: read 1ce37f1+400
+[ 65.179 s] [drive] E: done -> 0
+[ 65.180 s] [drive] E: read 1ce3bf1+1ae
+[ 65.180 s] [drive] E: done -> 0
+[ 65.181 s] [drive] E: read 1ce3742+60
+[ 65.181 s] [drive] E: done -> 0
+[ 65.183 s] [drive] E: read 1ce4312+392
+[ 65.183 s] [drive] E: done -> 0
+[ 65.185 s] [drive] E: read 1ce3d9f+400
+[ 65.185 s] [drive] E: done -> 0
+[ 65.186 s] [drive] E: read 1ce419f+173
+[ 65.186 s] [drive] E: done -> 0
+[ 65.187 s] [drive] E: read 1ce37f1+400
+[ 65.187 s] [drive] E: done -> 0
+[ 65.188 s] [drive] E: read 1ce3bf1+1ae
+[ 65.188 s] [drive] E: done -> 0
+[ 65.190 s] [drive] E: read 1ce3742+60
+[ 65.190 s] [drive] E: done -> 0
+[ 65.192 s] [drive] E: read 1ce4312+392
+[ 65.192 s] [drive] E: done -> 0
+[ 65.194 s] [drive] E: read 1ce3d9f+400
+[ 65.194 s] [drive] E: done -> 0
+[ 65.195 s] [drive] E: read 1ce419f+173
+[ 65.195 s] [drive] E: done -> 0
+[ 65.197 s] [drive] E: read 1ce37f1+400
+[ 65.197 s] [drive] E: done -> 0
+[ 65.198 s] [drive] E: read 1ce3bf1+1ae
+[ 65.198 s] [drive] E: done -> 0
+[ 65.199 s] [drive] E: read 1ce3742+60
+[ 65.199 s] [drive] E: done -> 0
+[ 65.201 s] [drive] E: read 1ce4312+392
+[ 65.201 s] [drive] E: done -> 0
+[ 65.203 s] [drive] E: read 1ce3d9f+400
+[ 65.203 s] [drive] E: done -> 0
+[ 65.204 s] [drive] E: read 1ce419f+173
+[ 65.204 s] [drive] E: done -> 0
+[ 65.205 s] [drive] E: read 1ce37f1+400
+[ 65.205 s] [drive] E: done -> 0
+[ 65.206 s] [drive] E: read 1ce3bf1+1ae
+[ 65.206 s] [drive] E: done -> 0
+[ 65.207 s] [drive] E: read 1ce3742+60
+[ 65.207 s] [drive] E: done -> 0
+[ 65.209 s] [drive] E: read 1ce4312+392
+[ 65.209 s] [drive] E: done -> 0
+[ 65.211 s] [drive] E: read 1ce3d9f+400
+[ 65.211 s] [drive] E: done -> 0
+[ 65.212 s] [drive] E: read 1ce419f+173
+[ 65.212 s] [drive] E: done -> 0
+[ 65.214 s] [drive] E: read 1ce37f1+400
+[ 65.214 s] [drive] E: done -> 0
+[ 65.215 s] [drive] E: read 1ce3bf1+1ae
+[ 65.215 s] [drive] E: done -> 0
+[ 65.216 s] [drive] E: read 1ce3742+60
+[ 65.216 s] [drive] E: done -> 0
+[ 65.218 s] [drive] E: read 1ce4312+392
+[ 65.218 s] [drive] E: done -> 0
+[ 65.220 s] [drive] E: read 1ce3d9f+400
+[ 65.220 s] [drive] E: done -> 0
+[ 65.221 s] [drive] E: read 1ce419f+173
+[ 65.221 s] [drive] E: done -> 0
+[ 65.223 s] [drive] E: read 1ce37f1+400
+[ 65.223 s] [drive] E: done -> 0
+[ 65.224 s] [drive] E: read 1ce3bf1+1ae
+[ 65.224 s] [drive] E: done -> 0
+[ 65.225 s] [drive] E: read 1ce3742+60
+[ 65.225 s] [drive] E: done -> 0
+[ 65.227 s] [drive] E: read 1ce4312+392
+[ 65.227 s] [drive] E: done -> 0
+[ 65.229 s] [drive] E: read 1ce3d9f+400
+[ 65.229 s] [drive] E: done -> 0
+[ 65.230 s] [drive] E: read 1ce419f+173
+[ 65.230 s] [drive] E: done -> 0
+[ 65.232 s] [drive] E: read 1ce37f1+400
+[ 65.232 s] [drive] E: done -> 0
+[ 65.233 s] [drive] E: read 1ce3bf1+1ae
+[ 65.233 s] [drive] E: done -> 0
+[ 65.234 s] [drive] E: read 1ce3742+60
+[ 65.234 s] [drive] E: done -> 0
+[ 65.235 s] [drive] E: read 1ce3742+60
+[ 65.235 s] [drive] E: done -> 0
+[ 65.237 s] [drive] E: read 1ce4312+392
+[ 65.237 s] [drive] E: done -> 0
+[ 65.239 s] [drive] E: read 1ce3d9f+400
+[ 65.239 s] [drive] E: done -> 0
+[ 65.240 s] [drive] E: read 1ce419f+173
+[ 65.240 s] [drive] E: done -> 0
+[ 65.242 s] [drive] E: read 1ce37f1+400
+[ 65.242 s] [drive] E: done -> 0
+[ 65.243 s] [drive] E: read 1ce3bf1+1ae
+[ 65.243 s] [drive] E: done -> 0
+[ 65.244 s] [drive] E: read 1ce3742+60
+[ 65.244 s] [drive] E: done -> 0
+[ 65.245 s] [drive] E: read 109b82d+158
+[ 65.245 s] [drive] E: done -> 0
+[ 65.254 s] [drive] E: read 1ce2f5d+b3
+[ 65.254 s] [drive] E: done -> 0
+[ 65.260 s] [drive] E: read 1ce2f5d+b3
+[ 65.260 s] [drive] E: done -> 0
+[ 65.266 s] [drive] E: read 109ba79+22a
+[ 65.266 s] [drive] E: done -> 0
+[ 65.274 s] [drive] E: read 18e2ccc+400
+[ 65.275 s] [drive] E: done -> 0
+[ 65.275 s] [drive] E: read 18e30cc+346
+[ 65.276 s] [drive] E: done -> 0
+[ 65.279 s] [drive] E: read 18e3412+400
+[ 65.279 s] [drive] E: done -> 0
+[ 65.280 s] [drive] E: read 18e3812+337
+[ 65.280 s] [drive] E: done -> 0
+[ 65.284 s] [drive] E: read 18e2a6f+12e
+[ 65.284 s] [drive] E: done -> 0
+[ 65.285 s] [drive] E: read 18e2b9d+12f
+[ 65.285 s] [drive] E: done -> 0
+[ 65.286 s] [drive] E: read 10a171f+2d
+[ 65.286 s] [drive] E: done -> 0
+[ 65.288 s] [drive] E: read 124f31e+400
+[ 65.288 s] [drive] E: done -> 0
+[ 65.289 s] [drive] E: read 124f71e+400
+[ 65.289 s] [drive] E: done -> 0
+[ 65.290 s] [drive] E: read 124fb1e+400
+[ 65.290 s] [drive] E: done -> 0
+[ 65.290 s] [drive] E: read 124ff1e+400
+[ 65.290 s] [drive] E: done -> 0
+[ 65.291 s] [drive] E: read 125031e+400
+[ 65.291 s] [drive] E: done -> 0
+[ 65.292 s] [drive] E: read 125071e+400
+[ 65.292 s] [drive] E: done -> 0
+[ 65.292 s] [drive] E: read 1250b1e+400
+[ 65.292 s] [drive] E: done -> 0
+[ 65.293 s] [drive] E: read 1250f1e+400
+[ 65.293 s] [drive] E: done -> 0
+[ 65.293 s] [drive] E: read 125131e+400
+[ 65.293 s] [drive] E: done -> 0
+[ 65.294 s] [drive] E: read 125171e+400
+[ 65.294 s] [drive] E: done -> 0
+[ 65.294 s] [drive] E: read 1251b1e+400
+[ 65.294 s] [drive] E: done -> 0
+[ 65.295 s] [drive] E: read 1251f1e+400
+[ 65.295 s] [drive] E: done -> 0
+[ 65.295 s] [drive] E: read 125231e+400
+[ 65.295 s] [drive] E: done -> 0
+[ 65.296 s] [drive] E: read 125271e+400
+[ 65.296 s] [drive] E: done -> 0
+[ 65.296 s] [drive] E: read 1252b1e+400
+[ 65.297 s] [drive] E: done -> 0
+[ 65.297 s] [drive] E: read 1252f1e+400
+[ 65.297 s] [drive] E: done -> 0
+[ 65.298 s] [drive] E: read 125331e+400
+[ 65.298 s] [drive] E: done -> 0
+[ 65.298 s] [drive] E: read 125371e+400
+[ 65.298 s] [drive] E: done -> 0
+[ 65.299 s] [drive] E: read 1253b1e+400
+[ 65.299 s] [drive] E: done -> 0
+[ 65.300 s] [drive] E: read 1253f1e+400
+[ 65.300 s] [drive] E: done -> 0
+[ 65.300 s] [drive] E: read 125431e+400
+[ 65.300 s] [drive] E: done -> 0
+[ 65.301 s] [drive] E: read 125471e+400
+[ 65.301 s] [drive] E: done -> 0
+[ 65.301 s] [drive] E: read 1254b1e+400
+[ 65.301 s] [drive] E: done -> 0
+[ 65.302 s] [drive] E: read 1254f1e+400
+[ 65.302 s] [drive] E: done -> 0
+[ 65.302 s] [drive] E: read 125531e+400
+[ 65.303 s] [drive] E: done -> 0
+[ 65.303 s] [drive] E: read 125571e+400
+[ 65.303 s] [drive] E: done -> 0
+[ 65.304 s] [drive] E: read 1255b1e+400
+[ 65.304 s] [drive] E: done -> 0
+[ 65.304 s] [drive] E: read 1255f1e+400
+[ 65.304 s] [drive] E: done -> 0
+[ 65.305 s] [drive] E: read 125631e+400
+[ 65.305 s] [drive] E: done -> 0
+[ 65.305 s] [drive] E: read 125671e+400
+[ 65.305 s] [drive] E: done -> 0
+[ 65.306 s] [drive] E: read 1256b1e+400
+[ 65.306 s] [drive] E: done -> 0
+[ 65.306 s] [drive] E: read 1256f1e+400
+[ 65.307 s] [drive] E: done -> 0
+[ 65.307 s] [drive] E: read 125731e+400
+[ 65.307 s] [drive] E: done -> 0
+[ 65.308 s] [drive] E: read 125771e+400
+[ 65.308 s] [drive] E: done -> 0
+[ 65.308 s] [drive] E: read 1257b1e+400
+[ 65.308 s] [drive] E: done -> 0
+[ 65.309 s] [drive] E: read 1257f1e+400
+[ 65.309 s] [drive] E: done -> 0
+[ 65.309 s] [drive] E: read 125831e+400
+[ 65.309 s] [drive] E: done -> 0
+[ 65.310 s] [drive] E: read 125871e+400
+[ 65.310 s] [drive] E: done -> 0
+[ 65.310 s] [drive] E: read 1258b1e+400
+[ 65.310 s] [drive] E: done -> 0
+[ 65.311 s] [drive] E: read 1258f1e+400
+[ 65.311 s] [drive] E: done -> 0
+[ 65.312 s] [drive] E: read 125931e+400
+[ 65.312 s] [drive] E: done -> 0
+[ 65.313 s] [drive] E: read 125971e+400
+[ 65.313 s] [drive] E: done -> 0
+[ 65.313 s] [drive] E: read 1259b1e+400
+[ 65.313 s] [drive] E: done -> 0
+[ 65.314 s] [drive] E: read 1259f1e+400
+[ 65.314 s] [drive] E: done -> 0
+[ 65.314 s] [drive] E: read 125a31e+400
+[ 65.314 s] [drive] E: done -> 0
+[ 65.315 s] [drive] E: read 125a71e+400
+[ 65.315 s] [drive] E: done -> 0
+[ 65.315 s] [drive] E: read 125ab1e+400
+[ 65.315 s] [drive] E: done -> 0
+[ 65.316 s] [drive] E: read 125af1e+400
+[ 65.316 s] [drive] E: done -> 0
+[ 65.316 s] [drive] E: read 125b31e+400
+[ 65.316 s] [drive] E: done -> 0
+[ 65.317 s] [drive] E: read 125b71e+400
+[ 65.317 s] [drive] E: done -> 0
+[ 65.317 s] [drive] E: read 125bb1e+400
+[ 65.317 s] [drive] E: done -> 0
+[ 65.319 s] [drive] E: read 125bf1e+400
+[ 65.319 s] [drive] E: done -> 0
+[ 65.320 s] [drive] E: read 125c31e+400
+[ 65.320 s] [drive] E: done -> 0
+[ 65.320 s] [drive] E: read 125c71e+400
+[ 65.320 s] [drive] E: done -> 0
+[ 65.321 s] [drive] E: read 125cb1e+315
+[ 65.321 s] [drive] E: done -> 0
+[ 65.323 s] [drive] E: read 109e894+69
+[ 65.323 s] [drive] E: done -> 0
+[ 65.328 s] [drive] E: read 1098d57+400
+[ 65.328 s] [drive] E: done -> 0
+[ 65.330 s] [drive] E: read 1099157+400
+[ 65.330 s] [drive] E: done -> 0
+[ 65.334 s] [drive] E: read 1099557+400
+[ 65.334 s] [drive] E: done -> 0
+[ 65.336 s] [drive] E: read 1099957+400
+[ 65.336 s] [drive] E: done -> 0
+[ 65.337 s] [drive] E: read 1099d57+400
+[ 65.337 s] [drive] E: done -> 0
+[ 65.338 s] [drive] E: read 109a157+24e
+[ 65.338 s] [drive] E: done -> 0
+[ 65.351 s] [drive] E: read 109279d+2bf
+[ 65.351 s] [drive] E: done -> 0
+[ 65.353 s] [drive] E: read 6da787+400
+[ 65.353 s] [drive] E: done -> 0
+[ 65.355 s] [drive] E: read 6b5bc1+400
+[ 65.355 s] [drive] E: done -> 0
+[ 65.356 s] [drive] E: read 21f224+13b
+[ 65.356 s] [drive] E: done -> 0
+[ 65.363 s] [drive] E: read 3c8e12+400
+[ 65.364 s] [drive] E: done -> 0
+[ 65.365 s] [drive] E: read 33013a+400
+[ 65.365 s] [drive] E: done -> 0
+[ 65.367 s] [drive] E: read 3af790+400
+[ 65.367 s] [drive] E: done -> 0
+[ 65.368 s] [drive] E: read 30456b+400
+[ 65.368 s] [drive] E: done -> 0
+[ 65.370 s] [drive] E: read 928bcf+400
+[ 65.370 s] [drive] E: done -> 0
+[ 65.372 s] [drive] E: read 66ecb1+400
+[ 65.372 s] [drive] E: done -> 0
+[ 65.374 s] [drive] E: read e16e0e+74
+[ 65.374 s] [drive] E: done -> 0
+[ 65.374 s] [drive] E: read e16e0e+74
+[ 65.374 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e0e+74
+[ 65.375 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e14+6e
+[ 65.375 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e15+6d
+[ 65.375 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e18+6a
+[ 65.375 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e19+69
+[ 65.375 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e21+61
+[ 65.375 s] [drive] E: done -> 0
+[ 65.375 s] [drive] E: read e16e22+60
+[ 65.375 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e58+2a
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e59+29
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e5e+24
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e5f+23
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e62+20
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e63+1f
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e67+1b
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e68+1a
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e6b+17
+[ 65.376 s] [drive] E: done -> 0
+[ 65.376 s] [drive] E: read e16e6c+16
+[ 65.376 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e71+11
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e72+10
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e75+d
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e76+c
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e7d+5
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e7e+4
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e81+1
+[ 65.377 s] [drive] E: done -> 0
+[ 65.377 s] [drive] E: read e16e81+1
+[ 65.377 s] [drive] E: done -> 0
+[ 65.378 s] [drive] E: read e16e82+3c
+[ 65.378 s] [drive] E: done -> 0
+[ 65.378 s] [drive] E: read e16e82+3c
+[ 65.378 s] [drive] E: done -> 0
+[ 65.378 s] [drive] E: read e16e82+3c
+[ 65.378 s] [drive] E: done -> 0
+[ 65.378 s] [drive] E: read e16e88+36
+[ 65.378 s] [drive] E: done -> 0
+[ 65.378 s] [drive] E: read e16e89+35
+[ 65.378 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e8b+33
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e8c+32
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e90+2e
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e91+2d
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e93+2b
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e94+2a
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e9b+23
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e9c+22
+[ 65.379 s] [drive] E: done -> 0
+[ 65.379 s] [drive] E: read e16e9e+20
+[ 65.379 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16e9f+1f
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16ea3+1b
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16ea4+1a
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16ea6+18
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16ea7+17
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16ead+11
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16eae+10
+[ 65.380 s] [drive] E: done -> 0
+[ 65.380 s] [drive] E: read e16eb0+e
+[ 65.380 s] [drive] E: done -> 0
+[ 65.381 s] [drive] E: read e16eb1+d
+[ 65.381 s] [drive] E: done -> 0
+[ 65.381 s] [drive] E: read e16eb7+7
+[ 65.381 s] [drive] E: done -> 0
+[ 65.381 s] [drive] E: read e16eb8+6
+[ 65.381 s] [drive] E: done -> 0
+[ 65.381 s] [drive] E: read e16ebc+2
+[ 65.381 s] [drive] E: done -> 0
+[ 65.381 s] [drive] E: read e16ebc+2
+[ 65.381 s] [drive] E: done -> 0
+[ 65.381 s] [drive] E: read e16ebd+1
+[ 65.381 s] [drive] E: done -> 0
+[ 65.590 s] [drive] E: read 928bcf+400
+[ 65.590 s] [drive] E: done -> 0
+[ 65.591 s] [drive] E: read 928fcf+400
+[ 65.591 s] [drive] E: done -> 0
+[ 65.592 s] [drive] E: read 9293cf+400
+[ 65.592 s] [drive] E: done -> 0
+[ 65.593 s] [drive] E: read 9297cf+400
+[ 65.593 s] [drive] E: done -> 0
+[ 65.594 s] [drive] E: read 929bcf+400
+[ 65.594 s] [drive] E: done -> 0
+[ 65.594 s] [drive] E: read 929fcf+400
+[ 65.594 s] [drive] E: done -> 0
+[ 65.595 s] [drive] E: read 92a3cf+400
+[ 65.595 s] [drive] E: done -> 0
+[ 65.596 s] [drive] E: read 92a7cf+400
+[ 65.596 s] [drive] E: done -> 0
+[ 65.597 s] [drive] E: read 92abcf+400
+[ 65.597 s] [drive] E: done -> 0
+[ 65.597 s] [drive] E: read 92afcf+400
+[ 65.597 s] [drive] E: done -> 0
+[ 65.598 s] [drive] E: read 92b3cf+400
+[ 65.598 s] [drive] E: done -> 0
+[ 65.599 s] [drive] E: read 92b7cf+400
+[ 65.599 s] [drive] E: done -> 0
+[ 65.599 s] [drive] E: read 92bbcf+400
+[ 65.599 s] [drive] E: done -> 0
+[ 65.600 s] [drive] E: read 92bfcf+400
+[ 65.600 s] [drive] E: done -> 0
+[ 65.601 s] [drive] E: read 92c3cf+400
+[ 65.601 s] [drive] E: done -> 0
+[ 65.601 s] [drive] E: read 92c7cf+400
+[ 65.602 s] [drive] E: done -> 0
+[ 65.602 s] [drive] E: read 92cbcf+400
+[ 65.602 s] [drive] E: done -> 0
+[ 65.603 s] [drive] E: read 92cfcf+400
+[ 65.603 s] [drive] E: done -> 0
+[ 65.604 s] [drive] E: read 92d3cf+400
+[ 65.604 s] [drive] E: done -> 0
+[ 65.604 s] [drive] E: read 92d7cf+400
+[ 65.604 s] [drive] E: done -> 0
+[ 65.605 s] [drive] E: read 92dbcf+400
+[ 65.605 s] [drive] E: done -> 0
+[ 65.606 s] [drive] E: read 92dfcf+400
+[ 65.606 s] [drive] E: done -> 0
+[ 65.607 s] [drive] E: read 92e3cf+400
+[ 65.607 s] [drive] E: done -> 0
+[ 65.607 s] [drive] E: read 92e7cf+400
+[ 65.607 s] [drive] E: done -> 0
+[ 65.608 s] [drive] E: read 92ebcf+400
+[ 65.608 s] [drive] E: done -> 0
+[ 65.609 s] [drive] E: read 92efcf+400
+[ 65.609 s] [drive] E: done -> 0
+[ 65.609 s] [drive] E: read 92f3cf+400
+[ 65.609 s] [drive] E: done -> 0
+[ 65.610 s] [drive] E: read 92f7cf+400
+[ 65.611 s] [drive] E: done -> 0
+[ 65.611 s] [drive] E: read 92fbcf+400
+[ 65.611 s] [drive] E: done -> 0
+[ 65.612 s] [drive] E: read 92ffcf+400
+[ 65.612 s] [drive] E: done -> 0
+[ 65.613 s] [drive] E: read 9303cf+400
+[ 65.613 s] [drive] E: done -> 0
+[ 65.613 s] [drive] E: read 9307cf+400
+[ 65.613 s] [drive] E: done -> 0
+[ 65.614 s] [drive] E: read 930bcf+400
+[ 65.614 s] [drive] E: done -> 0
+[ 65.615 s] [drive] E: read 930fcf+400
+[ 65.615 s] [drive] E: done -> 0
+[ 65.615 s] [drive] E: read 9313cf+400
+[ 65.616 s] [drive] E: done -> 0
+[ 65.616 s] [drive] E: read 9317cf+400
+[ 65.616 s] [drive] E: done -> 0
+[ 65.617 s] [drive] E: read 931bcf+400
+[ 65.617 s] [drive] E: done -> 0
+[ 65.618 s] [drive] E: read 931fcf+400
+[ 65.618 s] [drive] E: done -> 0
+[ 65.618 s] [drive] E: read 9323cf+400
+[ 65.618 s] [drive] E: done -> 0
+[ 65.619 s] [drive] E: read 9327cf+400
+[ 65.619 s] [drive] E: done -> 0
+[ 65.620 s] [drive] E: read 932bcf+400
+[ 65.620 s] [drive] E: done -> 0
+[ 65.621 s] [drive] E: read 932fcf+400
+[ 65.621 s] [drive] E: done -> 0
+[ 65.621 s] [drive] E: read 9333cf+400
+[ 65.621 s] [drive] E: done -> 0
+[ 65.622 s] [drive] E: read 9337cf+400
+[ 65.622 s] [drive] E: done -> 0
+[ 65.623 s] [drive] E: read 933bcf+400
+[ 65.623 s] [drive] E: done -> 0
+[ 65.624 s] [drive] E: read 933fcf+400
+[ 65.624 s] [drive] E: done -> 0
+[ 65.624 s] [drive] E: read 9343cf+400
+[ 65.624 s] [drive] E: done -> 0
+[ 65.625 s] [drive] E: read 9347cf+400
+[ 65.625 s] [drive] E: done -> 0
+[ 65.626 s] [drive] E: read 934bcf+400
+[ 65.626 s] [drive] E: done -> 0
+[ 65.626 s] [drive] E: read 934fcf+400
+[ 65.626 s] [drive] E: done -> 0
+[ 65.627 s] [drive] E: read 9353cf+400
+[ 65.627 s] [drive] E: done -> 0
+[ 65.628 s] [drive] E: read 9357cf+400
+[ 65.628 s] [drive] E: done -> 0
+[ 65.628 s] [drive] E: read 935bcf+400
+[ 65.629 s] [drive] E: done -> 0
+[ 65.629 s] [drive] E: read 935fcf+400
+[ 65.629 s] [drive] E: done -> 0
+[ 65.630 s] [drive] E: read 9363cf+400
+[ 65.630 s] [drive] E: done -> 0
+[ 65.631 s] [drive] E: read 9367cf+400
+[ 65.631 s] [drive] E: done -> 0
+[ 65.634 s] [drive] E: read 936bcf+400
+[ 65.634 s] [drive] E: done -> 0
+[ 65.634 s] [drive] E: read 936fcf+400
+[ 65.634 s] [drive] E: done -> 0
+[ 65.635 s] [drive] E: read 9373cf+400
+[ 65.635 s] [drive] E: done -> 0
+[ 65.636 s] [drive] E: read 9377cf+400
+[ 65.636 s] [drive] E: done -> 0
+[ 65.636 s] [drive] E: read 937bcf+400
+[ 65.637 s] [drive] E: done -> 0
+[ 65.637 s] [drive] E: read 937fcf+400
+[ 65.637 s] [drive] E: done -> 0
+[ 65.638 s] [drive] E: read 9383cf+400
+[ 65.638 s] [drive] E: done -> 0
+[ 65.639 s] [drive] E: read 9387cf+400
+[ 65.639 s] [drive] E: done -> 0
+[ 65.639 s] [drive] E: read 938bcf+400
+[ 65.639 s] [drive] E: done -> 0
+[ 65.640 s] [drive] E: read 938fcf+400
+[ 65.640 s] [drive] E: done -> 0
+[ 65.641 s] [drive] E: read 9393cf+400
+[ 65.641 s] [drive] E: done -> 0
+[ 65.642 s] [drive] E: read 9397cf+400
+[ 65.642 s] [drive] E: done -> 0
+[ 65.644 s] [drive] E: read e9364c+1000
+[ 65.644 s] [drive] E: done -> 0
+[ 65.645 s] [drive] E: read 939bcf+400
+[ 65.645 s] [drive] E: done -> 0
+[ 65.645 s] [drive] E: read 939fcf+400
+[ 65.646 s] [drive] E: done -> 0
+[ 65.646 s] [drive] E: read 93a3cf+400
+[ 65.646 s] [drive] E: done -> 0
+[ 65.647 s] [drive] E: read 93a7cf+3b9
+[ 65.647 s] [drive] E: done -> 0
+[ 66.354 s] [drive] E: read e9464c+1000
+[ 66.354 s] [drive] E: done -> 0
+[ 67.386 s] [drive] E: read e9564c+1000
+[ 67.386 s] [drive] E: done -> 0
+[ 68.384 s] [drive] E: read e9664c+1000
+[ 68.384 s] [drive] E: done -> 0
+[ 69.223 s] [drive] E: read 3c8e12+400
+[ 69.223 s] [drive] E: done -> 0
+[ 69.226 s] [drive] E: read 3c9212+400
+[ 69.226 s] [drive] E: done -> 0
+[ 69.259 s] [drive] E: read 3c9612+400
+[ 69.259 s] [drive] E: done -> 0
+[ 69.283 s] [drive] E: read 3c9a12+400
+[ 69.283 s] [drive] E: done -> 0
+[ 69.284 s] [drive] E: read 3c9e12+400
+[ 69.284 s] [drive] E: done -> 0
+[ 69.318 s] [drive] E: read 3ca212+400
+[ 69.318 s] [drive] E: done -> 0
+[ 69.319 s] [drive] E: read 3ca612+400
+[ 69.319 s] [drive] E: done -> 0
+[ 69.353 s] [drive] E: read 3caa12+400
+[ 69.353 s] [drive] E: done -> 0
+[ 69.353 s] [drive] E: read 3cae12+400
+[ 69.353 s] [drive] E: done -> 0
+[ 69.354 s] [drive] E: read 3cb212+400
+[ 69.354 s] [drive] E: done -> 0
+[ 69.377 s] [drive] E: read 3cb612+400
+[ 69.377 s] [drive] E: done -> 0
+[ 69.378 s] [drive] E: read 3cba12+400
+[ 69.378 s] [drive] E: done -> 0
+[ 69.379 s] [drive] E: read 3cbe12+400
+[ 69.379 s] [drive] E: done -> 0
+[ 69.415 s] [drive] E: read e9764c+1000
+[ 69.415 s] [drive] E: done -> 0
+[ 69.456 s] [drive] E: read 3cc212+400
+[ 69.456 s] [drive] E: done -> 0
+[ 69.457 s] [drive] E: read 3cc612+400
+[ 69.457 s] [drive] E: done -> 0
+[ 69.457 s] [drive] E: read 3cca12+400
+[ 69.457 s] [drive] E: done -> 0
+[ 69.458 s] [drive] E: read 3cce12+400
+[ 69.458 s] [drive] E: done -> 0
+[ 69.492 s] [drive] E: read 3cd212+400
+[ 69.492 s] [drive] E: done -> 0
+[ 69.493 s] [drive] E: read 3cd612+400
+[ 69.493 s] [drive] E: done -> 0
+[ 69.494 s] [drive] E: read 3cda12+400
+[ 69.494 s] [drive] E: done -> 0
+[ 69.494 s] [drive] E: read 3cde12+400
+[ 69.494 s] [drive] E: done -> 0
+[ 69.518 s] [drive] E: read 3ce212+400
+[ 69.518 s] [drive] E: done -> 0
+[ 69.518 s] [drive] E: read 3ce612+400
+[ 69.518 s] [drive] E: done -> 0
+[ 69.519 s] [drive] E: read 3cea12+400
+[ 69.519 s] [drive] E: done -> 0
+[ 69.520 s] [drive] E: read 3cee12+400
+[ 69.520 s] [drive] E: done -> 0
+[ 69.554 s] [drive] E: read 3cf212+400
+[ 69.555 s] [drive] E: done -> 0
+[ 69.555 s] [drive] E: read 3cf612+400
+[ 69.555 s] [drive] E: done -> 0
+[ 69.556 s] [drive] E: read 3cfa12+400
+[ 69.556 s] [drive] E: done -> 0
+[ 69.557 s] [drive] E: read 3cfe12+400
+[ 69.557 s] [drive] E: done -> 0
+[ 69.580 s] [drive] E: read 3d0212+400
+[ 69.580 s] [drive] E: done -> 0
+[ 69.581 s] [drive] E: read 3d0612+400
+[ 69.581 s] [drive] E: done -> 0
+[ 69.581 s] [drive] E: read 3d0a12+400
+[ 69.581 s] [drive] E: done -> 0
+[ 69.582 s] [drive] E: read 3d0e12+400
+[ 69.582 s] [drive] E: done -> 0
+[ 69.615 s] [drive] E: read 3d1212+400
+[ 69.615 s] [drive] E: done -> 0
+[ 69.616 s] [drive] E: read 3d1612+400
+[ 69.616 s] [drive] E: done -> 0
+[ 69.616 s] [drive] E: read 3d1a12+400
+[ 69.616 s] [drive] E: done -> 0
+[ 69.617 s] [drive] E: read 3d1e12+400
+[ 69.617 s] [drive] E: done -> 0
+[ 69.650 s] [drive] E: read 3d2212+400
+[ 69.650 s] [drive] E: done -> 0
+[ 69.651 s] [drive] E: read 3d2612+400
+[ 69.651 s] [drive] E: done -> 0
+[ 69.652 s] [drive] E: read 3d2a12+400
+[ 69.652 s] [drive] E: done -> 0
+[ 69.652 s] [drive] E: read 3d2e12+400
+[ 69.652 s] [drive] E: done -> 0
+[ 69.676 s] [drive] E: read 3d3212+400
+[ 69.676 s] [drive] E: done -> 0
+[ 69.677 s] [drive] E: read 3d3612+400
+[ 69.677 s] [drive] E: done -> 0
+[ 69.678 s] [drive] E: read 3d3a12+400
+[ 69.678 s] [drive] E: done -> 0
+[ 69.678 s] [drive] E: read 3d3e12+400
+[ 69.678 s] [drive] E: done -> 0
+[ 69.754 s] [drive] E: read 3d4212+400
+[ 69.754 s] [drive] E: done -> 0
+[ 69.755 s] [drive] E: read 3d4612+400
+[ 69.755 s] [drive] E: done -> 0
+[ 69.755 s] [drive] E: read 3d4a12+400
+[ 69.755 s] [drive] E: done -> 0
+[ 69.789 s] [drive] E: read 3d4e12+400
+[ 69.789 s] [drive] E: done -> 0
+[ 69.789 s] [drive] E: read 3d5212+400
+[ 69.789 s] [drive] E: done -> 0
+[ 69.790 s] [drive] E: read 3d5612+400
+[ 69.790 s] [drive] E: done -> 0
+[ 69.791 s] [drive] E: read 3d5a12+400
+[ 69.791 s] [drive] E: done -> 0
+[ 69.815 s] [drive] E: read 3d5e12+400
+[ 69.815 s] [drive] E: done -> 0
+[ 69.816 s] [drive] E: read 3d6212+400
+[ 69.816 s] [drive] E: done -> 0
+[ 69.817 s] [drive] E: read 3d6612+400
+[ 69.817 s] [drive] E: done -> 0
+[ 69.817 s] [drive] E: read 3d6a12+400
+[ 69.817 s] [drive] E: done -> 0
+[ 69.818 s] [drive] E: read 3d6e12+400
+[ 69.818 s] [drive] E: done -> 0
+[ 69.851 s] [drive] E: read 3d7212+400
+[ 69.851 s] [drive] E: done -> 0
+[ 69.852 s] [drive] E: read 3d7612+400
+[ 69.852 s] [drive] E: done -> 0
+[ 69.853 s] [drive] E: read 3d7a12+400
+[ 69.853 s] [drive] E: done -> 0
+[ 69.853 s] [drive] E: read 3d7e12+400
+[ 69.853 s] [drive] E: done -> 0
+[ 69.878 s] [drive] E: read 3d8212+400
+[ 69.878 s] [drive] E: done -> 0
+[ 69.878 s] [drive] E: read 3d8612+400
+[ 69.878 s] [drive] E: done -> 0
+[ 69.879 s] [drive] E: read 3d8a12+400
+[ 69.879 s] [drive] E: done -> 0
+[ 69.880 s] [drive] E: read 3d8e12+400
+[ 69.880 s] [drive] E: done -> 0
+[ 69.913 s] [drive] E: read 3d9212+400
+[ 69.913 s] [drive] E: done -> 0
+[ 69.914 s] [drive] E: read 3d9612+400
+[ 69.914 s] [drive] E: done -> 0
+[ 69.914 s] [drive] E: read 3d9a12+400
+[ 69.914 s] [drive] E: done -> 0
+[ 69.915 s] [drive] E: read 3d9e12+400
+[ 69.915 s] [drive] E: done -> 0
+[ 69.916 s] [drive] E: read 3da212+400
+[ 69.916 s] [drive] E: done -> 0
+[ 69.940 s] [drive] E: read 3da612+400
+[ 69.940 s] [drive] E: done -> 0
+[ 69.941 s] [drive] E: read 3daa12+400
+[ 69.941 s] [drive] E: done -> 0
+[ 69.941 s] [drive] E: read 3dae12+400
+[ 69.941 s] [drive] E: done -> 0
+[ 69.942 s] [drive] E: read 3db212+400
+[ 69.942 s] [drive] E: done -> 0
+[ 69.975 s] [drive] E: read 3db612+400
+[ 69.975 s] [drive] E: done -> 0
+[ 69.976 s] [drive] E: read 3dba12+400
+[ 69.976 s] [drive] E: done -> 0
+[ 69.977 s] [drive] E: read 3dbe12+400
+[ 69.977 s] [drive] E: done -> 0
+[ 69.977 s] [drive] E: read 3dc212+400
+[ 69.978 s] [drive] E: done -> 0
+[ 70.002 s] [drive] E: read 3dc612+400
+[ 70.002 s] [drive] E: done -> 0
+[ 70.002 s] [drive] E: read 3dca12+400
+[ 70.003 s] [drive] E: done -> 0
+[ 70.003 s] [drive] E: read 3dce12+400
+[ 70.003 s] [drive] E: done -> 0
+[ 70.004 s] [drive] E: read 3dd212+400
+[ 70.004 s] [drive] E: done -> 0
+[ 70.047 s] [drive] E: read 3dd612+400
+[ 70.047 s] [drive] E: done -> 0
+[ 70.048 s] [drive] E: read 3dda12+400
+[ 70.048 s] [drive] E: done -> 0
+[ 70.049 s] [drive] E: read 3dde12+400
+[ 70.049 s] [drive] E: done -> 0
+[ 70.049 s] [drive] E: read 3de212+400
+[ 70.049 s] [drive] E: done -> 0
+[ 70.124 s] [drive] E: read 1f415be+1000
+[ 70.124 s] [drive] E: done -> 0
+[ 70.833 s] [drive] E: read 1f425be+1000
+[ 70.833 s] [drive] E: done -> 0
+[ 71.862 s] [drive] E: read 1f435be+1000
+[ 71.863 s] [drive] E: done -> 0
+[ 72.892 s] [drive] E: read 1f445be+1000
+[ 72.892 s] [drive] E: done -> 0
+[ 73.890 s] [drive] E: read 1f455be+1000
+[ 73.890 s] [drive] E: done -> 0
+[ 74.920 s] [drive] E: read 1f465be+1000
+[ 74.920 s] [drive] E: done -> 0
+load: busy MIPS per second: 31 0 0 26 85 56 80 97 82 77 72 80 68 70 69 71 68 70 67 71 67 66 66 78 64 67 66 74 67 65 68 66 66 77 65 70 67 67 68 49 2 2 2 2 19 2 2 2 2 17 6 6 3 2 76 54 54 53 49 55 53 54 49 50 66 72 69 67 70 83 84 84 83 84
+load: mean 53.5, max 96.7 MIPS of 100; RAM peak 774 pages (12.1 MB)
+lcd: 1524 updates; the framebuffer differed from the picture shown for over 0.1 s 0 times
+drive: 17 fetches from the image beyond the window
+ran 75.000 virtual s (7500017000 insns) in 64.3 host s; 4500 frames; exit None

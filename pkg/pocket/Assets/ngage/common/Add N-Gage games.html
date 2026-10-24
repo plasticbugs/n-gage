@@ -511,14 +511,14 @@ body.dragging .drop-big .rest { display: none; } body.dragging .drop-big .over {
     <details class="qa">
       <summary>A game won&rsquo;t go on the card</summary>
       <div>
-        <p>The Pocket&rsquo;s game card holds 32 MB, so Glimmerati and Pathway to Glory are too big.</p>
+        <p>A game card holds up to 64 MB, which every N-Gage game fits.</p>
         <p>This page opens <code>.zip</code> files and folders. For a <code>.7z</code> or <code>.rar</code>, right-click it and extract it first, then drop the folder you get.</p>
       </div>
     </details>
     <details class="qa">
       <summary>A game won&rsquo;t start</summary>
       <div>
-        <p>Asphalt Urban GT 2, Warhammer 40,000: Glory in Death and One check the memory card they were put on, so their copy protection stops them here. N-Gage 2.0 games don&rsquo;t run either.</p>
+        <p>Asphalt Urban GT 2, Glimmerati, Warhammer 40,000: Glory in Death and One check the memory card they were put on, so their copy protection stops them here. N-Gage 2.0 games don&rsquo;t run either.</p>
         <p>If the screen stays dark for more than two minutes, take the card out and check that <code>sym.rom</code> is in <code>Assets\ngage\common</code>.</p>
       </div>
     </details>
@@ -544,7 +544,9 @@ body.dragging .drop-big .rest { display: none; } body.dragging .drop-big .over {
     keep them in step: each function here is named after its Python twin. */
 const engine = (() => {
   'use strict';
-  const SECTOR = 512, MAX_MB = 32;
+  // the drive's window, all of the Pocket's CRAM (NGVM_DRIVE_MAX), and the
+  // largest image, reached through it (NGVM_IMAGE_MAX): as mkdrive.py's
+  const SECTOR = 512, WINDOW_MB = 32, MAX_MB = 64;
   const LAUNCH_OFF = 0x40, LAUNCH_MAX = 0x1FE - 0x48;
   const LAUNCH_MAGIC = [0x4E, 0x47, 0x56, 0x4D, 0x52, 0x55, 0x4E, 0x00];  // NGVMRUN
   const EMPTY = new Uint8Array(0);
@@ -849,11 +851,18 @@ const engine = (() => {
     let content = 0;
     const walk = n => { for (const c of n.children.values()) { content += c.data.length; walk(c); } };
     walk(tree);
-    const size = sizeMb || Math.min(MAX_MB, Math.max(16, Math.floor((content + 2 * 1024 * 1024 + 1048575) / 1048576) + 1));
-    if (size > MAX_MB) fail('the core loads a drive of at most ' + MAX_MB + ' MB (NGVM_DRIVE_MAX)');
+    const want = Math.max(16, Math.floor((content + 2 * 1024 * 1024 + 1048575) / 1048576) + 1);
+    let size = sizeMb || Math.min(WINDOW_MB, want);
+    if (size > MAX_MB) fail('the core loads a drive of at most ' + MAX_MB + ' MB (NGVM_IMAGE_MAX)');
     app = app || findApp(tree);
-    const { img, used } = build(tree, size, label, app);
-    return { img, size, content, used, app };
+    let r;
+    try { r = build(tree, size, label, app); }
+    catch (e) {
+      if (!(e instanceof NgError) || e.code !== 'full' || sizeMb || want <= size) throw e;
+      size = Math.min(MAX_MB, want);
+      r = build(tree, size, label, app);
+    }
+    return { img: r.img, size, content, used: r.used, app };
   }
 
   // ---------------------------------------------------------------- zipfile
@@ -1377,7 +1386,7 @@ const engine = (() => {
       let r;
       try { r = engine.makeImage(tree); }
       catch (e) {
-        if (e.code === 'full') return this.fail('This game’s files come to ' + mb(contentOf(tree)) + '. The Pocket’s game card holds 32 MB, so it won’t fit.');
+        if (e.code === 'full') return this.fail('This game’s files come to ' + mb(contentOf(tree)) + '. A game card holds up to 64 MB, so it won’t fit.');
         throw e;
       }
       this.src = null;

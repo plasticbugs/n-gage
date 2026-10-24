@@ -25,6 +25,7 @@
 #define NGVM_ROM_MAX      0x01400000u   /* 20 MB                                */
 #define NGVM_DRIVE_BASE   0x60000000u   /* the game's drive image (see below)   */
 #define NGVM_DRIVE_MAX    0x02000000u   /* 32 MB: all of the Pocket's CRAM      */
+#define NGVM_IMAGE_MAX    0x04000000u   /* 64 MB: the largest image (see below) */
 #define NGVM_IO_BASE      0xF0000000u
 
 /* The phone's internal drive, C:, where games keep their saves: the top
@@ -91,12 +92,17 @@
 #define IO_WIN_ID         0x06C  /* W: the number of the process whose data the
                                      window maps (1-63; 0 none): the caches tag
                                      window lines with it                    */
-#define IO_DRIVE_SIZE     0x070  /* R: bytes loaded at NGVM_DRIVE_BASE        */
+#define IO_DRIVE_SIZE     0x070  /* R: the drive image's size, in bytes      */
 #define IO_ROM_SIZE       0x074  /* R: bytes loaded at NGVM_ROM_BASE          */
 #define IO_SAVE_SIZE      0x078  /* R: bytes of save loaded at NGVM_SAVE_BASE */
 #define IO_SAVE_DIRTY     0x07C  /* W: C: has changed; the core writes the save
                                      back once a couple of seconds pass with
                                      no further write                        */
+#define IO_FETCH_SRC      0x080  /* RW: byte offset in the drive image       */
+#define IO_FETCH_DST      0x084  /* RW: byte offset in the drive window      */
+#define IO_FETCH_LEN      0x088  /* RW: bytes; writing it starts the fetch   */
+#define IO_FETCH_STAT     0x08C  /* R: bit 0 busy, bits 3:1 the last fetch's
+                                     error (0 none)                          */
 
 /* IO_DBG_FLAGS bits */
 #define DBGF_EXEC         (1u << 0)   /* log every exec call                    */
@@ -104,10 +110,12 @@
 #define DBGF_IPC          (1u << 2)   /* log messages                           */
 #define DBGF_DUMP         (1u << 3)   /* dump every thread when a server is missing */
 #define DBGF_THREADS      (1u << 4)   /* dump every thread once, as the bit is set */
+#define DBGF_DRIVE        (1u << 5)   /* log E:'s reads and writes, and its fetches */
 
 #define IRQ_TIMER         (1u << 0)
 #define IRQ_VBLANK        (1u << 1)
 #define IRQ_AUDIO         (1u << 2)   /* FIFO at or below half full           */
+#define IRQ_FETCH         (1u << 3)   /* a fetch has ended                    */
 
 /* The audio FIFO's capacity (IO_AUDIO_SIZE; ngvm_io.sv's AUDIO_N).  The
  * kernel tops it up whenever it is half empty, so it delays sound by half to
@@ -138,6 +146,18 @@
 #define NGVM_LAUNCH_OFF   0x40
 #define NGVM_LAUNCH_MAGIC "NGVMRUN"   /* 8 bytes with its NUL                  */
 #define NGVM_LAUNCH_MAX   0x1B6       /* bytes of path, NUL included           */
+
+/* An image larger than the window (IO_DRIVE_SIZE > NGVM_DRIVE_MAX, up to
+ * NGVM_IMAGE_MAX) is reached through it.  The Pocket loads the image's first
+ * NGVM_DRIVE_MAX bytes into the window, and the rest stays on the SD card;
+ * IO_DRIVE_SIZE is still the whole image's size.  The kernel fetches any
+ * part of the image into any place in the window: IO_FETCH_SRC is where in
+ * the image, IO_FETCH_DST where in the window, and writing IO_FETCH_LEN
+ * starts the fetch.  All three are even, and the window's span lies within
+ * it.  IO_FETCH_STAT is busy until the bytes are in the window, then holds
+ * the fetch's error (the Pocket's: 0 none), and IRQ_FETCH is raised.  A
+ * write to the three while busy is ignored.  With an image that fits, the
+ * window is the image and nothing is fetched.                              */
 
 /* IO_KEYS.  Bits 0-11 are the Pocket's controls.  Bits 12-26 are the phone
  * keys of the on-screen keypad (SELECT + R; rtl/ngage_osk.sv), one bit a

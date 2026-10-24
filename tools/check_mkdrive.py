@@ -7,7 +7,8 @@ Builds a set of zips and folders made to be awkward (both compression
 methods, a Mac's __MACOSX, a zip of the game's folder, VFAT names that need
 ~N aliases, cp437 and UTF-8 names, the Info-ZIP Unicode path field, Zip64
 records, a comment, bytes before the zip, data descriptors, duplicate
-names, several .apps with a hidden .aif, a root too full, a game too big)
+names, several .apps with a hidden .aif, a root too full, a game larger
+than the drive's 32 MB window, a game too big)
 and runs tools/mkdrive.py and tools/mkdrive.mjs (the page's engine) on each:
 the same exit, the same printed line, the same image.  --games adds every
 zip in DIR, and each unpacked as a folder; --rom checks the page's MD5 of
@@ -159,7 +160,8 @@ def cases(tmp):
     big_root = {'f%03d.txt' % i: b'x' for i in range(600)}
     big_root['system/x'] = b'y'
     z('root-full', big_root)
-    z('too-big', files_game(extra={'system/apps/VCop/huge.bin': os.urandom(33 * 1024 * 1024)}), method=zipfile.ZIP_STORED)
+    z('past-window', files_game(extra={'system/apps/VCop/huge.bin': os.urandom(33 * 1024 * 1024)}), method=zipfile.ZIP_STORED)
+    z('too-big', files_game(extra={'system/apps/VCop/huge.bin': os.urandom(65 * 1024 * 1024)}), method=zipfile.ZIP_STORED)
     z('mid-size', files_game(extra={'system/apps/VCop/mid.bin': os.urandom(20 * 1024 * 1024)}), method=zipfile.ZIP_STORED)
     z('near-32mb', files_game(extra={'system/apps/VCop/big.bin': os.urandom(28 * 1024 * 1024)}), method=zipfile.ZIP_STORED)
     # written by hand
@@ -208,7 +210,7 @@ def cases(tmp):
     src = os.path.join(tmp, 'deflated.zip')
     out += [('arg-size', src, ['--size-mb', '20']), ('arg-label', src, ['--label', 'Mmc Card']),
             ('arg-app', src, ['--app', 'E:\\system\\apps\\other\\other.app']), ('arg-small', src, ['--size-mb', '1']),
-            ('arg-over', src, ['--size-mb', '33'])]
+            ('arg-past-window', src, ['--size-mb', '33']), ('arg-over', src, ['--size-mb', '65'])]
     return out
 
 

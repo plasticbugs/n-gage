@@ -1,0 +1,42 @@
+[  0.004 s] NGVM kernel
+[  0.045 s] [launch] will run E:\system\apps\6R82\6R82.app
+[  0.045 s] EFile: entry 503cdbc5 data 80100000+c2c bss 8
+[  1.230 s] [rdebug] auxstart 105
+[  4.832 s] [kern] process EStart exits: type 0 reason 0
+[  4.873 s] [lcd] control 8193 (406cfce0 406cfcdc) from EwSrv
+[  4.873 s] [lcd] control 4109 (406cfcd4 0) from EwSrv
+[  4.948 s] [kern] process SelfTestServer exits: type 0 reason -37
+[  5.460 s] [kern] process DBRECOVERY exits: type 0 reason 0
+[  5.504 s] [LesterDrv] control 1 (0 0)
+[  5.521 s] [ipc] thread 52 waits for server EtelServer, which thread 60 is starting
+[  5.526 s] [ipc] thread 52: server EtelServer started
+[  5.535 s] [NOSDRIVER] request, pending: 2 (455a1ca4 0)
+[  5.649 s] [chan] Comm unit 0: not present
+[  5.766 s] [rdebug] CSysApAppUi::ConstructL: Start listening
+[  5.820 s] [helper] control 7 (0 0): not modelled, accepted
+[  5.824 s] [lcd] control 4099 (405e7d70 0) from EikSrvs
+[  5.824 s] [lcd] control 4100 (0 0) from EikSrvs
+[  6.599 s] [rdebug] RAdspServerSession::Construct
+[  6.600 s] [kern] PANIC thread Main in AudioServer: SS Audio Server 4
+[  6.601 s]   pc 503b3670 lr 503b3670 sp 45e3bf44: 80000001 45e3bf70 503b3690 503b8034 ffff8001 4 45e3bf70 45e44104 503b4704 ffff8001 510f2a2b 1000000f 510fa42c 45e44080 0 510f0e55 45e44080 0 510f0685 100000 503b6810 503b2884 503acd70 0
+[  6.601 s] [kern] process AudioServer exits: type 2 reason 4
+[  6.978 s] [kern] process AppRun exits: type 0 reason 0
+[  6.993 s] [kern] process AppRun exits: type 0 reason 0
+[  7.294 s] [kern] process SplashScreen exits: type 0 reason 0
+[  7.364 s] [kern] process Loadersrv exits: type 0 reason -37
+[  7.553 s] [launch] starting AppRun
+[  7.966 s] [kern] process MailInit exits: type 0 reason 0
+[  8.067 s] [launch] CommDb modem: 0
+[  8.590 s] [lcd] control 8193 (45eabc54 45eabc50) from 6R82
+[  8.590 s] [lcd] control 4109 (45eabc48 0) from 6R82
+[  9.324 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[  9.324 s] [Audioldd] control 1 (0 0)
+[  9.325 s] [Audioldd] control 1 (0 0)
+[  9.326 s] [rdebug] DEVSOUND:CGalaxyAudioPolicy::CheckAgainstProfiles Digital ringvol is 3
+[  9.395 s] [kern] process RfsServer exits: type 0 reason 0
+[ 12.795 s] [kern] process FLogSvr exits: type 0 reason 0
+[ 14.410 s] [kern] process EDbsrv exits: type 0 reason 0
+load: busy MIPS per second: 31 0 0 27 85 56 100 100 81 71 66 78 69 72 77 64 65 72 67 65 66 68 65 75 68 67 66 75 67 68 67 68 66 81 67 72 66 68 69 50 2 2 2 2 18 2 2 2 2 17 6 6 3 2 77 54 54 53 51 55 52 54 50 49 67 72 70 67 69 84 84 84 83 84
+load: mean 53.8, max 100.0 MIPS of 100; RAM peak 774 pages (12.1 MB)
+lcd: 1530 updates; the framebuffer differed from the picture shown for over 0.1 s 0 times
+ran 75.000 virtual s (7500017000 insns) in 69.5 host s; 4500 frames; exit None

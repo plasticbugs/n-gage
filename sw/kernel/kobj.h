@@ -262,6 +262,8 @@ void timer_tick(void);
 void activity(void);                  /* user activity: inactivity timers restart */
 void keys_poll(void);                 /* at vblank: IO_KEYS changes become key events */
 void dsp_pump(void);                  /* IRQ_AUDIO: the DSP's PCM player feeds the FIFO */
+void drive_fetched(void);             /* IRQ_FETCH: E:'s block is in the window (drive.c) */
+void drive_poll(void);                /* at each timer tick: a fetch not answered */
 void thread_dump(void);               /* every live thread, where it waits */
 void stack_scan(struct thread *t, int max); /* ROM addresses on its stack, then a newline */
 /* ---- launch.c --------------------------------------------------------------- */

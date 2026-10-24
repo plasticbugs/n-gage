@@ -144,6 +144,10 @@ def whole_app(d):
     return h[0] == 0x10000079 and h[1] == 0x100039CE and h[25] + h[12] <= len(d)
 
 
+class DriveFull(SystemExit):
+    """The files do not fit the volume (main tries a larger one)."""
+
+
 def build(tree, size_mb, label, app=None):
     total = size_mb * 1024 * 1024 // SECTOR
     # pick the smallest cluster that keeps FAT16 within its cluster range
@@ -168,7 +172,7 @@ def build(tree, size_mb, label, app=None):
         n = max(1, (nbytes + csize - 1) // csize)
         first = nxt[0]
         if first + n > clusters + 2:
-            sys.exit('drive full: raise --size-mb')
+            raise DriveFull('drive full: raise --size-mb')
         for i in range(n):
             fat[first + i] = first + i + 1 if i < n - 1 else 0xFFFF
         nxt[0] += n
@@ -296,9 +300,13 @@ def card_root(tree):
     return n
 
 
-# the largest drive the core loads: all of the Pocket's CRAM (NGVM_DRIVE_MAX,
-# sw/include/ngvm_hw.h)
-MAX_MB = 32
+# The drive's window is all of the Pocket's CRAM, 32 MB (NGVM_DRIVE_MAX,
+# sw/include/ngvm_hw.h); a larger image, up to MAX_MB (NGVM_IMAGE_MAX), is
+# reached through it, fetched from the card as the game reads it.  An image
+# is no larger than WINDOW_MB unless its files do not fit in that, so every
+# game that fits is loaded whole, as it always was.
+WINDOW_MB = 32
+MAX_MB = 64
 
 
 def main():
@@ -306,7 +314,8 @@ def main():
     ap.add_argument('--from', dest='src', required=True)
     ap.add_argument('--out', required=True)
     ap.add_argument('--size-mb', type=int, default=0,
-                    help='default: the content plus 2 MB, at least 16 and at most %d' % MAX_MB)
+                    help='default: the content plus 2 MB, at least 16 and at most %d, '
+                         'or if that does not hold it, at most %d' % (WINDOW_MB, MAX_MB))
     ap.add_argument('--label', default='NGAGE')
     ap.add_argument('--app', help='the .app to launch (E:\\...); default: from the card')
     a = ap.parse_args()
@@ -319,11 +328,18 @@ def main():
             content += len(c.data)
             walk(c)
     walk(tree)
-    size = a.size_mb or min(MAX_MB, max(16, (content + 2 * 1024 * 1024 + 1048575) // 1048576 + 1))
+    want = max(16, (content + 2 * 1024 * 1024 + 1048575) // 1048576 + 1)
+    size = a.size_mb or min(WINDOW_MB, want)
     if size > MAX_MB:
-        sys.exit('the core loads a drive of at most %d MB (NGVM_DRIVE_MAX)' % MAX_MB)
+        sys.exit('the core loads a drive of at most %d MB (NGVM_IMAGE_MAX)' % MAX_MB)
     app = a.app or find_app(tree)
-    img, used = build(tree, size, a.label, app)
+    try:
+        img, used = build(tree, size, a.label, app)
+    except DriveFull:
+        if a.size_mb or want <= size:
+            raise
+        size = min(MAX_MB, want)
+        img, used = build(tree, size, a.label, app)
     open(a.out, 'wb').write(img)
     print('%s: %d MB FAT16, %d bytes of files, %d bytes of clusters used; launches %s'
           % (a.out, size, content, used, app or 'nothing'))

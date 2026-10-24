@@ -59,6 +59,7 @@ void exc_dispatch(struct ctx *c, int kind)
         if (st & IRQ_TIMER) timer_tick();
         if (st & IRQ_VBLANK) keys_poll();
         if (st & IRQ_AUDIO) dsp_pump();
+        if (st & IRQ_FETCH) drive_fetched();
         break;
     }
     default:

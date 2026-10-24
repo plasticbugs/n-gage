@@ -11,7 +11,9 @@
  *   unit 1  D:  the RAM drive: FAT under ERAM.FSY, which reaches the memory
  *               directly through the caps' iBaseAddress.  Its size varies:
  *               the file system grows and shrinks it (Enlarge/ReduceSize)
- *   unit 2  E:  the memory card: the game's image at NGVM_DRIVE_BASE
+ *   unit 2  E:  the memory card: the game's image at NGVM_DRIVE_BASE, or,
+ *               when it is larger than the window there, a cache of it
+ *               (below)
  *
  * TBusLocalDrive (EUser) is { +0 bus handle, +4 media status, +8 drive
  * handle }.  Connect asks for the bus handle (exec 0x8000B7), then for a
@@ -40,6 +42,41 @@ static struct {
 };
 static struct { struct thread *t; u32 st; } change[16];   /* by TMediaDevice */
 
+/* ---- E: larger than its window ------------------------------------------------
+ * The Pocket loads the image's first NGVM_DRIVE_MAX bytes into the window and
+ * leaves the rest on the card (ngvm_hw.h).  The window is then NSLOT slots of
+ * a 64 KB block each, slot i holding block i to begin with.  A block in no
+ * slot is fetched into one (IO_FETCH_*), chosen by a clock over the slots'
+ * referenced bits.  The clock turns from the top of the window down: a
+ * game reads its files forward, and a hand moving the same way would take,
+ * each time, the block the read needs next (Pathway to Glory's first 75 s:
+ * 41 fetches that way, 13 this, one for each block beyond the window it
+ * reads).  A slot E: was written in is never chosen again: nothing
+ * writes the image on the card, so the write lives in the window only, as a
+ * write to a drive that fits does.
+ *
+ * A request that needs a block not in the window waits for it: it is left
+ * pending, and IRQ_FETCH carries it on.  The caller waits on its status
+ * (EUser's TBusLocalDrive::Read calls User::WaitForRequest), and the rest
+ * of the phone runs meanwhile.  Requests are served one at a time, in the
+ * order they come. */
+#define BLK_SHIFT 16
+#define BLK       (1u << BLK_SHIFT)
+#define NSLOT     (NGVM_DRIVE_MAX >> BLK_SHIFT)
+#define NBLK      (NGVM_IMAGE_MAX >> BLK_SHIFT)
+#define NO_SLOT   0xFFFF
+#define FETCH_WAIT_US 5000000u             /* the Pocket has not answered: give up */
+static int cached;
+static u16 blk_slot[NBLK], slot_blk[NSLOT];
+static u8  slot_ref[NSLOT], slot_pin[NSLOT];
+static int hand = NSLOT - 1, fetch_slot = -1, fetch_blk;
+static u64 fetch_t0;
+static u32 fetches;
+struct ereq { struct thread *caller, *t; u32 st, buf, pos; int write, off, left; s32 r; };
+#define NREQ 8
+static struct ereq rq[NREQ];
+static int rq_head, rq_n;
+
 void drive_init(void)
 {
     u32 c = NGVM_PHYS_BASE + NGVM_SAVE_BASE;
@@ -54,8 +91,15 @@ void drive_init(void)
     media[1].base = d;
     media[1].max = D_MAX;
     media[2].size = media[2].max = IO(IO_DRIVE_SIZE);
-    if (kflags & DBGF_IPC) kprintf("[drive] C: at %p (%s), D: at %p, E: %x bytes\n",
-                                   c, saved ? "the save" : "erased", d, media[2].size);
+    cached = media[2].size > NGVM_DRIVE_MAX;
+    if (cached) {
+        if (media[2].size > NGVM_IMAGE_MAX) media[2].size = media[2].max = NGVM_IMAGE_MAX;
+        for (u32 b = 0; b < NBLK; b++) blk_slot[b] = b < NSLOT ? b : NO_SLOT;
+        for (u32 s = 0; s < NSLOT; s++) slot_blk[s] = s;
+    }
+    if (kflags & (DBGF_IPC | DBGF_DRIVE)) kprintf("[drive] C: at %p (%s), D: at %p, E: %x bytes%s\n",
+                                   c, saved ? "the save" : "erased", d, media[2].size,
+                                   cached ? ", larger than its window" : "");
 }
 
 /* ---- copies between media and a thread's descriptor ------------------------- */
@@ -104,6 +148,110 @@ static s32 program(struct thread *t, u32 d, u32 dst, int n, int off)
 
 static struct ldrive *drv(u32 h) { return (struct ldrive *)handle_lookup(cur, h, O_DEVICE); }
 
+/* ---- E:'s cache ------------------------------------------------------------- */
+/* The fetch failed, or the Pocket never answered: the game cannot go on.
+ * The screen says which, for the person holding the Pocket (docs/bringup.md):
+ * red with a white band for each unit of the Pocket's error code, or blue. */
+static void __attribute__((noreturn)) fetch_fail(u32 err)
+{
+    volatile u16 *fb = (volatile u16 *)IO(IO_LCD_BASE);
+    if (fb) {
+        for (int y = 0; y < LCD_H; y++)
+            for (int x = 0; x < LCD_W; x++)
+                fb[y * LCD_W + x] = !err ? 0x000F : (y % 24 < 12 && y / 24 < (int)err) ? 0x0FFF : 0x0F00;
+        IO(IO_LCD_SHOW) = 1;
+    }
+    if (err) kpanic("E: the fetch of block %x failed, error %d", fetch_blk, err);
+    kpanic("E: the fetch of block %x was not answered in %d ms", fetch_blk, FETCH_WAIT_US / 1000);
+}
+
+/* fetch block b into a slot the clock chooses; 0 if every slot is pinned */
+static int fetch(u32 b)
+{
+    int s, n = 0;
+    for (;; hand = (hand + NSLOT - 1) % NSLOT) {
+        if (++n > 2 * NSLOT) return 0;
+        s = hand;
+        if (slot_pin[s]) continue;
+        if (slot_ref[s]) { slot_ref[s] = 0; continue; }
+        break;
+    }
+    hand = (hand + NSLOT - 1) % NSLOT;
+    if (slot_blk[s] != NO_SLOT) blk_slot[slot_blk[s]] = NO_SLOT;
+    u32 old = slot_blk[s];
+    slot_blk[s] = NO_SLOT;
+    fetch_slot = s; fetch_blk = b;
+    u32 src = b << BLK_SHIFT, len = media[2].size - src;
+    if (len > BLK) len = BLK;
+    fetch_t0 = now_us();
+    fetches++;
+    if (kflags & DBGF_DRIVE) kprintf("[drive] E: fetch %d: block %x into slot %x (block %x was there)\n",
+                                     fetches, b, s, old);
+    IO(IO_FETCH_SRC) = src;
+    IO(IO_FETCH_DST) = (u32)s << BLK_SHIFT;
+    IO(IO_FETCH_LEN) = len & ~1u;
+    return 1;
+}
+
+/* carry request q on; 0 while it waits for a fetch */
+static int e_step(struct ereq *q)
+{
+    if (q->t->state == T_DEAD || q->caller->state == T_DEAD) { q->r = KErrDied; return 1; }
+    while (q->left > 0) {
+        u32 b = q->pos >> BLK_SHIFT, o = q->pos & (BLK - 1);
+        int n = BLK - o;
+        if (n > q->left) n = q->left;
+        u32 s = blk_slot[b];
+        if (s == NO_SLOT) {
+            if (fetch(b)) return 0;
+            q->r = KErrDiskFull;
+            return 1;
+        }
+        u32 a = NGVM_DRIVE_BASE + (s << BLK_SHIFT) + o;
+        slot_ref[s] = 1;
+        if (q->write) { from_des(q->t, q->buf, a, n, q->off); slot_pin[s] = 1; }
+        else if ((q->r = to_des(q->t, q->buf, a, n, q->off)) != KErrNone) return 1;
+        q->pos += n; q->off += n; q->left -= n;
+    }
+    return 1;
+}
+
+/* serve the queue's requests in turn, until one waits for a fetch */
+static void e_run(void)
+{
+    while (rq_n && fetch_slot < 0) {
+        struct ereq *q = &rq[rq_head];
+        if (!e_step(q)) return;
+        if (kflags & DBGF_DRIVE) kprintf("[drive] E: done -> %d\n", q->r);
+        if (q->caller->state != T_DEAD) request_complete(q->caller, q->st, q->r);
+        obj_unref(&q->caller->o);
+        obj_unref(&q->t->o);
+        rq_head = (rq_head + 1) % NREQ;
+        rq_n--;
+    }
+}
+
+/* IRQ_FETCH: the block is in its slot */
+void drive_fetched(void)
+{
+    if (fetch_slot < 0) return;
+    u32 st = IO(IO_FETCH_STAT);
+    if (st & 1) return;
+    if (st >> 1) fetch_fail(st >> 1);
+    blk_slot[fetch_blk] = fetch_slot;
+    slot_blk[fetch_slot] = fetch_blk;
+    slot_ref[fetch_slot] = 1;
+    if (kflags & DBGF_DRIVE) kprintf("[drive] E: fetched block %x in %d us\n", fetch_blk, (u32)(now_us() - fetch_t0));
+    fetch_slot = -1;
+    e_run();
+}
+
+/* at each timer tick: a fetch the Pocket has not answered */
+void drive_poll(void)
+{
+    if (fetch_slot >= 0 && now_us() - fetch_t0 > FETCH_WAIT_US) fetch_fail(0);
+}
+
 /* Read/Write(&{pos64, &len}, &{buf, thread, offset}, &status, drive) */
 static s32 rw(int write, u32 a0, u32 a1, u32 st, u32 h)
 {
@@ -119,6 +267,18 @@ static s32 rw(int write, u32 a0, u32 a1, u32 st, u32 h)
     if (!t) r = KErrBadHandle;
     else if (!media[l->unit].max) r = KErrNotReady;
     else if (poshi || len < 0 || pos > size || len > (int)(size - pos)) r = KErrArgument;
+    else if (l->unit == 2 && cached) {
+        if (kflags & DBGF_DRIVE) kprintf("[drive] E: %s %x+%x%s\n", write ? "write" : "read", pos, len,
+                                         rq_n ? ", queued" : "");
+        if (rq_n == NREQ) kpanic("E: more than %d requests at once", NREQ);
+        struct ereq *q = &rq[(rq_head + rq_n++) % NREQ];
+        q->caller = cur; q->t = t; q->st = st; q->buf = buf; q->pos = pos;
+        q->write = write; q->off = off; q->left = len; q->r = KErrNone;
+        obj_ref(&cur->o);
+        obj_ref(&t->o);
+        e_run();
+        return KErrNone;
+    }
     else if (write && l->unit == 0) { r = program(t, buf, media[0].base + pos, len, off); IO(IO_SAVE_DIRTY) = 1; }
     else if (write) r = from_des(t, buf, media[l->unit].base + pos, len, off);
     else r = to_des(t, buf, media[l->unit].base + pos, len, off);
@@ -142,6 +302,7 @@ static s32 erase(u32 a0, u32 a1, u32 st, u32 h)
     s32 r = KErrNone;
     if (!media[l->unit].max) r = KErrNotReady;
     else if (poshi || len < 0 || pos > size || len > (int)(size - pos)) r = KErrArgument;
+    else if (l->unit == 2 && cached) r = KErrNotSupported;
     else {
         memset((void *)(media[l->unit].base + pos), 0xFF, len);
         if (l->unit == 0) IO(IO_SAVE_DIRTY) = 1;

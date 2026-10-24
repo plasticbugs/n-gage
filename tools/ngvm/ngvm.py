@@ -112,13 +112,15 @@ class Machine:
         uc.mem_write(NGVM_ROM_BASE, rom)
         uc.mem_map(NGVM_DRIVE_BASE, NGVM_DRIVE_MAX, UC_PROT_ALL)
         self.rom_size = len(rom)
-        self.drive_size = 0
+        # the drive's window holds the image's first NGVM_DRIVE_MAX bytes, as
+        # the Pocket's loader leaves it; the rest is fetched (IO_FETCH_*)
+        self.image = b''
         if args.drive:
-            img = open(args.drive, 'rb').read()
-            self.drive_size = len(img)
-            if len(img) > NGVM_DRIVE_MAX:
-                sys.exit('drive image larger than NGVM_DRIVE_MAX')
-            uc.mem_write(NGVM_DRIVE_BASE, img)
+            self.image = open(args.drive, 'rb').read()
+            if len(self.image) > NGVM_IMAGE_MAX:
+                sys.exit('drive image larger than NGVM_IMAGE_MAX')
+            uc.mem_write(NGVM_DRIVE_BASE, self.image[:NGVM_DRIVE_MAX])
+        self.drive_size = len(self.image)
         # the game's save file, C: (ngvm_hw.h): loaded as the Pocket loads it,
         # and written back at the end if C: changed, as the core asks it to
         self.save_size, self.save_dirty = 0, 0
@@ -164,6 +166,12 @@ class Machine:
         self.keys = 0
         self.key_steps = self.parse_keys(args.keys)
         self.win_id = 0                # IO_WIN_ID: the RTL's caches tag the data window with it
+        self.fetch_regs = [0, 0, 0]    # IO_FETCH_SRC, _DST, _LEN
+        self.fetch_end = None          # virtual time, in instructions, the fetch in flight ends
+        self.fetch_err = 0
+        self.fetches = 0
+        lat, rate = (float(x) for x in args.fetch.split(','))
+        self.fetch_time = lambda n: int((lat + n / rate) * self.mips)
         self.audio = []                # samples (int16 L, int16 R)
         self.audio_rate = 8000
         self.audio_fifo = 0.0          # samples waiting, drained at audio_rate
@@ -282,6 +290,10 @@ class Machine:
             return self.rom_size
         if off == IO_SAVE_SIZE:
             return self.save_size
+        if IO_FETCH_SRC <= off <= IO_FETCH_LEN:
+            return self.fetch_regs[(off - IO_FETCH_SRC) >> 2]
+        if off == IO_FETCH_STAT:
+            return self.fetch_err << 1 | (self.fetch_end is not None)
         return 0
 
     def io_write(self, uc, off, size, value, ud):
@@ -339,6 +351,14 @@ class Machine:
             pass
         elif off == IO_SAVE_DIRTY:
             self.save_dirty += 1
+        elif IO_FETCH_SRC <= off <= IO_FETCH_LEN and self.fetch_end is None:
+            self.fetch_regs[(off - IO_FETCH_SRC) >> 2] = value
+            if off == IO_FETCH_LEN:
+                src, dst, n = self.fetch_regs
+                if (src | dst | n) & 1 or not n or dst + n > NGVM_DRIVE_MAX or src + n > len(self.image):
+                    return self.fault('fetch of %x bytes from %x to %x: not a span of the image and the window'
+                                      % (n, src, dst))
+                self.fetch_end = self.insns + self.fetch_time(n)
 
     # Entries LOW_FIRST..LOW_END-1 are mapped at the low name only: the
     # kernel never uses their high name (ngvm_hw.h), so a use of it faults.
@@ -486,12 +506,21 @@ class Machine:
         self.audio_fifo = max(0.0, self.audio_fifo - self.audio_rate * self.slice_us)
         if self.audio_fifo <= AUDIO_FIFO_N // 2:
             self.irq_status |= IRQ_AUDIO
+        # a fetch's bytes reach the window when it ends
+        if self.fetch_end is not None and self.insns >= self.fetch_end:
+            src, dst, n = self.fetch_regs
+            self.uc.mem_write(NGVM_DRIVE_BASE + dst, self.image[src:src + n])
+            self.fetch_end, self.fetch_err = None, 0
+            self.fetches += 1
+            self.irq_status |= IRQ_FETCH
 
     def next_event_insns(self):
         """Instructions until something can raise an interrupt."""
         cands = [(self.frames + 1) * self.frame_period_insns()]
         if self.timer_cmp is not None:
             cands.append(((self.timer_cmp - (self.now_us() & 0xFFFFFFFF)) & 0xFFFFFFFF) * self.mips + self.insns)
+        if self.fetch_end is not None:
+            cands.append(self.fetch_end)
         return max(min(cands), self.insns + 1)
 
     # ---- the LCD --------------------------------------------------------------
@@ -688,7 +717,7 @@ class Machine:
             f.write(pt.tobytes())
             f.write(bytes(self.ram))
             f.write(bytes(uc.mem_read(NGVM_KSEC_BASE, NGVM_KSEC_SIZE)))
-            f.write(bytes(uc.mem_read(NGVM_DRIVE_BASE, self.drive_size)))
+            f.write(bytes(uc.mem_read(NGVM_DRIVE_BASE, min(self.drive_size, NGVM_DRIVE_MAX))))
         print('[save] %.3f s: pc %08x cpsr %08x, %d pages mapped, to %s' % (t, pc, cpsr, len(self.pt), path),
               flush=True)
 
@@ -734,7 +763,7 @@ class Machine:
             if self.a.profile is not None and pc != self.idle_pc and self.insns >= self.a.profile * self.mips * 1e6:
                 self.pc_hist[pc & ~1] = self.pc_hist.get(pc & ~1, 0) + 1
             self.update_devices()
-            if self.save_at and self.insns >= self.save_at[0]:
+            if self.save_at and self.insns >= self.save_at[0] and self.fetch_end is None:
                 self.save(self.save_at[1], pc)
                 self.save_at = None
         dt = time.time() - t0
@@ -755,6 +784,8 @@ class Machine:
             print('save: %s, %d writes to C:%s' % (
                 'loaded %d bytes' % self.save_size if self.save_size else 'none loaded', self.save_dirty,
                 ', written to ' + self.a.save if self.save_dirty else ''))
+        if self.drive_size > NGVM_DRIVE_MAX:
+            print('drive: %d fetches from the image beyond the window' % self.fetches)
         print('ran %.3f virtual s (%d insns) in %.1f host s; %d frames; exit %s' % (
             self.insns / self.mips / 1e6, self.insns, dt, self.frames, self.exit_code))
         return self.exit_code or 0
@@ -788,6 +819,9 @@ def main():
     ap.add_argument('--save-at', metavar='SECONDS:FILE',
                     help='write the machine to FILE at that virtual second, for sim/sys/tb_sys.cpp --restore')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
+    ap.add_argument('--fetch', default='1000,4', metavar='US,BYTES_PER_US',
+                    help='how long a fetch from an image larger than the window takes (IO_FETCH_*): '
+                         'a latency and a rate; the Pocket\'s bridge carries about 4 bytes a us')
     ap.add_argument('--keymap', type=lambda x: int(x, 16), default=0,
                     help='(hex) IO_KEYMAP (ngvm_hw.h): 4 bits a button, A in 3:0 to R in 23:20, digit + 1, '
                          'or 0 for the default; 3 puts A on key 2')
