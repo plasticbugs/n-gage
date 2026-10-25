@@ -32,9 +32,10 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket**: the current release is v1.3.0, which runs
-games larger than 32 MB: Pathway to Glory (59 MB) runs on a Pocket.
-v1.2.0 kept each game's saves on the SD card and shipped a page, on the
+**It runs on the Pocket**: the current release is v1.4.0, which gets
+Glimmerati past its "Day 1" loading screen (a CPU fix) and puts \* and #
+on the key sliders. v1.3.0 ran games larger than 32 MB: Pathway to Glory
+(59 MB) runs on a Pocket. v1.2.0 kept each game's saves on the SD card and shipped a page, on the
 card, that turns game zips into games. v1.1.0 added TATE for the
 Analogizer, centred the Analogizer's picture on a CRT, and got Rifts:
 Promise of Power past its cutscenes. The first flash (CPU at 64 MHz)
@@ -225,8 +226,9 @@ larger than that (Pathway to Glory and its Ikusa Islands, of the retail
 games) is read from the SD card as the game needs it: new in v1.3.0.
 Pathway to Glory runs on a Pocket; Ikusa Islands has been checked only in
 simulation (`docs/bringup.md`).
-Glimmerati, which also needs more than 32 MB, does not run: its copy
-protection checks the memory card itself. The game list
+Glimmerati also needs more than 32 MB, and from v1.4.0 it gets past its
+"Day 1" load on a Pocket; some copies of it check the memory card they
+were installed on, and those stop. The game list
 (`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`. The page writes
 these entries for you. By hand, copy one of the files, name the copy after
 the game, and change its `filename` to the game's `.img`.

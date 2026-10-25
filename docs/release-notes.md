@@ -1,13 +1,17 @@
-# N-Gage for Analogue Pocket — 1.3.0
+# N-Gage for Analogue Pocket — 1.4.0
 
-A feature release:
+A fix and a feature:
 
-- **Games larger than 32 MB.** A game's card can now hold up to 64 MB,
-  which every N-Gage game fits. **Pathway to Glory** (59 MB), too large
-  for every earlier release, runs on a Pocket;
-- **Add N-Gage games.html** and `mkdrive.py` build those cards. A game
-  that fits in 32 MB gets the same card as before, byte for byte, so the
-  cards you have already made still work.
+- **Glimmerati** no longer freezes on its "Day 1 The Introduction"
+  loading bar. One instruction in its drawing code saves the stack
+  pointer along with other registers, and the core's CPU saved the wrong
+  value, so the race broke on its first frame;
+- **\* and # on a button.** The menu's six key sliders now go up to 12:
+  11 is \*, 12 is #. Each slider's name says what its 10, 11 and 12 are;
+- **Add N-Gage games.html** now shows which button is which key, and
+  what the slider numbers mean.
+
+1.3.0 made games up to 64 MB work, Pathway to Glory (59 MB) among them.
 
 The core boots the Nokia N-Gage's own firmware on the Pocket and runs
 games.
@@ -53,9 +57,10 @@ dump and your own games.
    (about 80 MB for Pathway to Glory), and the screen stays black until it
    is done. The phone then boots as it would, Nokia logo first.
 
-**From 1.2.0,** copy the whole zip over: the bitstream, `ngvm.bin`,
-`mkdrive.py` and `Add N-Gage games.html` have changed. Your `sym.rom`,
-`.img` and `.sav` files are not in it, and your menu settings are kept.
+**From 1.3.0 or 1.2.0,** copy the whole zip over: the bitstream,
+`ngvm.bin`, the menu and `Add N-Gage games.html` have changed, and from
+1.2.0 `mkdrive.py` too. Your `sym.rom`, `.img` and `.sav` files are not in
+it, and your menu settings are kept: a key slider stays where you put it.
 
 **From 1.1.0 or earlier,** copy the whole zip over: the game list has
 changed too. Your menu settings are kept, except a Shadow Mask setting,
@@ -83,8 +88,18 @@ Hawk's Pro Skater or Pandemonium.
 | Start | OK |
 | **Select + R** | the on-screen keypad, and put it away |
 
-The core's menu has a slider for each of A, B, X, Y, L and R: at 0 to 9
-the button is that digit key of the phone, at 10 it is as in the table.
+**To move a key,** press the Pocket's Analogue button and open Core
+Settings: A, B, X, Y, L and R each have a slider, and its number is the
+phone key the button presses.
+
+| slider | the button presses |
+|---|---|
+| 0 to 9 | that digit key |
+| 10 | its own key, as in the table above |
+| 11 | \* |
+| 12 | # |
+
+Each slider's name says it too: `Button A 10=5 11=* 12=#`.
 
 **The on-screen keypad** is for every key the buttons do not reach.
 Press Select and R together and the phone's keypad comes up over the
@@ -93,15 +108,27 @@ the highlight, A or B presses the key for as long as you hold it, and Y
 moves the keypad to the top of the screen and back. Select and R together
 put it away. While it is up, the game sees only the keys it presses.
 
-## New since 1.2.0
+## New since 1.3.0
+
+- **Glimmerati's "Day 1" load.** Glimmerati's span drawer opens with
+  `STMDB sp!, {r4-r12, sp, lr}` and closes with the matching `LDMIA`. The
+  core's CPU stored the stack pointer after moving it rather than before,
+  so the stack came back 44 bytes short and the game broke on the race's
+  first frame, leaving the loading screen up. ARMv4 leaves this case
+  undefined; the CPU now does what the reference emulator does, and
+  Glimmerati gets past the load.
+- **\* and # on the key sliders**, at 11 and 12. 0 to 10 mean what they
+  did, so saved settings carry over.
+- **Add N-Gage games.html** has a section on the buttons.
+
+## New in 1.3.0
 
 - **Games larger than 32 MB.** The core's drive is 32 MB, all of the
   Pocket's CRAM. A larger card now works: the Pocket loads the whole
   image, the core keeps its first 32 MB, and the rest is read from the SD
   card, 64 KB at a time, as the game asks for it. Most of those reads come
   as the game starts. Of the retail games, Pathway to Glory and Pathway to
-  Glory: Ikusa Islands need this. Glimmerati is larger than 32 MB too, but
-  its copy protection checks the memory card, so it does not run.
+  Glory: Ikusa Islands need this, and so does Glimmerati.
   A game that fits in 32 MB reads nothing more and runs as on 1.2.0.
 - **If one of those reads fails,** the core stops the game and fills the
   screen: **blue** if the Pocket never answered, **red with white bands**
@@ -112,16 +139,20 @@ put it away. While it is up, the game sees only the keys it presses.
 
 ## What to expect
 
-- **This build** was tried on a Pocket before release: its tester
-  reported that Pathway to Glory runs, the first game over 32 MB on a
-  Pocket. How far it was played, how long it took to load and whether it
-  saved were not said. Pathway to Glory: Ikusa Islands has been checked
-  only in simulation. Games that fit in 32 MB were not tried again on this
-  build; in simulation, Sonic N draws the same screens as on 1.2.0.
-  Saves now share the Pocket's bridge with the new reads: in simulation
-  every save is written back whole, but saves have not been tried again
-  on a Pocket. The Analogizer's output is unchanged from 1.2.0.
-- **Seen on a Pocket:** with 1.2.0, saves work. With 1.0.0, Virtua Cop,
+- **The CPU fix** was tried on a Pocket before release, on a build the
+  same as this one but for the key sliders: its tester reported that
+  Glimmerati now gets past the "Day 1" load. How far the race was
+  played was not said. In simulation the fixed CPU matches the reference
+  emulator instruction for instruction: through Glimmerati's load and
+  into the race (721 million instructions), over the firmware's boot, and
+  on 40 random programs.
+- **\* and # on the sliders** have been checked in simulation only: the
+  menu's numbers reach the kernel and read back as set, and the kernel
+  sends \* and # for 11 and 12. Other games were not tried again on a
+  Pocket with this build; the Analogizer's output is unchanged.
+- **Seen on a Pocket:** with 1.3.0, Pathway to Glory (59 MB) runs, the
+  first game over 32 MB on a Pocket; Pathway to Glory: Ikusa Islands has
+  been checked only in simulation. With 1.2.0, saves work. With 1.0.0, Virtua Cop,
   SSX: Out of Bounds and Puzzle Bobble VS play. With 0.3.1-alpha's
   build, The Elder Scrolls Travels: Shadowkey and The Sims Bustin' Out
   play, and Call of Duty plays slowly; with 0.3.0-alpha's, Pocket
@@ -158,8 +189,9 @@ put it away. While it is up, the game sees only the keys it presses.
     sound. It fell behind its music stream at 0.2.0-alpha's speed and
     dropped it for good.
 - Copy protection that checks the memory card the game was installed on
-  stops Asphalt Urban GT 2, Glimmerati, Warhammer 40,000: Glory in Death
-  and One: the card here is an image, with nothing behind it to identify.
+  stops some copies of Asphalt Urban GT 2, Glimmerati, Warhammer 40,000:
+  Glory in Death and One: the card here is an image, with nothing behind
+  it to identify.
 - In the reference emulator, not yet tried on a Pocket: Civilization and
   Splinter Cell: Chaos Theory stop during startup, and the Payload trial
   does not get past its first screens.
@@ -173,8 +205,8 @@ put it away. While it is up, the game sees only the keys it presses.
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `408035668fbf78884423721d594088fa` |
-| `Assets/ngage/common/ngvm.bin` | `768326c5b49c57c7c4e5183f1aa6db68` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `749b0353218fc2ce73eea2978dcfc42d` |
+| `Assets/ngage/common/ngvm.bin` | `4f1e2825ab85f08888fd1eb847ba2438` |
 
 CPU at 80 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.

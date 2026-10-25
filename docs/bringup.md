@@ -453,3 +453,15 @@ that died belong here as much as the one that lived.
   slot's first 32 MB and the core took the answers. Not reported: how far the game was played,
   how long the load took, any pause as it fetched, a save, or Pathway to
   Glory: Ikusa Islands.
+- 2026-10-25, `bitstream.rbf_r` `468a7ba6fcd95878088808b84743a3a4`
+  (`ngage_pocket.rbf` `e3a3caba60f8f60e97052194779b10e8`; ad2f404: an STM
+  stores its base as it was, fitted with seed 5) with kernel `ngvm.bin`
+  `768326c5b49c57c7c4e5183f1aa6db68` (v1.3.0's): "It's great", after
+  being told Glimmerati's "Day 1 The Introduction" bar should now fill
+  in seconds and the race start. On v1.3.0 the bar froze; in the
+  lockstep bench the unfixed CPU's stack pointer is 44 bytes low after
+  the span drawer's `LDMIA sp!, {r4-r12, sp, lr}` at 151.899 s, and the
+  fixed one matches Unicorn to 160 s. So the freeze was the CPU, not the
+  fetches past 32 MB or the save written just before the load (both
+  ruled out in simulation first). Not reported: which of the card's two
+  Glimmerati images, how far the race was played, other games.
