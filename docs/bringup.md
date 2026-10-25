@@ -126,7 +126,8 @@ loader's rate.
 
 What it should do: the phone's start-up screens as for any game, then
 the game's own, and then its menu. A game that fits in 32 MB asks for
-nothing and should run exactly as on v1.2.0.
+nothing and should run exactly as on v1.2.0. On a Pocket, Pathway to Glory
+runs (the log, 2026-10-24); Ikusa Islands has not been tried.
 
 On the bench (`sim/run_system.sh`, Pathway to Glory, no keys pressed, the
 host answering at the loader's rate) the game asked for 13 blocks in
@@ -441,3 +442,14 @@ that died belong here as much as the one that lived.
   to run the three steps under "Saves" with SSX: Out of Bounds. Not
   itemised: which games, which steps, the files' sizes, or whether a
   save made just before quitting through the menu was kept.
+- 2026-10-24, `bitstream.rbf_r` `408035668fbf78884423721d594088fa`
+  (`ngage_pocket.rbf` `7ced96cdf6fef2a8f19597a322505ec9`; e398678: drives
+  over 32 MB, fitted with seed 3) with kernel `ngvm.bin`
+  `768326c5b49c57c7c4e5183f1aa6db68` (cce2f67: whole-word fetches), main
+  at 7785722: Pathway to Glory (59 MB) runs, the first game over 32 MB on
+  a Pocket. On the bench it fetches 12 blocks from beyond 32 MB as it
+  starts, before its own first screen, so a game that runs means the
+  Pocket answered target reads (0x0180) past the slot's first 32 MB and
+  the core took the answers. Not reported: how far the game was played,
+  how long the load took, any pause as it fetched, a save, or Pathway to
+  Glory: Ikusa Islands.

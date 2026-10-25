@@ -207,8 +207,9 @@ difference.
 
 A game's card holds up to 64 MB. The core's drive is 32 MB, and a card
 larger than that (Pathway to Glory and its Ikusa Islands, of the retail
-games) is read from the SD card as the game needs it: new since v1.2.0,
-checked in simulation and not yet on a Pocket (`docs/bringup.md`).
+games) is read from the SD card as the game needs it: new since v1.2.0.
+Pathway to Glory runs on a Pocket; Ikusa Islands has been checked only in
+simulation (`docs/bringup.md`).
 Glimmerati, which also needs more than 32 MB, does not run: its copy
 protection checks the memory card itself. The game list
 (`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`. The page writes

@@ -1506,7 +1506,8 @@ Still unexercised:
   32 MB): Pathway to Glory for 45 s, 13 fetches right, its title at 30 s,
   three save readouts right (`docs/bringup.md`). The kernel's two
   failure screens, from the lockstep bench's `--fetch-fail`, are in
-  `artifacts/big_drive`.
+  `artifacts/big_drive`. On a Pocket (2026-10-24, `docs/bringup.md`'s
+  log): Pathway to Glory runs.
 - **Reset.** The CPU is held in reset until every slot is loaded.
 - **Running again.** A menu reset runs the kernel again over memory as the
   last run left it. Its `.data` therefore comes from a copy in the image,
