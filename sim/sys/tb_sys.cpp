@@ -26,7 +26,7 @@
 // written to --frames-to when it stops.
 //
 //   obj_sys/Vngvm_sys --rom SYM.ROM --kernel build/kernel/kernel.elf
-//       [--drive game.img] [--seconds S] [--no-uc] [--lat CYCLES]
+//       [--drive game.img] [--save game.sav] [--seconds S] [--no-uc] [--lat CYCLES]
 //       [--frames-to DIR --frame-every N] [--keys "S:MASK ..."] [--keymap HEX]
 //       [--watch-pc ADDR,ADDR,...]  (hex; prints when each retires, its first 20 times)
 //       [--profile FROM]  (where the cycles go from FROM seconds, the idle loop's apart)
@@ -861,6 +861,7 @@ int main(int argc, char **argv)
 {
     Verilated::commandArgs(argc, argv);
     const char *rom = nullptr, *kernel = "build/kernel/kernel.elf", *drive = nullptr, *restore = nullptr;
+    const char *save = nullptr;
     double seconds = 1.0, prof_s = -1;
     uint32_t keymap = 0;
     Bench b;
@@ -869,6 +870,7 @@ int main(int argc, char **argv)
         if (a == "--rom" && i + 1 < argc) rom = argv[++i];
         else if (a == "--kernel" && i + 1 < argc) kernel = argv[++i];
         else if (a == "--drive" && i + 1 < argc) drive = argv[++i];
+        else if (a == "--save" && i + 1 < argc) save = argv[++i];
         else if (a == "--seconds" && i + 1 < argc) seconds = atof(argv[++i]);
         else if (a == "--no-uc") b.use_uc = false;
         else if (a == "--profile" && i + 1 < argc) prof_s = atof(argv[++i]);
@@ -930,6 +932,16 @@ int main(int argc, char **argv)
         memcpy(b.ucm.drive.data(), b.image.data(), held);
         memcpy(b.cram.data(), b.image.data(), held);
     }
+    // the game's save, C:, at NGVM_SAVE_BASE with its size in IO_SAVE_SIZE,
+    // as the Pocket's load leaves them (ngage_save.sv); a checkpoint has its own
+    size_t save_size = 0;
+    if (save && !restore) {
+        auto sv = slurp(save);
+        save_size = std::min<size_t>(sv.size(), NGVM_SAVE_SIZE);
+        memcpy(&b.ucm.ram[NGVM_SAVE_BASE], sv.data(), save_size);
+        memcpy(&b.sdram[NGVM_SAVE_BASE], sv.data(), save_size);
+        printf("[save] %zu bytes from %s\n", save_size, save);
+    }
     if (restore) b.load_ckpt(restore);
     if (seconds <= b.t_base) { fprintf(stderr, "--seconds %.3f is not after the checkpoint's %.3f\n", seconds, b.t_base); return 2; }
     b.max_cycles = (uint64_t)((seconds - b.t_base) * CPU_HZ);
@@ -947,6 +959,7 @@ int main(int argc, char **argv)
     b.top = new Vngvm_sys;
     b.top->rom_size = (uint32_t)b.rom_size;
     b.top->drive_size = (uint32_t)b.drive_size;
+    b.top->save_size = (uint32_t)save_size;
     b.top->fetch_done_t = 0; b.top->fetch_err = 0;
     b.top->keys = keys0;
     b.top->keymap = keymap;
