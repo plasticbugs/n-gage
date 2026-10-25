@@ -721,6 +721,51 @@ class Machine:
         print('[save] %.3f s: pc %08x cpsr %08x, %d pages mapped, to %s' % (t, pc, cpsr, len(self.pt), path),
               flush=True)
 
+    def restore(self, path):
+        """--restore: go on from a checkpoint in save()'s format, this one's or
+        sim/sys/tb_sys.cpp --save-at's.  From the RTL's, the reference has the
+        RTL's memory layout, which its own timing does not reproduce.  Time is
+        the checkpoint's clock, in this machine's instructions; the frame
+        count follows from it, so no vblank comes in a burst."""
+        uc = self.uc
+        d = open(path, 'rb').read()
+        if d[:8] != b'NGVMCKP1':
+            sys.exit('%s: not a checkpoint' % path)
+        o = 8
+        t, pc, cpsr = struct.unpack_from('<dII', d, o); o += 16
+        regs = struct.unpack_from('<32I', d, o); o += 128
+        spsr = dict(zip(self.CKPT_SPSR, struct.unpack_from('<5I', d, o))); o += 20
+        (us, self.irq_status, self.irq_enable, cmp, armed, self.timer_hi_latch, self.lcd_base,
+         self.lcd_ctrl, _frames, _keys, rate, self.win_id, size) = struct.unpack_from('<Q12I', d, o)
+        o += 56
+        if size != self.drive_size:
+            sys.exit('%s: a drive of %d bytes, and --drive gives %d' % (path, size, self.drive_size))
+        pt = array.array('H')
+        pt.frombytes(d[o:o + 2 * NGVM_PT_ENTRIES]); o += 2 * NGVM_PT_ENTRIES
+        ctypes.memmove(self.ram_addr, d[o:o + NGVM_RAM_SIZE], NGVM_RAM_SIZE); o += NGVM_RAM_SIZE
+        uc.mem_write(NGVM_KSEC_BASE, d[o:o + NGVM_KSEC_SIZE]); o += NGVM_KSEC_SIZE
+        held = min(size, NGVM_DRIVE_MAX)
+        uc.mem_write(NGVM_DRIVE_BASE, d[o:o + held]); o += held
+        if o != len(d):
+            sys.exit('%s: %d bytes, not %d' % (path, len(d), o))
+        for i, page in enumerate(pt):
+            if page != NGVM_PT_NONE:
+                self.pt_set(i, page)
+        for mode, rs, phys in self.CKPT_MODES:
+            uc.reg_write(UC_ARM_REG_CPSR, (cpsr & ~0x1F) | mode)
+            for r in rs:
+                uc.reg_write(REGS[r], regs[phys(r)])
+            if mode != 0x1F:
+                uc.reg_write(UC_ARM_REG_SPSR, spsr[mode])
+        uc.reg_write(UC_ARM_REG_CPSR, cpsr)
+        self.pc = pc & ~1
+        self.timer_cmp = cmp if armed & 1 else None
+        self.audio_rate = rate or 8000
+        self.insns = us * self.mips
+        self.frames = self.insns // self.frame_period_insns()
+        print('[restore] %.3f s (clock %d us): pc %08x cpsr %08x, %d pages mapped, from %s' % (
+            t, us, pc, cpsr, len(self.pt), path), flush=True)
+
     def run(self):
         uc = self.uc
         end = self.a.seconds * 1000000 * self.mips
@@ -816,6 +861,8 @@ def main():
     ap.add_argument('--stamp', action='store_true',
                     help="prefix each line the kernel prints with virtual time, as sim/run_system.sh does")
     ap.add_argument('--memtrace', help='FROM:SECONDS:FILE: record fetches and data accesses for a cache model')
+    ap.add_argument('--restore', metavar='FILE',
+                    help="go on from a checkpoint: --save-at's, or sim/sys/tb_sys.cpp --save-at's (the RTL's machine)")
     ap.add_argument('--save-at', metavar='SECONDS:FILE',
                     help='write the machine to FILE at that virtual second, for sim/sys/tb_sys.cpp --restore')
     ap.add_argument('--keys', help='key script: "SECONDS:KEY[+KEY] ..." (see above)')
@@ -827,6 +874,8 @@ def main():
                          'or 0 for the default; 3 puts A on key 2')
     a = ap.parse_args()
     m = Machine(a)
+    if a.restore:
+        m.restore(a.restore)
     sys.exit(m.run())
 
 

@@ -31,6 +31,7 @@
 //       [--watch-pc ADDR,ADDR,...]  (hex; prints when each retires, its first 20 times)
 //       [--profile FROM]  (where the cycles go from FROM seconds, the idle loop's apart)
 //       [--restore FILE]  (start from tools/ngvm/ngvm.py --save-at's machine; see below)
+//       [--save-at S:FILE]  (the machine, at an IRQ entry from S seconds, for ngvm.py --restore)
 //
 // --restore starts the machine where the reference saved it, so a run can
 // begin in a game's play rather than at power-on.  The file holds, little-
@@ -577,6 +578,59 @@ struct Bench {
         restore_pending = true;
         printf("[restore] %.3f s: pc %08x cpsr %08x from %s\n", ck.t, ck.pc, ck.cpsr, path);
     }
+    // ---------------------------------------------------- --save-at
+    // The machine in --restore's format, for tools/ngvm/ngvm.py --restore:
+    // the reference then goes on from the RTL's machine, whose memory layout
+    // the reference's own timing does not reproduce.  Taken from Unicorn's
+    // copy (lockstep only), which holds every register bank and memory as
+    // the program left them, with no cache in the way, at the first IRQ entry
+    // or idle-loop retirement from save_s on with no fetch in flight: an IRQ
+    // entry flushes the pipeline, so no device write is under way there, and
+    // the devices are the RTL's.  A game that never idles still takes the
+    // timer's IRQ every few ms.
+    double save_s = -1;
+    const char *save_path = nullptr;
+    void save_ckpt() {
+        static const int R[15] = {UC_ARM_REG_R0, UC_ARM_REG_R1, UC_ARM_REG_R2, UC_ARM_REG_R3,
+            UC_ARM_REG_R4, UC_ARM_REG_R5, UC_ARM_REG_R6, UC_ARM_REG_R7, UC_ARM_REG_R8,
+            UC_ARM_REG_R9, UC_ARM_REG_R10, UC_ARM_REG_R11, UC_ARM_REG_R12, UC_ARM_REG_R13, UC_ARM_REG_R14};
+        static const struct { uint32_t mode; int lo, hi, phys, spsr; } banks[] = {
+            {0x1F, 0, 14, 0, -1}, {0x11, 8, 14, 16, 0}, {0x13, 13, 14, 23, 1},
+            {0x17, 13, 14, 25, 2}, {0x12, 13, 14, 27, 3}, {0x1B, 13, 14, 29, 4}};
+        uint32_t cpsr, regs[32] = {}, spsr[5] = {};
+        uc_reg_read(uc, UC_ARM_REG_CPSR, &cpsr);
+        for (auto &b : banks) {
+            uint32_t m = (cpsr & ~0x1Fu) | b.mode;
+            uc_reg_write(uc, UC_ARM_REG_CPSR, &m);
+            for (int r = b.lo; r <= b.hi; r++) uc_reg_read(uc, R[r], &regs[b.phys + r - b.lo]);
+            if (b.spsr >= 0) uc_reg_read(uc, UC_ARM_REG_SPSR, &spsr[b.spsr]);
+        }
+        uc_reg_write(uc, UC_ARM_REG_CPSR, &cpsr);
+        auto *s = top->rootp->ngvm_sys;
+        double t = vt();
+        uint32_t pc = uc_next_pc;
+        uint64_t us = s->u_io__DOT__us;
+        uint32_t dev[12] = {(uint32_t)s->u_io__DOT__status, (uint32_t)s->u_io__DOT__enable,
+                            (uint32_t)s->u_io__DOT__cmp, (uint32_t)s->u_io__DOT__armed,
+                            (uint32_t)s->u_io__DOT__hi_latch, (uint32_t)s->u_io__DOT__lcd_base,
+                            (uint32_t)s->u_io__DOT__lcd_on, (uint32_t)s->u_io__DOT__lcd_frame,
+                            (uint32_t)top->keys, (uint32_t)s->u_io__DOT__a_rate,
+                            (uint32_t)s->u_io__DOT__win_id, (uint32_t)drive_size};
+        FILE *f = fopen(save_path, "wb");
+        if (!f) { perror(save_path); exit(2); }
+        fwrite("NGVMCKP1", 1, 8, f);
+        fwrite(&t, 8, 1, f); fwrite(&pc, 4, 1, f); fwrite(&cpsr, 4, 1, f);
+        fwrite(regs, 4, 32, f); fwrite(spsr, 4, 5, f); fwrite(&us, 8, 1, f); fwrite(dev, 4, 12, f);
+        fwrite(ucm.pt, 2, NGVM_PT_ENTRIES, f);
+        fwrite(ucm.ram.data(), 1, NGVM_RAM_SIZE, f);
+        fwrite(ucm.ksec.data(), 1, NGVM_KSEC_SIZE, f);
+        fwrite(ucm.drive.data(), 1, std::min<size_t>(drive_size, NGVM_DRIVE_MAX), f);
+        fclose(f);
+        printf("[save] %.3f s: pc %08x cpsr %08x, clock %llu us, to %s\n", t, pc, cpsr,
+               (unsigned long long)us, save_path);
+        save_path = nullptr;
+    }
+
     // after the edge that ends the CPU's reset, before its first clock: the
     // caches sweep their tags for hundreds of cycles first, so a fetch or
     // access that started from a value set here before it settled misses
@@ -793,6 +847,8 @@ struct Bench {
         if (rt) {
             if (!retire(r)) { failed = true; return false; }
             if (!r.irq && r.pc == idle_pc) idle_retired++;
+            if (save_path && (r.irq || r.pc == idle_pc) && !bl_merged && fetch_end == ~0ull && vt() >= save_s)
+                save_ckpt();
         }
 
         top->clk = 0;
@@ -817,6 +873,13 @@ int main(int argc, char **argv)
         else if (a == "--no-uc") b.use_uc = false;
         else if (a == "--profile" && i + 1 < argc) prof_s = atof(argv[++i]);
         else if (a == "--restore" && i + 1 < argc) restore = argv[++i];
+        else if (a == "--save-at" && i + 1 < argc) {
+            std::string v = argv[++i];
+            size_t c = v.find(':');
+            if (c == std::string::npos) { fprintf(stderr, "--save-at SECONDS:FILE\n"); return 2; }
+            b.save_s = atof(v.substr(0, c).c_str());
+            b.save_path = strdup(v.substr(c + 1).c_str());
+        }
         else if (a == "--lat" && i + 1 < argc) { b.lat_line = atoi(argv[++i]); b.lat_word = b.lat_line / 2 + 1; }
         else if (a == "--frames-to" && i + 1 < argc) b.frames_to = argv[++i];
         else if (a == "--frame-every" && i + 1 < argc) b.frame_every = atoi(argv[++i]);
@@ -879,7 +942,7 @@ int main(int argc, char **argv)
     if (b.use_uc) {
         b.uc_init();
         if (restore) b.uc_restore();
-    }
+    } else if (b.save_path) { fprintf(stderr, "--save-at takes its machine from Unicorn: not with --no-uc\n"); return 2; }
 
     b.top = new Vngvm_sys;
     b.top->rom_size = (uint32_t)b.rom_size;
