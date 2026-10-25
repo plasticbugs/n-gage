@@ -78,8 +78,9 @@ s32 event_exec(int idx, u32 a0, u32 a1)
  * phone key, and each phone key that goes down or up becomes a raw key
  * event with an N-Gage standard scan code (e32keys.h).  The game keys of
  * the phone are 5 and 7; the soft keys and the OK key run the menus.  The
- * menu can put A, B, X, Y, L or R on any digit key instead (IO_KEYMAP), so
- * two buttons may hold one key: it goes up when the last is let go.
+ * menu can put A, B, X, Y, L or R on any digit key, * or # instead
+ * (IO_KEYMAP), so two buttons may hold one key: it goes up when the last
+ * is let go.
  *
  * Bits 12-26 are the on-screen keypad's keys (KEY_PAD_*, ngvm_hw.h): the
  * digits, *, #, the soft keys and C, which the pad has no button for.  The
@@ -112,6 +113,8 @@ void keys_poll(void)
         if (i >= 4 && i <= 9) {               /* A B X Y L R: 4 bits each, A first */
             u32 f = (map >> (4 * (i - 4))) & 15;
             if (f >= 1 && f <= 10) k = (u8)('0' + f - 1);
+            else if (f == 11) k = '*';
+            else if (f == 12) k = 0x7F;       /* # (EStdKeyHash) */
         }
         int j = 0;
         while (j < n && down[j] != k) j++;

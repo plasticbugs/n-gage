@@ -871,7 +871,7 @@ def main():
                          'a latency and a rate; the Pocket\'s bridge carries about 4 bytes a us')
     ap.add_argument('--keymap', type=lambda x: int(x, 16), default=0,
                     help='(hex) IO_KEYMAP (ngvm_hw.h): 4 bits a button, A in 3:0 to R in 23:20, digit + 1, '
-                         'or 0 for the default; 3 puts A on key 2')
+                         'b for *, c for #, or 0 for the default; 3 puts A on key 2')
     a = ap.parse_args()
     m = Machine(a)
     if a.restore:

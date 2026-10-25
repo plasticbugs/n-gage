@@ -81,7 +81,8 @@
 #define IO_KEYS           0x040  /* R: KEY_* bits, 1 = pressed                */
 #define IO_KEYMAP         0x044  /* R: the phone key each of A B X Y L R holds:
                                      4 bits a button, A in 3:0, R in 23:20;
-                                     d+1 for digit key d, 0 for the default   */
+                                     d+1 for digit key d, 11 *, 12 #, 0 for
+                                     the default                              */
 #define IO_AUDIO_DATA     0x050  /* W: one sample, L in 15:0, R in 31:16      */
 #define IO_AUDIO_LEVEL    0x054  /* R: samples waiting in the FIFO            */
 #define IO_AUDIO_RATE     0x058  /* RW: FIFO drain rate, Hz                   */

@@ -93,10 +93,24 @@ What is not implemented:
 | select | # |
 | **SELECT + R** | the on-screen keypad, and dismiss it |
 
-The core's menu has a slider for each of A, B, X, Y, L and R. At 0 to 9
-the button is that digit key of the phone; at 10 it is as in the table.
-They start at 5, 7, 10, 9, 10 and 10, the table's own keys. A game that
-asks for, say, 2 to pause or 0 for its map can then have it on a button.
+### Key map
+
+The core's menu (the Pocket's Analogue button, then **Core Settings**) has
+a slider for each of A, B, X, Y, L and R. Its number is the phone key the
+button presses:
+
+| slider | the button presses |
+|---|---|
+| 0 to 9 | that digit key |
+| 10 | its own key, as in the table above: A 5, B 7, X OK, Y 9, L and R the left and right soft keys |
+| 11 | * |
+| 12 | # |
+
+Each slider's name says what its 10, 11 and 12 are: `Button A 10=5 11=* 12=#`,
+`Button X 10=OK 11=* 12=#`, `Button L 10=soft 11=* 12=#`. They start at 5,
+7, 10, 9, 10 and 10, the table's own keys. A game that asks for, say, 2 to
+pause or 0 for its map can then have it on a button. Two buttons on one
+key are fine: the key goes up when the last of them is let go.
 
 ### On-screen keypad
 

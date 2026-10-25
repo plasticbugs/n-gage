@@ -21,7 +21,7 @@ set_global_assignment -name NUM_PARALLEL_PROCESSORS 1
 # The fitter's seed.  With one processor the fit is the same on every run,
 # here and on CI, and the seed chooses it; the CPU's 80 MHz has closed by
 # under a nanosecond, which placement alone moves (docs/core-design.md 5.4).
-set_global_assignment -name SEED 5
+set_global_assignment -name SEED 7
 # Speed-first: NGVM's CPU runs at a full 80 MHz with no multicycle budget,
 # and its Fmax was measured with this setting (docs/core-design.md 5.4).
 # The template's cores were area-first (one overflowed the device by 59 ALMs

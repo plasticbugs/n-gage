@@ -44,64 +44,64 @@
         ]
       },
       {
-        "name": "Button A: key (10 = 5)",
+        "name": "Button A 10=5 11=* 12=#",
         "id": 80,
         "type": "slider_u32",
         "enabled": true,
         "persist": true,
         "address": "0xF5000000",
         "defaultval": 5,
-        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+        "graphical": {"signed": false, "min": 0, "max": 12, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "Button B: key (10 = 7)",
+        "name": "Button B 10=7 11=* 12=#",
         "id": 81,
         "type": "slider_u32",
         "enabled": true,
         "persist": true,
         "address": "0xF5000004",
         "defaultval": 7,
-        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+        "graphical": {"signed": false, "min": 0, "max": 12, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "Button X: key (10 = OK)",
+        "name": "Button X 10=OK 11=* 12=#",
         "id": 82,
         "type": "slider_u32",
         "enabled": true,
         "persist": true,
         "address": "0xF5000008",
         "defaultval": 10,
-        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+        "graphical": {"signed": false, "min": 0, "max": 12, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "Button Y: key (10 = 9)",
+        "name": "Button Y 10=9 11=* 12=#",
         "id": 83,
         "type": "slider_u32",
         "enabled": true,
         "persist": true,
         "address": "0xF500000C",
         "defaultval": 9,
-        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+        "graphical": {"signed": false, "min": 0, "max": 12, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "Button L: key (10 = soft)",
+        "name": "Button L 10=soft 11=* 12=#",
         "id": 84,
         "type": "slider_u32",
         "enabled": true,
         "persist": true,
         "address": "0xF5000010",
         "defaultval": 10,
-        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+        "graphical": {"signed": false, "min": 0, "max": 12, "adjust_small": 1, "adjust_large": 1}
       },
       {
-        "name": "Button R: key (10 = soft)",
+        "name": "Button R 10=soft 11=* 12=#",
         "id": 85,
         "type": "slider_u32",
         "enabled": true,
         "persist": true,
         "address": "0xF5000014",
         "defaultval": 10,
-        "graphical": {"signed": false, "min": 0, "max": 10, "adjust_small": 1, "adjust_large": 1}
+        "graphical": {"signed": false, "min": 0, "max": 12, "adjust_small": 1, "adjust_large": 1}
       },
       {
         "name": "Analogizer",

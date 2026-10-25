@@ -926,16 +926,17 @@ module core_top
 
     //! The phone key each of A, B, X, Y, L and R presses (IO_KEYMAP,
     //! sw/include/ngvm_hw.h): six sliders of interact.json, a word each at
-    //! 0xF5000000 (A) to 0xF5000014 (R), 0-9 a digit key, 10 the default
-    //! (sw/kernel/event.c).  IO_KEYMAP holds 4 bits a button, A in 3:0: the
-    //! digit plus one, or 0 for the default, so that a bench which leaves
-    //! the port at 0 has the default keys.  It starts at interact.json's
-    //! defaults: A 5, B 7, Y 9.
+    //! 0xF5000000 (A) to 0xF5000014 (R), 0-9 a digit key, 10 the default,
+    //! 11 * and 12 # (sw/kernel/event.c).  IO_KEYMAP holds 4 bits a button,
+    //! A in 3:0: the digit plus one, 11 for *, 12 for #, or 0 for the
+    //! default, so that a bench which leaves the port at 0 has the default
+    //! keys.  It starts at interact.json's defaults: A 5, B 7, Y 9.
     reg  [23:0] g_keymap;
     initial g_keymap = 24'h00A086;
     wire  [2:0] km_sel = bridge_addr[4:2];
     wire        km_hit = bridge_addr[31:24] == 8'hF5 && bridge_addr[23:5] == 19'd0 && km_sel < 3'd6;
-    wire  [3:0] km_f   = (bridge_wr_data <= 32'd9) ? bridge_wr_data[3:0] + 4'd1 : 4'd0;
+    wire  [3:0] km_f   = (bridge_wr_data <= 32'd9) ? bridge_wr_data[3:0] + 4'd1 :
+                         (bridge_wr_data == 32'd11 || bridge_wr_data == 32'd12) ? bridge_wr_data[3:0] : 4'd0;
     always @(posedge clk_74a)
         if (bridge_wr && km_hit)
             case (km_sel)
@@ -950,7 +951,8 @@ module core_top
     wire  [3:0] km_rd_f = km_sel == 3'd0 ? g_keymap[3:0]   : km_sel == 3'd1 ? g_keymap[7:4]   :
                           km_sel == 3'd2 ? g_keymap[11:8]  : km_sel == 3'd3 ? g_keymap[15:12] :
                           km_sel == 3'd4 ? g_keymap[19:16] : g_keymap[23:20];
-    assign km_bridge_rd_data = !km_hit ? 32'd0 : (km_rd_f == 4'd0) ? 32'd10 : {28'd0, km_rd_f - 4'd1};
+    assign km_bridge_rd_data = !km_hit ? 32'd0 : (km_rd_f == 4'd0) ? 32'd10 :
+                               (km_rd_f <= 4'd10) ? {28'd0, km_rd_f - 4'd1} : {28'd0, km_rd_f};
 
     //! SDRAM switches from the modifier word (the "SDRAM" entries of
     //! interact.json): bit 4 catches read data at READ+4 instead of READ+3,

@@ -3,8 +3,8 @@
 // pad pressing them.
 //
 // The phone has more keys than the Pocket has buttons.  The menu can put A B
-// X Y L R on any digit (IO_KEYMAP), but not all ten at once, and * and C
-// nowhere.  So, as the BBC Micro core's keyboard does (its rtl/bbc_osk.sv is
+// X Y L R on any digit, * or # (IO_KEYMAP), but not all twelve at once, and
+// C nowhere.  So, as the BBC Micro core's keyboard does (its rtl/bbc_osk.sv is
 // where this came from), the core draws the keys and the pad types on them:
 //
 //   SELECT + R    show the keypad, and dismiss it

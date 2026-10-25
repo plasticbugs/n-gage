@@ -306,6 +306,13 @@ body.dragging .drop-big .rest { display: none; } body.dragging .drop-big .over {
 .qa summary:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
 .qa:not([open]) > div { display: none; }
 .qa > div { display: grid; gap: var(--space-sm); padding: 0 0 var(--space-lg); }
+.keys-sec { gap: var(--space-md); }
+.keys-sec > h2 { margin-bottom: 0; }
+.keys { border-collapse: collapse; width: 100%; max-width: 40rem; }
+.keys th, .keys td { text-align: left; vertical-align: top; padding: var(--space-xs) var(--space-md) var(--space-xs) 0; border-bottom: var(--rule-hair) solid var(--color-rule); }
+.keys thead th { font-weight: 600; border-bottom: var(--rule-bar) solid var(--color-ink); }
+.keys td:first-child { white-space: nowrap; font-weight: 600; }
+.keys-sec p b { white-space: nowrap; }
 .foot { padding-bottom: var(--space-2xl); font-size: var(--text-sm); color: var(--color-muted); }
 .foot-in { padding-top: var(--space-lg); border-top: var(--rule-bar) solid var(--color-ink); }
 .foot p + p { margin-top: var(--space-xs); }
@@ -498,6 +505,33 @@ body.dragging .drop-big .rest { display: none; } body.dragging .drop-big .over {
       </details>
     </section>
   </div>
+
+  <section class="help keys-sec" aria-labelledby="h-keys">
+    <h2 id="h-keys">The buttons</h2>
+    <table class="keys">
+      <thead><tr><th scope="col">Pocket</th><th scope="col">N-Gage</th></tr></thead>
+      <tbody>
+        <tr><td>D-pad</td><td>joystick</td></tr>
+        <tr><td>A, B</td><td>5, 7: the N-Gage&rsquo;s game keys</td></tr>
+        <tr><td>X, Start</td><td>OK</td></tr>
+        <tr><td>Y</td><td>9</td></tr>
+        <tr><td>L, R</td><td>left and right soft keys</td></tr>
+        <tr><td>Select</td><td>#</td></tr>
+        <tr><td>Select + R</td><td>the on-screen keypad, for every other key; press them again to put it away</td></tr>
+      </tbody>
+    </table>
+    <p>To move a key, press the Pocket&rsquo;s Analogue button while a game runs and open <b>Core Settings</b>. A, B, X, Y, L and R each have a slider, and its number is the key the button presses:</p>
+    <table class="keys">
+      <thead><tr><th scope="col">Slider</th><th scope="col">The button presses</th></tr></thead>
+      <tbody>
+        <tr><td>0 to 9</td><td>that number key</td></tr>
+        <tr><td>10</td><td>its own key, from the table above</td></tr>
+        <tr><td>11</td><td>*</td></tr>
+        <tr><td>12</td><td>#</td></tr>
+      </tbody>
+    </table>
+    <p>Each slider&rsquo;s name says it too: <b>Button A 10=5 11=* 12=#</b>.</p>
+  </section>
 
   <section class="help" aria-labelledby="h-help">
     <h2 id="h-help">If something isn&rsquo;t right</h2>

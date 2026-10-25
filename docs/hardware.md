@@ -250,10 +250,11 @@ been seen in a game yet. The phone's green, red, menu and pen keys have
 no bit.
 
 `IO_KEYMAP` moves A, B, X, Y, L and R: 4 bits each, A in bits 3:0 to R in
-23:20, `d + 1` for digit key `d` (scan code `'0' + d`) and 0 for the
-default above. On the Pocket it is six menu sliders (0xF5000000 to
-0xF5000014, `target/pocket/core_top.sv`), 0-9 a digit and 10 the default;
-in the reference, `--keymap`. The kernel reads both registers at each
+23:20, `d + 1` for digit key `d` (scan code `'0' + d`), 11 for * (`'*'`),
+12 for # (0x7F) and 0 for the default above. On the Pocket it is six menu
+sliders (0xF5000000 to 0xF5000014, `target/pocket/core_top.sv`), 0-9 a
+digit, 10 the default, 11 * and 12 #, which read back as written; in the
+reference, `--keymap`. The kernel reads both registers at each
 vblank and keeps the set of phone keys held, so a phone key that two
 buttons hold goes up only when both are let go (`sw/kernel/event.c`);
 X and start, both OK, did otherwise before.
