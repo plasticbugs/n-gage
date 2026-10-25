@@ -465,3 +465,11 @@ that died belong here as much as the one that lived.
   fetches past 32 MB or the save written just before the load (both
   ruled out in simulation first). Not reported: which of the card's two
   Glimmerati images, how far the race was played, other games.
+- 2026-10-25, `bitstream.rbf_r` `749b0353218fc2ce73eea2978dcfc42d`
+  (`ngage_pocket.rbf` `cf4b8ab3359def5314a377e9f8102594`; 7fe0ad3: \*
+  and # on the key sliders, fitted with seed 7) with kernel `ngvm.bin`
+  `4f1e2825ab85f08888fd1eb847ba2438` (7fe0ad3's event.c on HEAD's sw/),
+  released as v1.4.0: "Confirmed working", after being asked to check
+  Glimmerati past the Day 1 load, the sliders' new names and range to
+  12, and \* from a button set to 11 in a game. Not itemised: which of
+  those were tried, which game took \*, and whether # (12) was tried.

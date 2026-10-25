@@ -139,17 +139,17 @@ put it away. While it is up, the game sees only the keys it presses.
 
 ## What to expect
 
-- **The CPU fix** was tried on a Pocket before release, on a build the
-  same as this one but for the key sliders: its tester reported that
-  Glimmerati now gets past the "Day 1" load. How far the race was
-  played was not said. In simulation the fixed CPU matches the reference
-  emulator instruction for instruction: through Glimmerati's load and
-  into the race (721 million instructions), over the firmware's boot, and
-  on 40 random programs.
-- **\* and # on the sliders** have been checked in simulation only: the
-  menu's numbers reach the kernel and read back as set, and the kernel
-  sends \* and # for 11 and 12. Other games were not tried again on a
-  Pocket with this build; the Analogizer's output is unchanged.
+- **This build** was tried on a Pocket before release: its tester
+  confirmed it working after being asked to check that Glimmerati gets
+  past the "Day 1" load, that the key sliders show their new names and
+  go to 12, and that a button set to 11 gives \* in a game. Which game,
+  and how far the race was played, were not said. The build before it,
+  the same but for the sliders, got Glimmerati past the load on a Pocket
+  too. In simulation the fixed CPU matches the reference emulator
+  instruction for instruction: through Glimmerati's load and into the
+  race (721 million instructions), over the firmware's boot, and on 40
+  random programs. Other games were not tried again on a Pocket with
+  this build; the Analogizer's output is unchanged.
 - **Seen on a Pocket:** with 1.3.0, Pathway to Glory (59 MB) runs, the
   first game over 32 MB on a Pocket; Pathway to Glory: Ikusa Islands has
   been checked only in simulation. With 1.2.0, saves work. With 1.0.0, Virtua Cop,
