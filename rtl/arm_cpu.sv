@@ -350,6 +350,7 @@ module arm_cpu
         .bl_suffix(d1.thumb && t_bl), .t_und(d1.thumb && t_und), .pabt(d1.abt),
         .pc(d1.pc), .pc_op(d1_pc_op), .mode(cpsr[4:0]),
         .step(2'd0), .rem(16'd0), .k(5'd0), .lreg(ls_low[ib_r]), .nregs(ls_cnt[ib_r]),
+        .lmore(ls_more[ib_r]),
         .u(d1_u_x), .ra_pc(d1_ra_pc), .rb_pc(d1_rb_pc), .rc_pc(d1_rc_pc),
         .more(d1_more_x), .rem_next(d1_rem_x),
         .sel_a_rd(d1_sel_a_rd), .sel_b_31(d1_sel_b_31), .sel_c(d1_sel_c)
@@ -394,6 +395,7 @@ module arm_cpu
         .bl_suffix(d2_bl), .t_und(d2_und), .pabt(d2_abt),
         .pc(d2_pc), .pc_op(d2_pc_op), .mode(d2_mode),
         .step(d2_step), .rem(d2_rem_cur), .k(d2_k), .lreg(d2_lreg), .nregs(d2_nregs),
+        .lmore(d2_lmore),
         .u(dec_u), .ra_pc(dec_ra_pc), .rb_pc(dec_rb_pc), .rc_pc(dec_rc_pc),
         .more(dec_more), .rem_next(dec_rem_next),
         .sel_a_rd(dec_sel_a_rd), .sel_b_31(dec_sel_b_31), .sel_c(dec_sel_c)

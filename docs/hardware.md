@@ -53,6 +53,7 @@ line is where NGVM cuts.
 | FIQ | not used | |
 | coprocessors | none | the ARM925T had no FPU, so the firmware and the games carry none |
 | unaligned LDR | ARMv4 rotation | some ROM code relies on it; Unicorn does not rotate, a known gap of the reference |
+| LDM/STM, base in the list, write-back | an STM stores the base as it was before the instruction, wherever it is in the list; an LDM leaves the base holding the word it loaded | ARMv4 leaves both unpredictable. Glimmerati's span drawer opens with `STMDB sp!, {r4-r12, sp, lr}`, closes with `LDMIA sp!, {r4-r12, sp, lr}`, and needs sp back where it was; Unicorn agrees (`sim/cpu/lsmbase.py`) |
 | MMU | NGVM's own table (section 4), not ARM's | one address space; see section 4 |
 | speed | ~100 MIPS of user work for the heaviest game | measured, section 9 |
 

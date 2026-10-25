@@ -6,7 +6,10 @@
 // which feeds back `step` and, for LDM/STM, the registers still to transfer
 // (`rem`) and how many have gone (`k`):
 //   LDM/STM            one step per register, lowest first; the first also
-//                      latches the base and writes it back
+//                      latches the base.  An LDM's first step writes the base
+//                      back, so a base in the list ends as the word loaded;
+//                      an STM's last does, so a base in the list is stored
+//                      as it was before the STM (sim/cpu/lsmbase.py)
 //   SWP                load to the temporary, store Rm, move the temporary
 //   UMLAL/SMLAL        multiply into the product register, then add RdHi:RdLo
 //
@@ -35,6 +38,7 @@ module arm_decode
     input  logic  [4:0] k,              // LDM/STM registers already gone
     input  logic  [3:0] lreg,           // the register this step moves: the lowest in rem (from D1)
     input  logic  [4:0] nregs,          // LDM/STM: registers in the list (from D1)
+    input  logic        lmore,          // LDM/STM: another step follows this one (from D1)
     output uop_t        u,
     output logic        ra_pc, rb_pc, rc_pc,
     output logic        more,           // another step follows this one
@@ -225,7 +229,13 @@ module arm_decode
                     u.imm = {{24{lsm_off[7]}}, lsm_off};
                     u.lsm_wb = instr[23] ? {25'd0, nregs, 2'b00} : 32'd0 - {25'd0, nregs, 2'b00};
                     u.ra = phys(rn, mode); u.ra_rd = k == 5'd0;
-                    if (k == 5'd0 && instr[21]) begin u.wb_en = 1'b1; u.wb = phys(rn, mode); end
+                    // the write-back: an LDM's first step, an STM's last.  ARMv4
+                    // leaves a base in the list unpredictable; Glimmerati pairs
+                    // STMDB sp!, {r4-r12, sp, lr} with LDMIA sp!, {r4-r12, sp, lr}
+                    // and needs sp back where it was, as Unicorn (QEMU) has it
+                    if (instr[21] && (instr[20] ? k == 5'd0 : !lmore)) begin
+                        u.wb_en = 1'b1; u.wb = phys(rn, mode);
+                    end
                     if (instr[20]) begin
                         u.wa_en = 1'b1;
                         u.wa = phys(lreg, lsm_user ? M_USR : mode);
