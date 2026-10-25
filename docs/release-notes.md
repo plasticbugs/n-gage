@@ -1,14 +1,13 @@
-# N-Gage for Analogue Pocket — 1.2.0
+# N-Gage for Analogue Pocket — 1.3.0
 
 A feature release:
 
-- **Game saves.** Each game's saves now live on the SD card and are still
-  there the next time you play;
-- **Add N-Gage games.html**, on the card beside the core's files, turns
-  your game zips into games for the Pocket: drop them on it, all at once,
-  and they go onto the SD card with their names in the Pocket's menu. No
-  Python, no command line, and it works offline;
-- the menu's Scanlines and Shadow Mask are now one list, **Screen Effect**.
+- **Games larger than 32 MB.** A game's card can now hold up to 64 MB,
+  which every N-Gage game fits. **Pathway to Glory** (59 MB), too large
+  for every earlier release, runs on a Pocket;
+- **Add N-Gage games.html** and `mkdrive.py` build those cards. A game
+  that fits in 32 MB gets the same card as before, byte for byte, so the
+  cards you have already made still work.
 
 The core boots the Nokia N-Gage's own firmware on the Pocket and runs
 games.
@@ -50,14 +49,17 @@ dump and your own games.
    The game list (`Assets/ngage/plasticbugs.ngage/*.json`) names the `.img`
    and the `.sav` each game uses. The page writes these entries; by hand,
    add a JSON there for any other game.
-3. Loading takes a while: up to about 50 MB go through the Pocket's loader,
-   and the screen stays black until it is done. The phone then boots as it
-   would, Nokia logo first.
+3. Loading takes a while: up to about 50 MB go through the Pocket's loader
+   (about 80 MB for Pathway to Glory), and the screen stays black until it
+   is done. The phone then boots as it would, Nokia logo first.
 
-**From 1.1.0 or earlier,** copy the whole zip over: the bitstream,
-`ngvm.bin` and the game list have changed. Your `sym.rom` and `.img`
-files are not in it, and your menu settings are kept, except a Shadow
-Mask setting, which goes back to Off: choose it again under Screen Effect.
+**From 1.2.0,** copy the whole zip over: the bitstream, `ngvm.bin`,
+`mkdrive.py` and `Add N-Gage games.html` have changed. Your `sym.rom`,
+`.img` and `.sav` files are not in it, and your menu settings are kept.
+
+**From 1.1.0 or earlier,** copy the whole zip over: the game list has
+changed too. Your menu settings are kept, except a Shadow Mask setting,
+which goes back to Off: choose it again under Screen Effect.
 
 **Games you added to the list yourself** need a save entry, or they all
 share one save file, `ngage.sav`. In the game's JSON, after the `.img`
@@ -91,44 +93,44 @@ the highlight, A or B presses the key for as long as you hold it, and Y
 moves the keypad to the top of the screen and back. Select and R together
 put it away. While it is up, the game sees only the keys it presses.
 
-## New since 1.1.0
+## New since 1.2.0
 
-- **Game saves.** A game keeps its saves on the phone's own C: drive.
-  Until now that drive was erased at every start, so nothing outlived
-  the Pocket's power. Each game's C: drive is now its save file,
-  `Saves/ngage/plasticbugs.ngage/<game>.sav` on the card (1 MB). The core
-  writes it a couple of seconds after the game saves, and when the
-  Pocket's menu opens with a save still waiting. A game's first start on
-  this release formats its new drive, as a new phone would, so that start
-  is slower. Later starts skip that, and are quicker than on 1.1.0, which
-  formatted the drive every time.
-- **Add N-Gage games.html** makes the same `.img` files as `mkdrive.py`,
-  byte for byte, in the browser. It takes any number of game zips or
-  unzipped game folders at once, checks `SYM.ROM` and saves it as
-  `sym.rom`, and never overwrites a file already on the card.
-- **Screen Effect.** The Pocket allows 20 menu entries and data slots
-  together, and the save slot is a new data slot. Scanlines (25, 50, 75%)
-  and Shadow Mask (1x, 2x, 3x) are now options of one list, so the two
-  can no longer be on at once.
-- **`mkdrive.py`** takes a zip of the game's folder, and a zip made on a
-  Mac, as well as a zip of the card's contents. Snakes no longer needs
-  `--app`.
+- **Games larger than 32 MB.** The core's drive is 32 MB, all of the
+  Pocket's CRAM. A larger card now works: the Pocket loads the whole
+  image, the core keeps its first 32 MB, and the rest is read from the SD
+  card, 64 KB at a time, as the game asks for it. Most of those reads come
+  as the game starts. Of the retail games, Pathway to Glory and Pathway to
+  Glory: Ikusa Islands need this. Glimmerati is larger than 32 MB too, but
+  its copy protection checks the memory card, so it does not run.
+  A game that fits in 32 MB reads nothing more and runs as on 1.2.0.
+- **If one of those reads fails,** the core stops the game and fills the
+  screen: **blue** if the Pocket never answered, **red with white bands**
+  if it answered with an error (the number of bands is the error code).
+  Note which, then quit the core. Neither has been seen on a Pocket.
+- **`mkdrive.py` and Add N-Gage games.html** make a card larger than
+  32 MB only when the game's files do not fit in 32 MB, up to 64 MB.
 
 ## What to expect
 
 - **This build** was tried on a Pocket before release: its tester
-  reported that save games work. Which games, and whether the Analogizer
-  was used, was not said; 1.1.0's Analogizer output is unchanged.
-- **Seen on a Pocket:** with 1.0.0, Virtua Cop, SSX: Out of Bounds and
-  Puzzle Bobble VS play. With 0.3.1-alpha's build, The Elder Scrolls
-  Travels: Shadowkey and The Sims Bustin' Out play, and Call of Duty
-  plays slowly; with 0.3.0-alpha's, Pocket Kingdom plays well. With
-  0.2.0-alpha's, Atari Masterpieces Vol. 1 and 2, Rayman 3 and The Roots
-  play well. On the builds before it, Colin McRae Rally 2005 plays
-  perfectly, Tony Hawk's Pro Skater and Ghost Recon play well, and
-  Requiem of Hell starts after a long pause. Sonic N played on
-  0.1.0-alpha. The games not named for 1.0.0 have not been reported on
-  it or on this build yet.
+  reported that Pathway to Glory runs, the first game over 32 MB on a
+  Pocket. How far it was played, how long it took to load and whether it
+  saved were not said. Pathway to Glory: Ikusa Islands has been checked
+  only in simulation. Games that fit in 32 MB were not tried again on this
+  build; in simulation, Sonic N draws the same screens as on 1.2.0.
+  Saves now share the Pocket's bridge with the new reads: in simulation
+  every save is written back whole, but saves have not been tried again
+  on a Pocket. The Analogizer's output is unchanged from 1.2.0.
+- **Seen on a Pocket:** with 1.2.0, saves work. With 1.0.0, Virtua Cop,
+  SSX: Out of Bounds and Puzzle Bobble VS play. With 0.3.1-alpha's
+  build, The Elder Scrolls Travels: Shadowkey and The Sims Bustin' Out
+  play, and Call of Duty plays slowly; with 0.3.0-alpha's, Pocket
+  Kingdom plays well. With 0.2.0-alpha's, Atari Masterpieces Vol. 1 and
+  2, Rayman 3 and The Roots play well. On the builds before it, Colin
+  McRae Rally 2005 plays perfectly, Tony Hawk's Pro Skater and Ghost
+  Recon play well, and Requiem of Hell starts after a long pause. Sonic N
+  played on 0.1.0-alpha. The games not named for 1.0.0 have not been
+  reported on it or on this build yet.
 - **The on-screen keypad** has been checked in simulation (every key
   presses its own, and nothing else reaches the game), and has not been
   reported on from a Pocket.
@@ -156,8 +158,8 @@ put it away. While it is up, the game sees only the keys it presses.
     sound. It fell behind its music stream at 0.2.0-alpha's speed and
     dropped it for good.
 - Copy protection that checks the memory card the game was installed on
-  stops Asphalt Urban GT 2, Warhammer 40,000: Glory in Death and One:
-  the card here is an image, with nothing behind it to identify.
+  stops Asphalt Urban GT 2, Glimmerati, Warhammer 40,000: Glory in Death
+  and One: the card here is an image, with nothing behind it to identify.
 - In the reference emulator, not yet tried on a Pocket: Civilization and
   Splinter Cell: Chaos Theory stop during startup, and the Payload trial
   does not get past its first screens.
@@ -171,8 +173,8 @@ put it away. While it is up, the game sees only the keys it presses.
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `0c74766f7471e7649a1fbd905d2cf75f` |
-| `Assets/ngage/common/ngvm.bin` | `86c89494eae24bf2d0c5932e90dadc51` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `408035668fbf78884423721d594088fa` |
+| `Assets/ngage/common/ngvm.bin` | `768326c5b49c57c7c4e5183f1aa6db68` |
 
 CPU at 80 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.

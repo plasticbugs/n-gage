@@ -32,12 +32,13 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket**: the current release is v1.2.0, which keeps
-each game's saves on the SD card and ships a page, on the card, that
-turns game zips into games. v1.1.0 added TATE for the Analogizer, centred
-the Analogizer's picture on a CRT, and got Rifts: Promise of Power past
-its cutscenes. The first flash
-(CPU at 64 MHz) booted and ran Sonic N into gameplay, with sound. Since
+**It runs on the Pocket**: the current release is v1.3.0, which runs
+games larger than 32 MB: Pathway to Glory (59 MB) runs on a Pocket.
+v1.2.0 kept each game's saves on the SD card and shipped a page, on the
+card, that turns game zips into games. v1.1.0 added TATE for the
+Analogizer, centred the Analogizer's picture on a CRT, and got Rifts:
+Promise of Power past its cutscenes. The first flash (CPU at 64 MHz)
+booted and ran Sonic N into gameplay, with sound. Since
 then the CPU runs at 80 MHz on a clock of its own, both caches hold
 64 KB, the picture is copied when the firmware updates the display, the
 audio FIFO holds 32–64 ms, a cache miss restarts the CPU on the word it
@@ -207,7 +208,7 @@ difference.
 
 A game's card holds up to 64 MB. The core's drive is 32 MB, and a card
 larger than that (Pathway to Glory and its Ikusa Islands, of the retail
-games) is read from the SD card as the game needs it: new since v1.2.0.
+games) is read from the SD card as the game needs it: new in v1.3.0.
 Pathway to Glory runs on a Pocket; Ikusa Islands has been checked only in
 simulation (`docs/bringup.md`).
 Glimmerati, which also needs more than 32 MB, does not run: its copy
