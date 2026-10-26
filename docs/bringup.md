@@ -473,3 +473,14 @@ that died belong here as much as the one that lived.
   Glimmerati past the Day 1 load, the sliders' new names and range to
   12, and \* from a button set to 11 in a game. Not itemised: which of
   those were tried, which game took \*, and whether # (12) was tried.
+  Then, on the same build: Glimmerati with a save "getting stuck at boot
+  up. Not going to the cinematics", and its other copy (the EN zip)
+  with its own save "goes to a blue screen". On the bench (`tb_sys
+  --no-uc --save`, v1.4.0's kernel) the first copy with the card's
+  `glimmerati.sav` (md5 `0ac3ad7b3c50e629f04e5a52e336a336`) opens MmcIf
+  twice at about 13.7 s, is told no card is there, and its thread 6R37
+  takes a data abort at pc `4493c8c8`: a kernel panic, which on a Pocket
+  leaves the last picture up. Without the save it never opens MmcIf and
+  was still running at 15.6 s. The EN copy with its save stopped the
+  same way on the bench, not with a blue screen, so the blue screen is
+  not explained; that copy has been deleted from the card.

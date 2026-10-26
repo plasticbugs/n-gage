@@ -34,7 +34,8 @@ drivers.
 
 **It runs on the Pocket**: the current release is v1.4.0, which gets
 Glimmerati past its "Day 1" loading screen (a CPU fix) and puts \* and #
-on the key sliders. v1.3.0 ran games larger than 32 MB: Pathway to Glory
+on the key sliders. Glimmerati still stops at startup once it has a save
+(below). v1.3.0 ran games larger than 32 MB: Pathway to Glory
 (59 MB) runs on a Pocket. v1.2.0 kept each game's saves on the SD card and shipped a page, on the
 card, that turns game zips into games. v1.1.0 added TATE for the
 Analogizer, centred the Analogizer's picture on a CRT, and got Rifts:
@@ -228,7 +229,12 @@ Pathway to Glory runs on a Pocket; Ikusa Islands has been checked only in
 simulation (`docs/bringup.md`).
 Glimmerati also needs more than 32 MB, and from v1.4.0 it gets past its
 "Day 1" load on a Pocket; some copies of it check the memory card they
-were installed on, and those stop. The game list
+were installed on, and those stop. Once it has a save, Glimmerati stops
+at startup too, before its cinematics, with the last picture left on
+screen: the save sends it to its memory-card check, and the core has no
+card to show it. Deleting `Saves/ngage/plasticbugs.ngage/glimmerati.sav`
+lets it start again, and loses its progress, so for now it cannot keep
+progress from one start to the next. The game list
 (`Assets/ngage/plasticbugs.ngage/*.json`) names each `.img`. The page writes
 these entries for you. By hand, copy one of the files, name the copy after
 the game, and change its `filename` to the game's `.img`.

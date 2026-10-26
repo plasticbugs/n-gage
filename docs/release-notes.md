@@ -192,6 +192,14 @@ put it away. While it is up, the game sees only the keys it presses.
   stops some copies of Asphalt Urban GT 2, Glimmerati, Warhammer 40,000:
   Glory in Death and One: the card here is an image, with nothing behind
   it to identify.
+- Glimmerati stops at startup once it has a save, before its
+  cinematics, with the last picture left on screen (reported from a
+  Pocket on this build). In simulation, with the same copy and the same
+  save, it asks for the memory card twice, is told there is none, and
+  its own code faults milliseconds later; without a save it never asks.
+  Deleting `Saves/ngage/plasticbugs.ngage/glimmerati.sav` lets it start
+  again and loses its progress, so for now it cannot keep progress from
+  one start to the next.
 - In the reference emulator, not yet tried on a Pocket: Civilization and
   Splinter Cell: Chaos Theory stop during startup, and the Payload trial
   does not get past its first screens.
