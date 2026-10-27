@@ -32,8 +32,10 @@ drivers.
 
 ## Status
 
-**It runs on the Pocket**: the current release is v1.4.0, which gets
-Glimmerati past its "Day 1" loading screen (a CPU fix) and puts \* and #
+**It runs on the Pocket**: the current release is v1.4.1, which fixes
+Operation Shadow's 3D models: a game's code now sits at 0xEE000000, where
+its addresses compare as negative, as on the phone. v1.4.0 got
+Glimmerati past its "Day 1" loading screen (a CPU fix) and put \* and #
 on the key sliders. Glimmerati still stops at startup once it has a save
 (below). v1.3.0 ran games larger than 32 MB: Pathway to Glory
 (59 MB) runs on a Pocket. v1.2.0 kept each game's saves on the SD card and shipped a page, on the

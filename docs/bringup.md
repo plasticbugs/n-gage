@@ -484,3 +484,21 @@ that died belong here as much as the one that lived.
   was still running at 15.6 s. The EN copy with its save stopped the
   same way on the bench, not with a blue screen, so the blue screen is
   not explained; that copy has been deleted from the card.
+- 2026-10-27, on v1.4.0's build (`749b0353` with `ngvm.bin` `4f1e2825`):
+  "Fairly heavy graphical corruption/texture warping in game" in
+  Operation Shadow, with a screenshot of soldiers and buildings spread
+  into wide spans. In the reference emulator the game's edge walker
+  (6r22.app + 0x93608) caps its reciprocal table's address, not its
+  index, with a signed compare against 4096; with the .app at 0x48ac8000
+  the cap always fired and the slopes came from 0x1000 + 4·dy. Restoring
+  the table's address there made the same frames draw whole.
+- 2026-10-27, `bitstream.rbf_r` `95293ecf6791d534a2ecd2d3b19926da`
+  (`ngage_pocket.rbf` `089bd947ceeca01a0176b040877852d4`; 76e9e35: a
+  game's .app and its DLLs at 0xEE000000, IO and uncached decoded from
+  the address in the D-cache, fitted with seed 7) with kernel `ngvm.bin`
+  `6a3b979cf3fe887553efe059091af131` (76e9e35's sw/, without the working
+  tree's MmcIf diagnostic), released as v1.4.1: "tested working", after
+  being told Operation Shadow's soldiers, sandbags, towers and buildings
+  should be drawn whole, without the wide shapes or warped textures, and
+  other games as on v1.4.0. Not itemised: how far Operation Shadow was
+  played, or which other games were tried.

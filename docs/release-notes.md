@@ -1,17 +1,14 @@
-# N-Gage for Analogue Pocket — 1.4.0
+# N-Gage for Analogue Pocket — 1.4.1
 
-A fix and a feature:
+A fix:
 
-- **Glimmerati** no longer freezes on its "Day 1 The Introduction"
-  loading bar. One instruction in its drawing code saves the stack
-  pointer along with other registers, and the core's CPU saved the wrong
-  value, so the race broke on its first frame;
-- **\* and # on a button.** The menu's six key sliders now go up to 12:
-  11 is \*, 12 is #. Each slider's name says what its 10, 11 and 12 are;
-- **Add N-Gage games.html** now shows which button is which key, and
-  what the slider numbers mean.
+- **Operation Shadow** draws its soldiers, buildings and textures whole.
+  On 1.4.0 and before, its 3D models broke into wide, stretched shapes
+  with warped textures.
 
-1.3.0 made games up to 64 MB work, Pathway to Glory (59 MB) among them.
+1.4.0 got Glimmerati past its "Day 1" loading screen and put \* and #
+on the key sliders. 1.3.0 made games up to 64 MB work, Pathway to Glory
+(59 MB) among them.
 
 The core boots the Nokia N-Gage's own firmware on the Pocket and runs
 games.
@@ -56,6 +53,11 @@ dump and your own games.
 3. Loading takes a while: up to about 50 MB go through the Pocket's loader
    (about 80 MB for Pathway to Glory), and the screen stays black until it
    is done. The phone then boots as it would, Nokia logo first.
+
+**From 1.4.0,** copy the whole zip over, or just
+`Cores/plasticbugs.ngage/bitstream.rbf_r` and
+`Assets/ngage/common/ngvm.bin`. Copy both: this `ngvm.bin` does not run
+on 1.4.0's bitstream.
 
 **From 1.3.0 or 1.2.0,** copy the whole zip over: the bitstream,
 `ngvm.bin`, the menu and `Add N-Gage games.html` have changed, and from
@@ -108,7 +110,19 @@ the highlight, A or B presses the key for as long as you hold it, and Y
 moves the keypad to the top of the screen and back. Select and R together
 put it away. While it is up, the game sees only the keys it presses.
 
-## New since 1.3.0
+## New in 1.4.1
+
+- **Operation Shadow's 3D models.** When the game works out a polygon
+  edge, it caps an index into a table at 4096, but its compare caps the
+  table's address instead, and treats it as a signed number. On the
+  phone, a game's code and tables sit above 0xE0000000, where an address
+  counts as negative, so the cap never fired. The core put them at
+  0x48…, so the cap fired on every edge, and the slopes were read from
+  the wrong memory. Each game's `.app` and the libraries it brings now
+  load at 0xEE000000, so the compare comes out as on the phone. Games
+  that ship as an `.exe` (System Rush) keep their code where it was.
+
+## New in 1.4.0
 
 - **Glimmerati's "Day 1" load.** Glimmerati's span drawer opens with
   `STMDB sp!, {r4-r12, sp, lr}` and closes with the matching `LDMIA`. The
@@ -140,17 +154,20 @@ put it away. While it is up, the game sees only the keys it presses.
 ## What to expect
 
 - **This build** was tried on a Pocket before release: its tester
-  confirmed it working after being asked to check that Glimmerati gets
-  past the "Day 1" load, that the key sliders show their new names and
-  go to 12, and that a button set to 11 gives \* in a game. Which game,
-  and how far the race was played, were not said. The build before it,
-  the same but for the sliders, got Glimmerati past the load on a Pocket
-  too. In simulation the fixed CPU matches the reference emulator
-  instruction for instruction: through Glimmerati's load and into the
-  race (721 million instructions), over the firmware's boot, and on 40
-  random programs. Other games were not tried again on a Pocket with
-  this build; the Analogizer's output is unchanged.
-- **Seen on a Pocket:** with 1.3.0, Pathway to Glory (59 MB) runs, the
+  reported it working after being asked to check that Operation
+  Shadow's soldiers and buildings are drawn whole, and that other games
+  look as they did on 1.4.0. How far the game was played, and which
+  other games were tried, were not said. In the reference emulator,
+  Operation Shadow's attract demo draws whole with the new kernel, and
+  the core's simulation, run against the reference instruction for
+  instruction, draws the same picture. 46 other games ran for 40 s from
+  power-on in the reference emulator, on 1.4.0's kernel and on this
+  one: each ends the same way on both, 36 give the same pictures, and
+  10 differ only in how far a menu animation had got. Games were not
+  played further than that with the new kernel, outside the Pocket
+  test. The Analogizer's output is unchanged.
+- **Seen on a Pocket:** with 1.4.0's builds, Glimmerati gets past its
+  "Day 1" load. With 1.3.0, Pathway to Glory (59 MB) runs, the
   first game over 32 MB on a Pocket; Pathway to Glory: Ikusa Islands has
   been checked only in simulation. With 1.2.0, saves work. With 1.0.0, Virtua Cop,
   SSX: Out of Bounds and Puzzle Bobble VS play. With 0.3.1-alpha's
@@ -194,7 +211,8 @@ put it away. While it is up, the game sees only the keys it presses.
   it to identify.
 - Glimmerati stops at startup once it has a save, before its
   cinematics, with the last picture left on screen (reported from a
-  Pocket on this build). In simulation, with the same copy and the same
+  Pocket on 1.4.0, not tried on this build). In simulation, with the
+  same copy and the same
   save, it asks for the memory card twice, is told there is none, and
   its own code faults milliseconds later; without a save it never asks.
   Deleting `Saves/ngage/plasticbugs.ngage/glimmerati.sav` lets it start
@@ -213,8 +231,8 @@ put it away. While it is up, the game sees only the keys it presses.
 
 | file | md5 |
 |---|---|
-| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `749b0353218fc2ce73eea2978dcfc42d` |
-| `Assets/ngage/common/ngvm.bin` | `4f1e2825ab85f08888fd1eb847ba2438` |
+| `Cores/plasticbugs.ngage/bitstream.rbf_r` | `95293ecf6791d534a2ecd2d3b19926da` |
+| `Assets/ngage/common/ngvm.bin` | `6a3b979cf3fe887553efe059091af131` |
 
 CPU at 80 MHz. `docs/bringup.md` in the source says what each screen
 should look like and when, and what to report if it does not.
