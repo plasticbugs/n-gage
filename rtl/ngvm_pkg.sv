@@ -24,7 +24,8 @@ typedef enum logic [3:0] {
     RG_KERN,            // 0x00000000, 1 MB: RAM pages 0-63, flat, cached
     RG_WIN,             // 0x00400000, 4 MB: the data window, paged, cached, tagged by IO_WIN_ID
     RG_PHYS,            // 0x20000000, 32 MB: all of RAM, flat, uncached
-    RG_CHUNK,           // 0x40000000, 256 MB: paged, cached; and its low name, 0x00800000-0x01FFFFFF
+    RG_CHUNK,           // 0x40000000, 256 MB: paged, cached; and its low name, 0x00800000-0x01FFFFFF,
+                        // and its code name, 0xEE000000-0xEFFFFFFF
     RG_ROM,             // 0x50000000, 20 MB: read-only, cached
     RG_DRIVE,           // 0x60000000, 32 MB: CRAM, uncached
     RG_KSEC,            // 0x80000000, 4 MB: flat, cached
@@ -37,11 +38,24 @@ function automatic region_t region_of(input logic [31:0] va);
     if (va[31:25] == 7'h10)                     return RG_PHYS;
     if (va[31:28] == 4'h4)                      return RG_CHUNK;
     if (va[31:25] == 7'h00 && va[24:23] != 2'd0) return RG_CHUNK;   // the low name (ngvm_hw.h)
+    if (va[31:25] == 7'h77)                     return RG_CHUNK;   // the code name (ngvm_hw.h)
     if (va[31:28] == 4'h5 && va[27:20] < 8'h14) return RG_ROM;
     if (va[31:28] == 4'h6 && va[27:25] == 3'd0) return RG_DRIVE;
     if (va[31:22] == 10'h200)                   return RG_KSEC;
     if (va[31:12] == 20'hF0000)                 return RG_IO;
     return RG_NONE;
+endfunction
+
+// IO, and the uncached regions (PHYS, DRIVE), straight from the address, as
+// region_of decodes them: the D-cache's dc_ok waits on both, and through
+// region_of's chain each waited on every region tested before it, the code
+// name included (a fit missed by 0.540 ns from r_va through is_unc into A).
+function automatic logic io_of(input logic [31:0] va);
+    return va[31:12] == 20'hF0000;
+endfunction
+
+function automatic logic unc_of(input logic [31:0] va);
+    return va[31:25] == 7'h10 || (va[31:28] == 4'h6 && va[27:25] == 3'd0);
 endfunction
 
 function automatic logic cached_rg(input region_t r);
@@ -59,8 +73,8 @@ function automatic logic [TAGW-1:0] vtag_of(input logic [31:0] va, input logic [
     return {va[31:13], va[31:22] == 10'h001 ? win_id : 6'd0};
 endfunction
 
-// the page-table index of a paged address (the low name's va[27:14] is its
-// high name's, so both use one entry)
+// the page-table index of a paged address (the low and code names' va[27:14]
+// are their high names', so each pair uses one entry)
 localparam int PT_CHUNK   = 16384;
 localparam int PT_ENTRIES = 16640;
 function automatic logic [14:0] pt_index_of(input logic [31:0] va);

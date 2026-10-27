@@ -96,7 +96,8 @@ static void lib_set_name(struct library *l, const u16 *path, int n)
  * from the image's own code base, puts the DLL reference table right after
  * the code, loads each import (DllAddDependency names them) and then calls
  * LibraryLoaded.  One address space: written where it runs.  EKA1 gives a
- * RAM DLL no writable static data. */
+ * RAM DLL no writable static data.  The code runs under the code name, at
+ * 0xEE000000 and up, negative as EKA1's RAM code was (ngvm_hw.h). */
 static s32 library_create_ram(struct thread *t, u32 li)
 {
     extern int u16_eq_fold(const u16 *, int, const u16 *, int);
@@ -119,7 +120,7 @@ static s32 library_create_ram(struct thread *t, u32 li)
     u32 refs = uread32(li + LI_DLLREFS);
     u32 size = code + 4 + 8 * refs;           /* the code, then the reference table */
     struct library *l = (struct library *)obj_new(O_LIBRARY, sizeof(struct library), 0);
-    l->chunk = vm_reserve_for(t->proc->low, size);
+    l->chunk = vm_reserve_code(size);
     if (!l->chunk || vm_commit(l->chunk, size)) { obj_unref(&l->o); return KErrNoMemory; }
     for (int i = 0; i < 3; i++) l->uid[i] = uread32(li + LI_UID + 4 * i);
     l->code_base = l->chunk;

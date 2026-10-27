@@ -899,7 +899,9 @@ set_global_assignment -name OPTIMIZE_HOLD_TIMING "ALL PATHS"
 # on which counter drives dram_clk: every archived fit from X0_Y0 or X54_Y3
 # left 0.77-0.80 ns of setup, X54_Y0 0.25, X0_Y6 0.13 and -0.39
 # (docs/core-design.md, section 5.4, M).  Pinned, the capture keeps the
-# margin of the builds tested on the Pocket so far.
+# margin of the builds tested on the Pocket so far.  Not that margin since
+# the seeds: with this pin, v1.4.0 (seed 7, run on a Pocket) left +0.213 /
+# +0.194 ns at 85 / 0 C, and the next fit +0.246 / +0.232.
 set_location_assignment FRACTIONALPLL_X0_Y1_N0 -to "core_top:ic|core_pll:core_pll|core_pll_0002:core_pll_inst|altera_pll:altera_pll_i|general[0].gpll~FRACTIONAL_PLL"
 set_location_assignment FRACTIONALPLL_X54_Y1_N0 -to "core_top:ic|cpu_pll:cpu_pll|altera_pll:altera_pll_i|general[0].gpll~FRACTIONAL_PLL"
 set_location_assignment PLLOUTPUTCOUNTER_X0_Y0_N1 -to "core_top:ic|core_pll:core_pll|core_pll_0002:core_pll_inst|altera_pll:altera_pll_i|general[3].gpll~PLL_OUTPUT_COUNTER"

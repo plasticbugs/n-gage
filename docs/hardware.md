@@ -77,6 +77,7 @@ Reaching the kernel:
 | `0x50000000` | ≤ 20 MB | `SYM.ROM`, as linked; read-only | everyone |
 | `0x60000000` | ≤ 32 MB | the game's drive image (FAT16, section 7); of an image up to 64 MB, a window onto it | kernel (the drive LDD) |
 | `0x80000000` | 4 MB | fixed processes' static data (EFile `0x80100000`, EwSrv `0x80200000`) | user |
+| `0xEE000000` | 32 MB | the code name of chunk space's `0x4E000000`–`0x4FFFFFFF`: RAM DLLs' code (every `.app`) | user, through the table |
 | `0xF0000000` | 4 KB | devices | kernel |
 
 The ROM base, the fixed-process data addresses and the 4 MB EXE data window
@@ -100,12 +101,29 @@ coherent. The reference maps the low name only, so a use of the high name
 faults there and in the lockstep bench. The low name fills from the bottom,
 so a game's first 8 MB of reservations are under 16 MB.
 
+**The code name.** EKA1 ran RAM-loaded code at `0xE0000000` and up, so a
+pointer into a game's code was negative as a signed number, and at least one
+game relies on that. Operation Shadow keeps a 2,048-entry reciprocal table in
+its `.app` and, in the routine that walks a triangle's edges, clamps the
+table's *address* to 4096 with a signed compare (`cmp r9, #4096; movgt r9,
+#4096` at `.app` + `0x93608`), where the scanline loop beside it clamps the
+index. On the phone the address was negative and the clamp never fired. At
+`0x4xxxxxxx` it always fired, every edge took its slope from the kernel's
+code at `0x1000`, and its soldiers and buildings were drawn with wide spans
+off their sides and warped textures. So `0xEE000000`–`0xEFFFFFFF` is a
+second name for chunk space's `0x4E000000`–`0x4FFFFFFF` (table entries
+14336–16383), and the kernel puts every RAM DLL's code there
+(`vm_reserve_code`) and never uses those pages' high name. EXEs loaded from
+the card keep code and data in one chunk under the low name, as before. The
+reference and the lockstep bench map the code name only.
+
 ## 4. Paging
 
 One table of 16,640 16-bit entries:
 
 - entries 0–16383 map chunk space (`0x40000000` + n × 16 KB); 512–2047 map
-  `0x00800000` + (n − 512) × 16 KB as well, the low name (section 3);
+  `0x00800000` + (n − 512) × 16 KB as well, the low name, and 14336–16383
+  map `0xEE000000` + (n − 14336) × 16 KB as well, the code name (section 3);
 - entries 16384–16639 map the 4 MB data window.
 
 Each entry holds a 16 KB RAM page number, or `0xFFFF` for none. The kernel

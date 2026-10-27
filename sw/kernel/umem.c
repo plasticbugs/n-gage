@@ -123,6 +123,7 @@ int uaddr_ok(u32 a, u32 n)
         if (!vm_mapped(p)) return 0;
     return (a >= NGVM_CHUNK_BASE && e <= NGVM_CHUNK_BASE + NGVM_CHUNK_SIZE) ||
            (a >= NGVM_LOW_BASE && e <= NGVM_LOW_BASE + NGVM_LOW_SIZE) ||
+           (a >= NGVM_CODE_BASE && e <= NGVM_CODE_BASE + NGVM_CODE_SIZE) ||
            (a >= NGVM_DATA_BASE && e <= NGVM_DATA_BASE + NGVM_DATA_SIZE);
 }
 

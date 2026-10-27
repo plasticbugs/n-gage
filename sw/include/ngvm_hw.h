@@ -64,6 +64,19 @@
 #define NGVM_LOW_BASE     0x00800000u
 #define NGVM_LOW_SIZE     0x01800000u
 
+/* The code name of chunk space: 0xEE000000-0xEFFFFFFF is 0x4E000000-
+ * 0x4FFFFFFF, through the same table entries (14336-16383).  EKA1 ran
+ * RAM-loaded code at 0xE0000000 and up, so a pointer into a game's code
+ * was negative, and some games rely on it: Operation Shadow clamps its
+ * reciprocal table's address with a signed compare against 4096, which a
+ * pointer into its .app at 0x4xxxxxxx fails, and every edge it draws then
+ * takes its slope from the kernel at 0x1000.  The kernel loads RAM DLLs
+ * (every .app) here and never uses these pages' high name; the reference
+ * maps the code name only.                                                 */
+#define NGVM_CODE_BASE    0xEE000000u
+#define NGVM_CODE_SIZE    0x02000000u
+#define NGVM_CODE_HIGH    0x4E000000u   /* the same pages' chunk-space name     */
+
 /* ---- devices, at NGVM_IO_BASE + offset, all 32-bit ---------------------- */
 #define IO_DBG_PUTC       0x000  /* W: one byte to the debug console          */
 #define IO_DBG_EXIT       0x004  /* W: stop the simulation with this code     */

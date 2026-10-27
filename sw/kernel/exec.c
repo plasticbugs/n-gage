@@ -55,14 +55,16 @@ void trace_stack(u32 sp)
 /* RDebug::ReadMemory (8) and WriteMemory (9): len bytes between a thread's
  * memory and a descriptor.  Asphalt Urban GT 2 decrypts its own code with
  * WriteMemory, 0x1C0 bytes at a time from cwivenc.dat, and calls it at once;
- * answered KErrNotSupported, it ran the ciphertext.  Chunk space is the same
- * in every process, the data window only the caller's own. */
+ * answered KErrNotSupported, it ran the ciphertext.  Chunk space and its
+ * code name are the same in every process, the data window only the
+ * caller's own. */
 static s32 debug_memory(struct thread *me, u32 op, u32 tid, u32 addr, u32 des, s32 len)
 {
     struct thread *t = thread_by_id(tid);
     u32 end;
     if (!t || t->state == T_DEAD) return KErrNotFound;
     if (addr - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE) end = NGVM_CHUNK_BASE + NGVM_CHUNK_SIZE;
+    else if (addr - NGVM_CODE_BASE < NGVM_CODE_SIZE) end = NGVM_CODE_BASE + NGVM_CODE_SIZE;
     else if (addr - NGVM_DATA_BASE < NGVM_DATA_SIZE && t->proc == me->proc) end = NGVM_DATA_BASE + NGVM_DATA_SIZE;
     else return KErrNotSupported;
     if (len < 0 || (u32)len > end - addr) return KErrArgument;

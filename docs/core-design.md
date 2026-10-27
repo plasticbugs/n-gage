@@ -988,6 +988,21 @@ failing paths, which were then grouped by their end registers.
     1,259,730,521 instructions and 848 frames as H.
   - **A first attempt cost more.** It registered the region a cycle
     ahead and cost 0.6% on Tony Hawk.
+- **The code name, and IO and uncached from the address.** Adding the
+  code name (`0xEE000000`, hardware.md section 3) to `region_of` failed the
+  CPU's clock at seed 7 by 0.540 / 0.328 ns (85 / 0 °C). Every failing path
+  ran from the D-cache's `r_va` through the enum's compares into `is_unc`,
+  then `dc_ok`, A's `a_free` and A's operands: the D-cache asked "IO?" and
+  "uncached?" through the whole priority chain, and each region tested
+  before them lengthened it.
+  - **The fix.** They are decoded straight from the address now
+    (`io_of`, `unc_of` in `ngvm_pkg`). PHYS or DRIVE is six address bits.
+  - **Measured.** The CPU closed at +0.486 / +0.592 ns, the SDRAM capture
+    at +0.246 / +0.232 ns, and the worst hold was +0.119 ns. v1.4.0 had
+    +0.145 / +0.149 on the CPU and +0.213 / +0.194 on the capture.
+  - **Equivalence.** From Operation Shadow's 56 s checkpoint, in lockstep,
+    the CPU retired the same 16,932,603 instructions in the same
+    31,985,791 cycles, with the same bus traffic and frames.
 - **82 MHz, with the area settings (below), was not within reach of
   seeds.** Two seeds missed by 0.5 to 0.7 ns, each on different paths: D2
   into S, M into the D-cache, and the D-cache's hit through the stall.

@@ -247,9 +247,9 @@ module ngvm_dcache
 
     logic        clean_pend, flushing, walking;
     wire  cmp     = st == S_IDLE && look && !clean_pend;
-    wire  is_io   = r_rg == RG_IO;
+    wire  is_io   = io_of(r_va);                      // not through r_rg (ngvm_pkg)
     wire  is_fl   = is_io && r_we && r_va[11:2] == IO_CACHE_FLUSH;
-    wire  is_unc  = r_rg == RG_PHYS || r_rg == RG_DRIVE;
+    wire  is_unc  = unc_of(r_va);
     wire  is_c    = !r_abt && !is_io && !is_unc;
     // A hit is only ever in a cached region: the tag is all of va[31:13], and
     // a line is only filled for a cached address.  So a hit's answer and a

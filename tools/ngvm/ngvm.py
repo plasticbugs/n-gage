@@ -360,14 +360,18 @@ class Machine:
                                       % (n, src, dst))
                 self.fetch_end = self.insns + self.fetch_time(n)
 
-    # Entries LOW_FIRST..LOW_END-1 are mapped at the low name only: the
-    # kernel never uses their high name (ngvm_hw.h), so a use of it faults.
+    # Entries LOW_FIRST..LOW_END-1 are mapped at the low name only, and
+    # CODE_FIRST..NGVM_PT_CHUNK-1 at the code name only: the kernel never
+    # uses their high name (ngvm_hw.h), so a use of it faults.
     LOW_FIRST = NGVM_LOW_BASE >> NGVM_PAGE_SHIFT
     LOW_END = (NGVM_LOW_BASE + NGVM_LOW_SIZE) >> NGVM_PAGE_SHIFT
+    CODE_FIRST = (NGVM_CODE_HIGH - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT
 
     def pt_virt(self, i):
         if self.LOW_FIRST <= i < self.LOW_END:
             return i << NGVM_PAGE_SHIFT
+        if self.CODE_FIRST <= i < NGVM_PT_CHUNK:
+            return NGVM_CODE_BASE + ((i - self.CODE_FIRST) << NGVM_PAGE_SHIFT)
         if i < NGVM_PT_CHUNK:
             return NGVM_CHUNK_BASE + (i << NGVM_PAGE_SHIFT)
         return NGVM_DATA_BASE + ((i - NGVM_PT_CHUNK) << NGVM_PAGE_SHIFT)
@@ -410,7 +414,7 @@ class Machine:
                 k += 1
                 continue
             s = k
-            while (k + 1 <= hi and k + 1 not in (NGVM_PT_CHUNK, self.LOW_FIRST, self.LOW_END)
+            while (k + 1 <= hi and k + 1 not in (NGVM_PT_CHUNK, self.LOW_FIRST, self.LOW_END, self.CODE_FIRST)
                    and self.pt.get(k + 1) == self.pt[k] + 1):
                 k += 1
             n = k - s + 1
@@ -587,7 +591,9 @@ class Machine:
               ' sp=%08x lr=%08x pc=%08x cpsr=%08x' % (r[13], r[14], r[15], uc.reg_read(UC_ARM_REG_CPSR)))
         if self.a.fault_va:                    # what the page table says about an address
             va = int(self.a.fault_va, 16)
-            i = va >> NGVM_PAGE_SHIFT if va - NGVM_LOW_BASE < NGVM_LOW_SIZE else (va - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT
+            i = (va >> NGVM_PAGE_SHIFT if va - NGVM_LOW_BASE < NGVM_LOW_SIZE else
+                 (va - NGVM_CODE_BASE + NGVM_CODE_HIGH - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT
+                 if va - NGVM_CODE_BASE < NGVM_CODE_SIZE else (va - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT)
             print('  %08x: pt[%d] = %s; %d pages mapped in %d regions' % (va, i, self.pt.get(i), len(self.pt), len(self.runs)))
             near = sorted(k for k in self.pt if abs(k - i) < 600)
             print('  mapped near it: %s' % (near and '%d..%d (%d)' % (near[0], near[-1], len(near))))

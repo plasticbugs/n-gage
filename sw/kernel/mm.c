@@ -70,6 +70,7 @@ static int pt_index(u32 va)
 {
     if (va - NGVM_CHUNK_BASE < NGVM_CHUNK_SIZE) return (va - NGVM_CHUNK_BASE) >> NGVM_PAGE_SHIFT;
     if (va - NGVM_LOW_BASE < NGVM_LOW_SIZE) return va >> NGVM_PAGE_SHIFT;
+    if (va - NGVM_CODE_BASE < NGVM_CODE_SIZE) return (NGVM_CODE_HIGH - NGVM_CHUNK_BASE + va - NGVM_CODE_BASE) >> NGVM_PAGE_SHIFT;
     if (va - NGVM_DATA_BASE < NGVM_DATA_SIZE) return NGVM_PT_CHUNK + ((va - NGVM_DATA_BASE) >> NGVM_PAGE_SHIFT);
     return -1;
 }
@@ -90,8 +91,9 @@ u32 pt_get_va(u32 va)
 int vm_mapped(u32 va) { return pt_get_va(va) != NGVM_PT_NONE; }
 
 /* ---- reservations in chunk space ------------------------------------------
- * Three ranges: chunk space below its low name's pages, the low name
- * (NGVM_LOW_BASE, for the game's processes), and chunk space above. */
+ * Four ranges: chunk space below its low name's pages, the low name
+ * (NGVM_LOW_BASE, for the game's processes), chunk space above that up to
+ * its code name's pages, and the code name (NGVM_CODE_BASE, for RAM DLLs). */
 #define LOW_HIGH (NGVM_CHUNK_BASE + NGVM_LOW_BASE)   /* the low name's pages, by their high name */
 
 static u32 reserve_in(u32 lo, u32 hi, u32 size)
@@ -116,7 +118,13 @@ static u32 reserve_in(u32 lo, u32 hi, u32 size)
 u32 vm_reserve(u32 size)
 {
     u32 b = reserve_in(NGVM_CHUNK_BASE, LOW_HIGH, size);
-    return b ? b : reserve_in(LOW_HIGH + NGVM_LOW_SIZE, NGVM_CHUNK_BASE + NGVM_CHUNK_SIZE, size);
+    return b ? b : reserve_in(LOW_HIGH + NGVM_LOW_SIZE, NGVM_CODE_HIGH, size);
+}
+
+/* a RAM DLL's code, under the code name */
+u32 vm_reserve_code(u32 size)
+{
+    return reserve_in(NGVM_CODE_BASE, NGVM_CODE_BASE + NGVM_CODE_SIZE, size);
 }
 
 /* low: under the low name if it has room */
